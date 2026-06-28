@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react'
 import {
   fetchPapers,
   fetchSummary,
+  fetchCategories,
+  saveCategories,
   refresh,
   notebookLmExportUrl,
   type Paper,
+  type CategoryGroup,
 } from './api'
+import CategoryPicker from './CategoryPicker'
 import './App.css'
 
 const PAGE_SIZE = 20
@@ -96,6 +100,9 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string>('')
   const [page, setPage] = useState(1)
+  const [catGroups, setCatGroups] = useState<CategoryGroup[]>([])
+  const [catOpen, setCatOpen] = useState(false)
+  const [catSaving, setCatSaving] = useState(false)
 
   async function load(date: string) {
     setLoading(true)
@@ -130,6 +137,37 @@ export default function App() {
     setSelected((cur) =>
       cur.includes(cat) ? cur.filter((c) => c !== cat) : [...cur, cat],
     )
+  }
+
+  async function openCategories() {
+    try {
+      const data = await fetchCategories()
+      setCatGroups(data.groups)
+      setFollowed(data.followed)
+      setCatOpen(true)
+    } catch (e) {
+      setStatus(String(e))
+    }
+  }
+
+  async function onSaveCategories(codes: string[]) {
+    setCatSaving(true)
+    try {
+      const saved = await saveCategories(codes)
+      setFollowed(saved)
+      // Drop any active filter chips that are no longer followed.
+      setSelected((cur) => cur.filter((c) => saved.includes(c)))
+      setPage(1)
+      setCatOpen(false)
+      setStatus(
+        `Categories updated (${saved.length} followed). ` +
+          `Click Refresh papers to pull ${activeDate} with the new set.`,
+      )
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCatSaving(false)
+    }
   }
 
   async function onRefresh() {
@@ -191,6 +229,9 @@ export default function App() {
               ))}
             </datalist>
           </label>
+          <button className="btn secondary" onClick={openCategories}>
+            Categories{followed.length > 0 ? ` (${followed.length})` : ''}
+          </button>
           <a className="btn secondary" href={notebookLmExportUrl(activeDate)}>
             Export for NotebookLM
           </a>
@@ -199,6 +240,16 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {catOpen && (
+        <CategoryPicker
+          groups={catGroups}
+          followed={followed}
+          saving={catSaving}
+          onSave={onSaveCategories}
+          onClose={() => setCatOpen(false)}
+        />
+      )}
 
       {status && <div className="status">{status}</div>}
 

@@ -63,6 +63,42 @@ export async function fetchSummary(arxivId: string): Promise<string> {
   return data.summary as string
 }
 
+export interface Category {
+  code: string
+  name: string
+}
+
+export interface CategoryGroup {
+  group: string
+  categories: Category[]
+}
+
+export interface CategoriesResponse {
+  groups: CategoryGroup[]
+  followed: string[]
+}
+
+// The full arXiv taxonomy plus the categories the user currently follows.
+export async function fetchCategories(): Promise<CategoriesResponse> {
+  const res = await fetch('/api/categories')
+  if (!res.ok) throw new Error(`Failed to load categories (${res.status})`)
+  return res.json()
+}
+
+// Replace the followed-category set; returns the saved (cleaned) list.
+export async function saveCategories(followed: string[]): Promise<string[]> {
+  const res = await fetch('/api/categories', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ followed }),
+  })
+  const data = await res.json()
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || `Failed to save categories (${res.status})`)
+  }
+  return data.followed as string[]
+}
+
 // Returns the URL that downloads a NotebookLM-ready Markdown digest.
 export function notebookLmExportUrl(date?: string): string {
   const qs = date ? `?date=${encodeURIComponent(date)}` : ''
