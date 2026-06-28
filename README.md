@@ -56,19 +56,20 @@ Edit `.env`:
 - **`ARXIV_CATEGORIES`** — your subject "subscription", comma-separated.
   Defaults to `cs.LG,cs.AI,cs.CL,cs.CV`. Full list:
   <https://arxiv.org/category_taxonomy>.
-- **`ARXIV_LOOKBACK_DAYS`** (default `2`) — how far back "the latest batch"
-  reaches. Bump it if a run comes back empty (e.g. over a weekend).
+- **`ARXIV_MAX_RESULTS`** (default `100`) — cap on papers pulled per day.
 
 ### 2. Fetch papers
 
 ```bash
-uv run python backend/run.py refresh
+uv run python backend/run.py refresh                 # papers submitted today
+uv run python backend/run.py refresh --date 2026-06-25
 ```
 
-Fetches the latest papers in your categories, stores them, and summarizes all of
-them (handy for a daily cron). Add `--no-summary` to fetch only — in the
-dashboard you instead summarize each paper on demand via its **Get summary**
-button.
+Pulls papers **submitted on the given date** (default today) in your categories
+and stores them under that date. Add `--no-summary` to skip summaries (the
+default in the dashboard, where you summarize each paper on demand via its **Get
+summary** button); without it the CLI also summarizes the batch, handy for a
+daily cron.
 
 ### 3. Open the dashboard
 
@@ -91,9 +92,11 @@ cd frontend && npm run build && cd ..
 uv run python backend/run.py serve             # serves dashboard + API at :5000
 ```
 
-Open <http://127.0.0.1:5000>. In the dashboard: **Refresh papers** requeries
-arXiv for new papers, **Get summary** on any row summarizes that one paper on
-demand, and the category chips filter the day's batch.
+Open <http://127.0.0.1:5000>. In the dashboard: pick any **date** to view that
+day's papers (if none have been pulled yet, you'll see a prompt to fetch them),
+**Refresh papers** pulls the selected day's submissions from arXiv, **Get
+summary** on any row summarizes that one paper on demand, the category chips
+filter the day's batch, and long days are paginated.
 
 ---
 
@@ -128,10 +131,11 @@ arxiv-digest/
 
 ## How fetching works
 
-`arxiv_client.fetch_recent_papers()` builds a query like
-`cat:cs.LG OR cat:cs.AI OR …`, asks arXiv for the newest submissions, and keeps
-everything from the last `ARXIV_LOOKBACK_DAYS`. Papers are keyed by arXiv id, so
-re-running never duplicates a paper or re-pays to summarize one.
+`arxiv_client.fetch_papers_for_date()` builds a query like
+`(cat:cs.LG OR cat:cs.AI OR …) AND submittedDate:[YYYYMMDD0000 TO YYYYMMDD2359]`
+— i.e. papers **submitted on that date** (GMT) in your categories — and stores
+them under that date. Papers are keyed by arXiv id, so re-pulling a date never
+duplicates a paper or re-pays to summarize one.
 
 ## Notes & next steps
 
