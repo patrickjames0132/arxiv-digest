@@ -233,3 +233,36 @@ footer {
   color: #f08a8a;
   font-size: 12.5px;
 }
+
+.date-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.date-field input[type='date'] {
+  color-scheme: dark;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 18px;
+}
+.page-info {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.empty .btn {
+  margin-top: 16px;
+}

@@ -36,12 +36,16 @@ export async function fetchPapers(date?: string): Promise<PapersResponse> {
   return res.json()
 }
 
-// Refresh only requeries arXiv for new papers; summaries are per-row on demand.
-export async function refresh(summarize = false): Promise<RefreshResult> {
+// Pull papers submitted on `date` (default: today) from arXiv. Summaries are
+// generated per-row on demand, so this only fetches & stores the papers.
+export async function refresh(
+  date?: string,
+  summarize = false,
+): Promise<RefreshResult> {
   const res = await fetch('/api/refresh', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ summarize }),
+    body: JSON.stringify({ date, summarize }),
   })
   return res.json()
 }

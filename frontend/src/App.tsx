@@ -8,6 +8,15 @@ import {
 } from './api'
 import './App.css'
 
+const PAGE_SIZE = 20
+
+// Local-time YYYY-MM-DD (so the date picker matches the user's calendar day).
+function todayISO(): string {
+  const now = new Date()
+  const tz = now.getTimezoneOffset() * 60000
+  return new Date(now.getTime() - tz).toISOString().slice(0, 10)
+}
+
 function PaperRow({ paper }: { paper: Paper }) {
   const [open, setOpen] = useState(false)
   const [summary, setSummary] = useState<string | null>(paper.summary)
@@ -77,23 +86,24 @@ function PaperRow({ paper }: { paper: Paper }) {
 }
 
 export default function App() {
+  const today = todayISO()
   const [papers, setPapers] = useState<Paper[]>([])
-  const [dates, setDates] = useState<string[]>([])
+  const [pulledDates, setPulledDates] = useState<string[]>([])
   const [followed, setFollowed] = useState<string[]>([])
   const [selected, setSelected] = useState<string[]>([])
-  const [activeDate, setActiveDate] = useState<string | undefined>(undefined)
+  const [activeDate, setActiveDate] = useState<string>(today)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string>('')
+  const [page, setPage] = useState(1)
 
-  async function load(date?: string) {
+  async function load(date: string) {
     setLoading(true)
     try {
       const data = await fetchPapers(date)
       setPapers(data.papers)
-      setDates(data.dates)
+      setPulledDates(data.dates)
       setFollowed(data.followed_categories ?? [])
-      setActiveDate(data.date ?? undefined)
     } catch (e) {
       setStatus(String(e))
     } finally {
@@ -101,10 +111,46 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    load(activeDate)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function onDateChange(date: string) {
+    if (!date) return
+    setActiveDate(date)
+    setSelected([])
+    setPage(1)
+    setStatus('')
+    load(date)
+  }
+
   function toggleCategory(cat: string) {
+    setPage(1)
     setSelected((cur) =>
       cur.includes(cat) ? cur.filter((c) => c !== cat) : [...cur, cat],
     )
+  }
+
+  async function onRefresh() {
+    setBusy(true)
+    setStatus(`Fetching papers submitted on ${activeDate} from arXiv…`)
+    try {
+      const result = await refresh(activeDate)
+      if (!result.ok) {
+        setStatus(`Error: ${result.error}`)
+      } else {
+        await load(activeDate)
+        setPage(1)
+        setStatus(
+          `Done — ${result.papers_new} new paper(s) pulled for ${activeDate}.`,
+        )
+      }
+    } catch (e) {
+      setStatus(String(e))
+    } finally {
+      setBusy(false)
+    }
   }
 
   // Show papers that carry at least one selected category; no selection = all.
@@ -115,27 +161,10 @@ export default function App() {
           p.categories.split(/\s+/).some((c) => selected.includes(c)),
         )
 
-  useEffect(() => {
-    load()
-  }, [])
-
-  async function onRefresh() {
-    setBusy(true)
-    setStatus('Fetching latest papers from arXiv…')
-    try {
-      const result = await refresh() // fetch only — summaries are per-row
-      if (!result.ok) {
-        setStatus(`Error: ${result.error}`)
-      } else {
-        await load()
-        setStatus(`Done — ${result.papers_new} new paper(s) added.`)
-      }
-    } catch (e) {
-      setStatus(String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const totalPages = Math.max(1, Math.ceil(visiblePapers.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pageStart = (safePage - 1) * PAGE_SIZE
+  const pagePapers = visiblePapers.slice(pageStart, pageStart + PAGE_SIZE)
 
   return (
     <div className="app">
@@ -147,21 +176,21 @@ export default function App() {
           </p>
         </div>
         <div className="controls">
-          {dates.length > 0 && (
-            <select
+          <label className="date-field">
+            <span>Date</span>
+            <input
+              type="date"
               value={activeDate}
-              onChange={(e) => {
-                setActiveDate(e.target.value)
-                load(e.target.value)
-              }}
-            >
-              {dates.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
+              max={today}
+              list="pulled-dates"
+              onChange={(e) => onDateChange(e.target.value)}
+            />
+            <datalist id="pulled-dates">
+              {pulledDates.map((d) => (
+                <option key={d} value={d} />
               ))}
-            </select>
-          )}
+            </datalist>
+          </label>
           <a className="btn secondary" href={notebookLmExportUrl(activeDate)}>
             Export for NotebookLM
           </a>
@@ -197,28 +226,55 @@ export default function App() {
         <p className="muted">Loading…</p>
       ) : papers.length === 0 ? (
         <div className="empty">
-          <p>No papers yet.</p>
+          <p>No papers have been pulled for {activeDate} yet.</p>
           <p className="muted">
-            Click <strong>Refresh</strong> to pull today's arXiv emails, parse
-            the papers, and generate AI summaries.
+            Click <strong>Refresh papers</strong> to fetch this day's
+            submissions from arXiv in the categories you follow.
           </p>
+          <button className="btn" onClick={onRefresh} disabled={busy}>
+            {busy ? 'Fetching…' : 'Refresh papers'}
+          </button>
         </div>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Title &amp; authors</th>
-              <th>Categories</th>
-              <th>AI summary</th>
-              <th>Links</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visiblePapers.map((p) => (
-              <PaperRow key={p.arxiv_id} paper={p} />
-            ))}
-          </tbody>
-        </table>
+        <>
+          <table>
+            <thead>
+              <tr>
+                <th>Title &amp; authors</th>
+                <th>Categories</th>
+                <th>AI summary</th>
+                <th>Links</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagePapers.map((p) => (
+                <PaperRow key={p.arxiv_id} paper={p} />
+              ))}
+            </tbody>
+          </table>
+
+          {totalPages > 1 && (
+            <div className="pagination">
+              <button
+                className="btn secondary"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+              >
+                ← Prev
+              </button>
+              <span className="page-info">
+                Page {safePage} of {totalPages}
+              </span>
+              <button
+                className="btn secondary"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       <footer>
@@ -226,7 +282,7 @@ export default function App() {
           {visiblePapers.length}
           {selected.length > 0 ? ` of ${papers.length}` : ''} papers
         </span>
-        {activeDate && <span> · {activeDate}</span>}
+        <span> · {activeDate}</span>
       </footer>
     </div>
   )
