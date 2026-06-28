@@ -53,8 +53,10 @@ Edit `.env`:
   - `claude_cli` — the `claude` CLI under your **Claude Pro/Max subscription**
     (no API billing; local-only; needs Claude Code installed + signed in via
     `claude` then `/login`). Uses Haiku via `CLAUDE_CLI_MODEL=haiku`.
-- **`ARXIV_CATEGORIES`** — your subject "subscription", comma-separated.
-  Defaults to `cs.LG,cs.AI,cs.CL,cs.CV`. Full list:
+- **`ARXIV_CATEGORIES`** — the *initial* subjects to follow, comma-separated
+  (default `cs.LG,cs.AI,cs.CL,cs.CV`). This is only a seed: once the app is
+  running you manage the set from the dashboard's **Categories** button, and the
+  choice is saved in the database. Full list:
   <https://arxiv.org/category_taxonomy>.
 - **`ARXIV_MAX_RESULTS`** (default `100`) — cap on papers pulled per day.
 
@@ -92,11 +94,13 @@ cd frontend && npm run build && cd ..
 uv run python backend/run.py serve             # serves dashboard + API at :5000
 ```
 
-Open <http://127.0.0.1:5000>. In the dashboard: pick any **date** to view that
-day's papers (if none have been pulled yet, you'll see a prompt to fetch them),
-**Refresh papers** pulls the selected day's submissions from arXiv, **Get
-summary** on any row summarizes that one paper on demand, the category chips
-filter the day's batch, and long days are paginated.
+Open <http://127.0.0.1:5000>. In the dashboard: the **Categories** button opens
+a searchable picker for the full arXiv taxonomy — the subjects you choose are
+the ones pulled from arXiv *and* offered as filters. Pick any **date** to view
+that day's papers (if none have been pulled yet, you'll see a prompt to fetch
+them), **Refresh papers** pulls the selected day's submissions in your followed
+categories, **Get summary** on any row summarizes that one paper on demand, the
+category chips filter the day's batch, and long days are paginated.
 
 ---
 
@@ -120,13 +124,14 @@ arxiv-digest/
 │   ├── run.py                # CLI: serve | refresh
 │   └── arxiv_digest/
 │       ├── config.py         # all settings, from .env
-│       ├── arxiv_client.py   # fetch recent papers from the arXiv API
+│       ├── arxiv_client.py   # fetch papers for a date from the arXiv API
+│       ├── taxonomy.py       # full arXiv category taxonomy (+ taxonomy.json)
 │       ├── summarizer.py     # Claude summaries (cached by arXiv id)
-│       ├── store.py          # SQLite persistence
+│       ├── store.py          # SQLite persistence (papers + settings)
 │       ├── pipeline.py       # fetch → store → summarize
 │       └── app.py            # Flask API + serves the built dashboard
 └── frontend/                 # React + TS + Vite dashboard
-    └── src/{App.tsx, api.ts, App.css}
+    └── src/{App.tsx, CategoryPicker.tsx, api.ts, App.css}
 ```
 
 ## How fetching works
