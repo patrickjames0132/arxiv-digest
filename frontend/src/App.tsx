@@ -105,9 +105,6 @@ export default function App() {
   const [catOpen, setCatOpen] = useState(false)
   const [catSaving, setCatSaving] = useState(false)
 
-  // Dates we've already auto-pulled this session (so empty days aren't re-pulled
-  // every time you revisit them). Re-pull is always available via the ↻ button.
-  const autoPulled = useRef<Set<string>>(new Set())
   // Mirror activeDate in a ref so async loads/pulls can drop stale results from
   // a date the user has since navigated away from.
   const activeDateRef = useRef(activeDate)
@@ -157,26 +154,11 @@ export default function App() {
     }
   }
 
-  // Load the selected date; if it has no papers (and we haven't tried yet this
-  // session), auto-pull it from arXiv after a short debounce so scrubbing
-  // through dates doesn't fire a request per date.
+  // Load whatever's already stored for the selected date. Empty dates are not
+  // auto-pulled — the user pulls explicitly via the ↻ button (or the empty
+  // state's "Pull papers for <date>" button).
   useEffect(() => {
-    let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    ;(async () => {
-      const found = await load(activeDate)
-      if (cancelled) return
-      if (found.length === 0 && !autoPulled.current.has(activeDate)) {
-        autoPulled.current.add(activeDate)
-        timer = setTimeout(() => {
-          if (!cancelled) pull(activeDate)
-        }, 500)
-      }
-    })()
-    return () => {
-      cancelled = true
-      if (timer) clearTimeout(timer)
-    }
+    load(activeDate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDate])
 
@@ -276,21 +258,13 @@ export default function App() {
     }
   }
 
-  async function onSaveCategories(codes: string[], alsoPull: boolean) {
+  async function onSaveCategories(codes: string[]) {
     setCatSaving(true)
     try {
       const saved = await saveCategories(codes)
       setFollowed(saved)
       setCatOpen(false)
-      if (alsoPull) {
-        autoPulled.current.add(activeDate) // we're pulling now; don't double-fire
-        await pull(activeDate)
-      } else {
-        setStatus(
-          `Categories updated (${saved.length} followed). ` +
-            `Re-pull ${activeDate} (↻) to apply them.`,
-        )
-      }
+      await pull(activeDate)
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
     } finally {
