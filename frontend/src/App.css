@@ -31,6 +31,13 @@ h1 {
   gap: 10px;
   align-items: center;
 }
+.controls-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  cursor: help;
+}
 
 select {
   background: var(--panel);
@@ -555,6 +562,13 @@ footer {
 .modal-head .muted {
   margin: 4px 0 0;
   font-size: 13px;
+}
+
+.download-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 0 20px 12px;
 }
 
 .cat-search {

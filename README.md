@@ -104,17 +104,24 @@ cd frontend && npm run build && cd ..
 uv run python backend/run.py serve             # serves dashboard + API at :5000
 ```
 
-Open <http://127.0.0.1:5000>. In the dashboard: the **Categories** button opens
-a searchable picker for the full arXiv taxonomy — the subjects you choose are
-the ones pulled from arXiv *and* offered as filters. Pick a **From / To** date
-range to view its papers (if none have been pulled yet, you'll see a prompt to
-fetch them), the **↻** button pulls the selected range's submissions in your
-followed categories, **Get summary** on any row summarizes that one paper on
-demand, the category chips filter the loaded batch, and long ranges are
-paginated. The **search bar** does a **hybrid keyword + semantic** search over the
-papers you've already pulled, scoped to the current date range — so you can search
-by meaning ("teaching machines to see") or exact terms alike; see
-[How search works](#how-search-works) below.
+Open <http://127.0.0.1:5000>. The dashboard cleanly separates **downloading**
+from **browsing**:
+
+- **Download papers** (the **⬇ Download** button) opens one modal holding
+  everything ingestion-related — a searchable picker for the full arXiv taxonomy,
+  a **date range to pull**, and **Download** / **Re-pull all**. The subjects you
+  pick are what gets fetched *and* what's offered as filters. **Download** skips
+  days already pulled for your categories; **Re-pull all** re-fetches every day.
+- The top-bar **View From / To** range only *filters what you've already
+  downloaded* — changing it never fetches from arXiv. (After a download the view
+  jumps to the range you just pulled; narrow it from there.)
+
+**Get summary** on any row summarizes that one paper on demand, the category
+chips filter the loaded batch, and long ranges are paginated. The **search bar**
+does a **hybrid keyword + semantic** search over the papers you've already
+pulled, scoped to the view range — search by meaning ("teaching machines to
+see") or exact terms alike, and **Search all of arXiv →** to pull in a paper you
+don't have yet; see [How search works](#how-search-works) below.
 
 ---
 

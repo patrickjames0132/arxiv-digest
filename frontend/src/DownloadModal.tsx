@@ -1,21 +1,33 @@
 import { useMemo, useState } from 'react'
 import type { CategoryGroup } from './api'
 
-// A searchable, grouped checkbox picker for the full arXiv taxonomy (~155
-// categories). The chosen set is what we pull from arXiv *and* filter on.
-export default function CategoryPicker({
+// The single "Download papers" modal: choose the subjects AND the date range to
+// pull from arXiv, then download. Groups every ingestion control (dates,
+// categories, download, re-pull) in one place — deliberately separate from the
+// main screen's view/filter date range, which only browses what's already saved.
+export default function DownloadModal({
   groups,
   followed,
   saving,
-  dateLabel,
-  onSave,
+  busy,
+  dlStart,
+  dlEnd,
+  today,
+  onDlStartChange,
+  onDlEndChange,
+  onDownload,
   onClose,
 }: {
   groups: CategoryGroup[]
   followed: string[]
   saving: boolean
-  dateLabel: string
-  onSave: (codes: string[]) => void
+  busy: boolean
+  dlStart: string
+  dlEnd: string
+  today: string
+  onDlStartChange: (date: string) => void
+  onDlEndChange: (date: string) => void
+  onDownload: (codes: string[], opts: { force?: boolean }) => void
   onClose: () => void
 }) {
   const [picked, setPicked] = useState<Set<string>>(new Set(followed))
@@ -62,24 +74,51 @@ export default function CategoryPicker({
     })
   }
 
+  const dlLabel = dlStart === dlEnd ? dlStart : `${dlStart} → ${dlEnd}`
+  const disabled = saving || busy || picked.size === 0
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal"
         role="dialog"
-        aria-label="Manage categories"
+        aria-label="Download papers"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
           <div>
-            <h2>Categories</h2>
+            <h2>Download papers</h2>
             <p className="muted">
-              Pick the subjects to pull from arXiv and filter by.
+              Pull papers from arXiv for these subjects and dates. (This is
+              separate from the view date on the main screen, which only filters
+              what you've already downloaded.)
             </p>
           </div>
           <button className="link-btn" onClick={onClose}>
             ✕
           </button>
+        </div>
+
+        <div className="download-dates">
+          <label className="date-field">
+            <span>From</span>
+            <input
+              type="date"
+              value={dlStart}
+              max={today}
+              onChange={(e) => onDlStartChange(e.target.value)}
+            />
+          </label>
+          <label className="date-field">
+            <span>To</span>
+            <input
+              type="date"
+              value={dlEnd}
+              min={dlStart}
+              max={today}
+              onChange={(e) => onDlEndChange(e.target.value)}
+            />
+          </label>
         </div>
 
         <input
@@ -147,11 +186,20 @@ export default function CategoryPicker({
               Cancel
             </button>
             <button
-              className="btn"
-              onClick={() => onSave([...picked])}
-              disabled={saving || picked.size === 0}
+              className="btn secondary"
+              onClick={() => onDownload([...picked], { force: true })}
+              disabled={disabled}
+              title={`Re-fetch every day in ${dlLabel} from arXiv (catches late/cross-listed additions)`}
             >
-              {saving ? 'Saving…' : `Save & pull ${dateLabel}`}
+              Re-pull all
+            </button>
+            <button
+              className="btn"
+              onClick={() => onDownload([...picked], { force: false })}
+              disabled={disabled}
+              title={`Pull new days in ${dlLabel} (skips days already downloaded for these categories)`}
+            >
+              {saving ? 'Saving…' : busy ? 'Downloading…' : `Download ${dlLabel}`}
             </button>
           </div>
         </div>

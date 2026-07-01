@@ -13,7 +13,7 @@ import {
   type ArxivHit,
   type CategoryGroup,
 } from './api'
-import CategoryPicker from './CategoryPicker'
+import DownloadModal from './DownloadModal'
 import CategoryFilter, { type FilterOption } from './CategoryFilter'
 import './App.css'
 
@@ -185,12 +185,14 @@ export default function App() {
   const today = todayISO()
   const [papers, setPapers] = useState<Paper[]>([])
   const [followed, setFollowed] = useState<string[]>([])
-  // date -> categories already pulled for that day (from the backend ledger).
-  // A day is only skipped by the smart pull when every followed category is here.
-  const [coverage, setCoverage] = useState<Record<string, string[]>>({})
   const [selected, setSelected] = useState<string[]>([])
+  // View range: what's shown from the DB and searched/filtered. Separate from the
+  // download range below, which only controls what gets pulled from arXiv.
   const [startDate, setStartDate] = useState<string>(today)
   const [endDate, setEndDate] = useState<string>(today)
+  // Download range: the dates the "Download papers" modal pulls from arXiv.
+  const [dlStart, setDlStart] = useState<string>(today)
+  const [dlEnd, setDlEnd] = useState<string>(today)
   const [query, setQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Paper[]>([])
   const [searchMode, setSearchMode] = useState<'hybrid' | 'lexical'>('lexical')
@@ -214,7 +216,7 @@ export default function App() {
   const [status, setStatus] = useState<string>('')
   const [page, setPage] = useState(1)
   const [catGroups, setCatGroups] = useState<CategoryGroup[]>([])
-  const [catOpen, setCatOpen] = useState(false)
+  const [downloadOpen, setDownloadOpen] = useState(false)
   const [catSaving, setCatSaving] = useState(false)
 
   // A single day shows as "2026-06-26"; a span as "2026-06-24 → 2026-06-26".
@@ -237,7 +239,6 @@ export default function App() {
       if (activeRangeRef.current !== key) return data.papers // stale; don't apply
       setPapers(data.papers)
       setFollowed(data.followed_categories ?? [])
-      setCoverage(data.coverage ?? {})
       return data.papers
     } catch (e) {
       if (activeRangeRef.current === key) setStatus(String(e))
@@ -256,19 +257,45 @@ export default function App() {
     opts: { force?: boolean; categories?: string[] } = {},
   ) {
     // The category set the skip decision is about. Defaults to current state, but
-    // callers (e.g. Save & Pull) pass the just-changed set, since setFollowed is
-    // async and this closure would otherwise see the stale value.
+    // callers (Download) pass the just-saved set, since setFollowed is async and
+    // this closure would otherwise see the stale value.
     const activeCats = opts.categories ?? followed
     const key = rangeKey(start, end)
     const span = start === end ? start : `${start} → ${end}`
     const allDays = daysDescending(start, end)
+    // Take ownership of this range for the duration of the pull, then fetch a
+    // fresh baseline for it (existing papers to keep visible + per-day coverage
+    // to decide which days to skip). We do NOT read the `papers`/`coverage` state
+    // here: the download range can differ from what the view was showing, so
+    // those would be stale — the baseline must come from this range's own data.
+    activeRangeRef.current = key
+    setBusy(true)
+    setPage(1)
+    let baseline: Paper[] = []
+    let baseCoverage: Record<string, string[]> = {}
+    if (!opts.force) {
+      try {
+        const data = await fetchPapers(start, end)
+        if (activeRangeRef.current !== key) {
+          setBusy(false)
+          return
+        }
+        baseline = data.papers
+        baseCoverage = data.coverage ?? {}
+      } catch {
+        // Baseline load failed; treat the range as empty and pull everything.
+      }
+    }
+    // Show the range's existing papers immediately (empty for a force rebuild).
+    setPapers(baseline)
+
     // By default only fetch days not yet covered for every followed category —
     // re-pulling an overlapping range shouldn't re-download (slowly) what's
     // already here, but adding a new category must re-fetch days that hold papers
     // from other categories yet were never pulled for the new one. `force`
     // re-fetches every day (to catch late/cross-listed arXiv additions).
     const isCovered = (d: string) => {
-      const have = coverage[d]
+      const have = baseCoverage[d]
       if (!have) return false
       return activeCats.every((c) => have.includes(c))
     }
@@ -276,20 +303,17 @@ export default function App() {
 
     if (days.length === 0) {
       setStatus(
-        `Every day in ${span} is already downloaded for your followed ` +
-          `categories — nothing new to pull. Use “Re-pull all” to re-fetch ` +
-          `from arXiv.`,
+        `Every day in ${span} is already downloaded for these categories — ` +
+          `nothing new to pull. Use “Re-pull all” to re-fetch from arXiv.`,
       )
+      setBusy(false)
       return
     }
 
     const skipped = allDays.length - days.length
-    setBusy(true)
-    setPage(1)
-    // Seed with what's already loaded (unless forcing a clean rebuild), so
-    // existing days stay visible while the new days stream in.
-    const acc: Paper[] = opts.force ? [] : [...papers]
-    if (opts.force) setPapers([])
+    // Seed with the range's existing papers (unless forcing a clean rebuild), so
+    // they stay visible while the new days stream in.
+    const acc: Paper[] = opts.force ? [] : [...baseline]
     setProgress({ done: 0, total: days.length, papers: acc.length })
     setStatus(
       skipped > 0
@@ -316,9 +340,6 @@ export default function App() {
         acc.length = 0
         acc.push(...merged)
         setPapers([...acc])
-        // The refresh above recorded this day's coverage; fold it in so an
-        // immediate re-pull correctly skips the day we just fetched.
-        if (data.coverage) setCoverage((prev) => ({ ...prev, ...data.coverage }))
         setProgress({ done: i + 1, total: days.length, papers: acc.length })
       }
       setStatus(
@@ -329,16 +350,17 @@ export default function App() {
     } catch (e) {
       if (activeRangeRef.current === key) setStatus(String(e))
     } finally {
-      if (activeRangeRef.current === key) {
-        setBusy(false)
-        setProgress(null)
-      }
+      // Downloads are modal-gated so only one pull runs at a time — always clear
+      // the busy/progress flags when this pull ends, even if it was aborted by a
+      // mid-pull view change (otherwise busy would stick on).
+      setBusy(false)
+      setProgress(null)
     }
   }
 
   // Load whatever's already stored for the selected range. Empty ranges are not
-  // auto-pulled — the user pulls explicitly via the ↻ button (or the empty
-  // state's "Pull papers" button).
+  // auto-pulled — the user pulls explicitly via the Download modal (or the empty
+  // state's "Download papers" button).
   useEffect(() => {
     load(startDate, endDate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -526,28 +548,65 @@ export default function App() {
     )
   }
 
-  async function openCategories() {
+  // Open the Download modal. Optionally preset the download range (e.g. the empty
+  // state offers to pull the range you're currently viewing).
+  async function openDownload(preset?: { start: string; end: string }) {
     try {
       const data = await fetchCategories()
       setCatGroups(data.groups)
       setFollowed(data.followed)
-      setCatOpen(true)
+      if (preset) {
+        setDlStart(preset.start)
+        setDlEnd(preset.end)
+      }
+      setDownloadOpen(true)
     } catch (e) {
       setStatus(String(e))
     }
   }
 
-  async function onSaveCategories(codes: string[]) {
-    setCatSaving(true)
-    try {
-      const saved = await saveCategories(codes)
-      setFollowed(saved)
-      setCatOpen(false)
-      await pull(startDate, endDate, { categories: saved })
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
-    } finally {
+  function onDlStartChange(date: string) {
+    if (!date) return
+    setDlStart(date)
+    if (date > dlEnd) setDlEnd(date)
+  }
+
+  function onDlEndChange(date: string) {
+    if (!date) return
+    setDlEnd(date)
+    if (date < dlStart) setDlStart(date)
+  }
+
+  // Persist any category change, then pull the download range. After the pull the
+  // view range follows the download range so you immediately see what you pulled;
+  // from there you can narrow the view independently without re-downloading.
+  async function runDownload(codes: string[], opts: { force?: boolean } = {}) {
+    let saved = followed
+    const unchanged =
+      codes.length === followed.length &&
+      codes.every((c) => followed.includes(c))
+    if (!unchanged) {
+      setCatSaving(true)
+      try {
+        saved = await saveCategories(codes)
+        setFollowed(saved)
+      } catch (e) {
+        setStatus(e instanceof Error ? e.message : String(e))
+        setCatSaving(false)
+        return
+      }
       setCatSaving(false)
+    }
+    setDownloadOpen(false)
+    setSelected([])
+    const dlKey = rangeKey(dlStart, dlEnd)
+    // pull owns the range (sets activeRangeRef) and streams into the table.
+    await pull(dlStart, dlEnd, { ...opts, categories: saved })
+    // Sync the view to what we just downloaded — unless the user navigated to a
+    // different range mid-download, in which case respect their choice.
+    if (activeRangeRef.current === dlKey) {
+      setStartDate(dlStart)
+      setEndDate(dlEnd)
     }
   }
 
@@ -575,6 +634,9 @@ export default function App() {
           </p>
         </div>
         <div className="controls">
+          <span className="controls-label" title="Filters the papers you've already downloaded — does not fetch from arXiv">
+            View
+          </span>
           <label className="date-field">
             <span>From</span>
             <input
@@ -595,26 +657,12 @@ export default function App() {
             />
           </label>
           <button
-            className={`icon-btn${busy ? ' spinning' : ''}`}
-            onClick={() => pull(startDate, endDate)}
+            className="btn"
+            onClick={() => openDownload()}
             disabled={busy}
-            title={`Pull new days in ${rangeLabel} (skips days already downloaded)`}
-            aria-label={`Pull new days in ${rangeLabel}`}
+            title="Pull papers from arXiv (choose subjects + dates)"
           >
-            ↻
-          </button>
-          {papers.length > 0 && (
-            <button
-              className="btn small"
-              onClick={() => pull(startDate, endDate, { force: true })}
-              disabled={busy}
-              title={`Re-fetch every day in ${rangeLabel} from arXiv (catches late additions)`}
-            >
-              Re-pull all
-            </button>
-          )}
-          <button className="btn secondary" onClick={openCategories}>
-            Categories{followed.length > 0 ? ` (${followed.length})` : ''}
+            {busy ? 'Downloading…' : '⬇ Download'}
           </button>
           <a
             className="btn secondary"
@@ -737,14 +785,19 @@ export default function App() {
         </div>
       )}
 
-      {catOpen && (
-        <CategoryPicker
+      {downloadOpen && (
+        <DownloadModal
           groups={catGroups}
           followed={followed}
           saving={catSaving}
-          dateLabel={rangeLabel}
-          onSave={onSaveCategories}
-          onClose={() => setCatOpen(false)}
+          busy={busy}
+          dlStart={dlStart}
+          dlEnd={dlEnd}
+          today={today}
+          onDlStartChange={onDlStartChange}
+          onDlEndChange={onDlEndChange}
+          onDownload={runDownload}
+          onClose={() => setDownloadOpen(false)}
         />
       )}
 
@@ -834,19 +887,21 @@ export default function App() {
         <div className="empty">
           <p>No papers for {rangeLabel}.</p>
           <p className="muted">
-            Nothing was found on arXiv for this range in your followed
-            categories. Try another range, broaden your{' '}
-            <button className="link-btn inline" onClick={openCategories}>
-              categories
-            </button>
-            , or pull again.
+            You haven't downloaded anything for this range yet. Open{' '}
+            <button
+              className="link-btn inline"
+              onClick={() => openDownload({ start: startDate, end: endDate })}
+            >
+              Download
+            </button>{' '}
+            to pull it from arXiv (and pick your subjects there).
           </p>
           <button
             className="btn"
-            onClick={() => pull(startDate, endDate)}
+            onClick={() => openDownload({ start: startDate, end: endDate })}
             disabled={busy}
           >
-            Pull papers for {rangeLabel}
+            Download papers for {rangeLabel}
           </button>
         </div>
       )}
