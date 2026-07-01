@@ -47,6 +47,10 @@ export default function CategoryPicker({
     })
   }
 
+  function clearAll() {
+    setPicked(new Set())
+  }
+
   function setMany(codes: string[], on: boolean) {
     setPicked((prev) => {
       const next = new Set(prev)
@@ -104,7 +108,11 @@ export default function CategoryPicker({
                 </div>
                 <div className="cat-grid">
                   {g.categories.map((c) => (
-                    <label key={c.code} className="cat-option">
+                    <label
+                      key={c.code}
+                      className="cat-option"
+                      title={`${c.code} — ${c.name}`}
+                    >
                       <input
                         type="checkbox"
                         checked={picked.has(c.code)}
@@ -124,7 +132,16 @@ export default function CategoryPicker({
         </div>
 
         <div className="modal-foot">
-          <span className="muted">{picked.size} selected</span>
+          <div className="modal-foot-info">
+            <span className="muted">{picked.size} selected</span>
+            <button
+              className="link-btn"
+              onClick={clearAll}
+              disabled={saving || picked.size === 0}
+            >
+              Clear all
+            </button>
+          </div>
           <div className="modal-actions">
             <button className="btn secondary" onClick={onClose} disabled={saving}>
               Cancel

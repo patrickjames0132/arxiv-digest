@@ -556,6 +556,11 @@ footer {
   padding: 14px 20px;
   border-top: 1px solid var(--border);
 }
+.modal-foot-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .modal-actions {
   display: flex;
   gap: 10px;
