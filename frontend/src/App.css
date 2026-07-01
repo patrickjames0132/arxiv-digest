@@ -351,6 +351,28 @@ footer {
   color: var(--accent);
 }
 
+.progress {
+  margin-bottom: 18px;
+}
+.progress-track {
+  height: 8px;
+  background: var(--chip);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent-strong);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+.progress-text {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
 .pagination {
   display: flex;
   align-items: center;

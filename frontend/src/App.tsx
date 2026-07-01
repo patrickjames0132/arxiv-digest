@@ -22,6 +22,25 @@ function todayISO(): string {
   return new Date(now.getTime() - tz).toISOString().slice(0, 10)
 }
 
+// The calendar day before `iso` (YYYY-MM-DD), computed in local time. Built from
+// numeric parts so we never trip over UTC parsing shifting the date.
+function prevDay(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() - 1)
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getDate()).padStart(2, '0')
+  return `${dt.getFullYear()}-${mm}-${dd}`
+}
+
+// Every day in [start, end] inclusive, newest first (so the table grows
+// newest→oldest, matching the stored ordering).
+function daysDescending(start: string, end: string): string[] {
+  const days: string[] = []
+  for (let cur = end; cur >= start; cur = prevDay(cur)) days.push(cur)
+  return days
+}
+
 function PaperRow({ paper }: { paper: Paper }) {
   const [open, setOpen] = useState(false)
   const [summary, setSummary] = useState<string | null>(paper.summary)
@@ -96,71 +115,104 @@ export default function App() {
   const [pulledDates, setPulledDates] = useState<string[]>([])
   const [followed, setFollowed] = useState<string[]>([])
   const [selected, setSelected] = useState<string[]>([])
-  const [activeDate, setActiveDate] = useState<string>(today)
+  const [startDate, setStartDate] = useState<string>(today)
+  const [endDate, setEndDate] = useState<string>(today)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Day-by-day pull progress (null when idle): which day we're on of how many,
+  // and how many papers have streamed into the table so far.
+  const [progress, setProgress] = useState<{
+    done: number
+    total: number
+    papers: number
+  } | null>(null)
   const [status, setStatus] = useState<string>('')
   const [page, setPage] = useState(1)
   const [catGroups, setCatGroups] = useState<CategoryGroup[]>([])
   const [catOpen, setCatOpen] = useState(false)
   const [catSaving, setCatSaving] = useState(false)
 
-  // Mirror activeDate in a ref so async loads/pulls can drop stale results from
-  // a date the user has since navigated away from.
-  const activeDateRef = useRef(activeDate)
-  useEffect(() => {
-    activeDateRef.current = activeDate
-  }, [activeDate])
+  // A single day shows as "2026-06-26"; a span as "2026-06-24 → 2026-06-26".
+  const rangeLabel =
+    startDate === endDate ? startDate : `${startDate} → ${endDate}`
 
-  async function load(date: string): Promise<Paper[]> {
+  // Mirror the active range in a ref so async loads/pulls can drop stale results
+  // from a range the user has since navigated away from.
+  const rangeKey = (s: string, e: string) => `${s}|${e}`
+  const activeRangeRef = useRef(rangeKey(startDate, endDate))
+  useEffect(() => {
+    activeRangeRef.current = rangeKey(startDate, endDate)
+  }, [startDate, endDate])
+
+  async function load(start: string, end: string): Promise<Paper[]> {
+    const key = rangeKey(start, end)
     setLoading(true)
     try {
-      const data = await fetchPapers(date)
-      if (activeDateRef.current !== date) return data.papers // stale; don't apply
+      const data = await fetchPapers(start, end)
+      if (activeRangeRef.current !== key) return data.papers // stale; don't apply
       setPapers(data.papers)
       setPulledDates(data.dates)
       setFollowed(data.followed_categories ?? [])
       return data.papers
     } catch (e) {
-      if (activeDateRef.current === date) setStatus(String(e))
+      if (activeRangeRef.current === key) setStatus(String(e))
       return []
     } finally {
-      if (activeDateRef.current === date) setLoading(false)
+      if (activeRangeRef.current === key) setLoading(false)
     }
   }
 
-  async function pull(date: string) {
+  // Pull the range one day at a time, streaming each day's papers into the table
+  // as it arrives so a wide range fills in progressively instead of blocking on
+  // one giant request. Aborts cleanly if the user changes the range mid-pull.
+  async function pull(start: string, end: string) {
+    const key = rangeKey(start, end)
+    const span = start === end ? start : `${start} → ${end}`
+    const days = daysDescending(start, end)
     setBusy(true)
-    setStatus(`Fetching papers submitted on ${date} from arXiv…`)
+    setPage(1)
+    setPapers([]) // rebuild from scratch as days stream in (newest first)
+    setProgress({ done: 0, total: days.length, papers: 0 })
+    setStatus(`Fetching papers submitted ${span} from arXiv…`)
     try {
-      const result = await refresh(date)
-      if (activeDateRef.current !== date) return
-      if (!result.ok) {
-        setStatus(`Error: ${result.error}`)
-        return
+      const acc: Paper[] = []
+      for (let i = 0; i < days.length; i++) {
+        const day = days[i]
+        const result = await refresh(day, day)
+        if (activeRangeRef.current !== key) return // user navigated away; abort
+        if (!result.ok) {
+          setStatus(`Error on ${day}: ${result.error}`)
+          return
+        }
+        const data = await fetchPapers(day, day)
+        if (activeRangeRef.current !== key) return
+        acc.push(...data.papers)
+        setPapers([...acc])
+        setPulledDates(data.dates)
+        setProgress({ done: i + 1, total: days.length, papers: acc.length })
       }
-      const got = await load(date)
-      if (activeDateRef.current !== date) return
-      setPage(1)
       setStatus(
-        got.length > 0
-          ? `Pulled ${result.papers_new} new paper(s) for ${date}.`
-          : `No papers found on arXiv for ${date} in your followed categories.`,
+        acc.length > 0
+          ? `Pulled ${acc.length} paper(s) for ${span}.`
+          : `No papers found on arXiv for ${span} in your followed categories.`,
       )
     } catch (e) {
-      if (activeDateRef.current === date) setStatus(String(e))
+      if (activeRangeRef.current === key) setStatus(String(e))
     } finally {
-      if (activeDateRef.current === date) setBusy(false)
+      if (activeRangeRef.current === key) {
+        setBusy(false)
+        setProgress(null)
+      }
     }
   }
 
-  // Load whatever's already stored for the selected date. Empty dates are not
+  // Load whatever's already stored for the selected range. Empty ranges are not
   // auto-pulled — the user pulls explicitly via the ↻ button (or the empty
-  // state's "Pull papers for <date>" button).
+  // state's "Pull papers" button).
   useEffect(() => {
-    load(activeDate)
+    load(startDate, endDate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDate])
+  }, [startDate, endDate])
 
   // Load the taxonomy once so filter chips can show natural-language names.
   useEffect(() => {
@@ -172,9 +224,21 @@ export default function App() {
       .catch(() => {})
   }, [])
 
-  function onDateChange(date: string) {
-    if (!date || date === activeDate) return
-    setActiveDate(date)
+  function onStartChange(date: string) {
+    if (!date || date === startDate) return
+    setStartDate(date)
+    // Keep the range valid: never let start run past end.
+    if (date > endDate) setEndDate(date)
+    setSelected([])
+    setPage(1)
+    setStatus('')
+  }
+
+  function onEndChange(date: string) {
+    if (!date || date === endDate) return
+    setEndDate(date)
+    // Keep the range valid: never let end fall before start.
+    if (date < startDate) setStartDate(date)
     setSelected([])
     setPage(1)
     setStatus('')
@@ -264,7 +328,7 @@ export default function App() {
       const saved = await saveCategories(codes)
       setFollowed(saved)
       setCatOpen(false)
-      await pull(activeDate)
+      await pull(startDate, endDate)
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
     } finally {
@@ -297,33 +361,47 @@ export default function App() {
         </div>
         <div className="controls">
           <label className="date-field">
-            <span>Date</span>
+            <span>From</span>
             <input
               type="date"
-              value={activeDate}
+              value={startDate}
               max={today}
               list="pulled-dates"
-              onChange={(e) => onDateChange(e.target.value)}
+              onChange={(e) => onStartChange(e.target.value)}
             />
-            <datalist id="pulled-dates">
-              {pulledDates.map((d) => (
-                <option key={d} value={d} />
-              ))}
-            </datalist>
           </label>
+          <label className="date-field">
+            <span>To</span>
+            <input
+              type="date"
+              value={endDate}
+              min={startDate}
+              max={today}
+              list="pulled-dates"
+              onChange={(e) => onEndChange(e.target.value)}
+            />
+          </label>
+          <datalist id="pulled-dates">
+            {pulledDates.map((d) => (
+              <option key={d} value={d} />
+            ))}
+          </datalist>
           <button
             className={`icon-btn${busy ? ' spinning' : ''}`}
-            onClick={() => pull(activeDate)}
+            onClick={() => pull(startDate, endDate)}
             disabled={busy}
-            title={`Re-pull ${activeDate} from arXiv`}
-            aria-label={`Re-pull ${activeDate} from arXiv`}
+            title={`Re-pull ${rangeLabel} from arXiv`}
+            aria-label={`Re-pull ${rangeLabel} from arXiv`}
           >
             ↻
           </button>
           <button className="btn secondary" onClick={openCategories}>
             Categories{followed.length > 0 ? ` (${followed.length})` : ''}
           </button>
-          <a className="btn secondary" href={notebookLmExportUrl(activeDate)}>
+          <a
+            className="btn secondary"
+            href={notebookLmExportUrl(startDate, endDate)}
+          >
             Export for NotebookLM
           </a>
         </div>
@@ -334,7 +412,7 @@ export default function App() {
           groups={catGroups}
           followed={followed}
           saving={catSaving}
-          dateLabel={activeDate}
+          dateLabel={rangeLabel}
           onSave={onSaveCategories}
           onClose={() => setCatOpen(false)}
         />
@@ -351,25 +429,46 @@ export default function App() {
         />
       )}
 
-      {loading || busy ? (
-        <p className="muted">
-          {busy ? `Fetching ${activeDate} from arXiv…` : 'Loading…'}
-        </p>
+      {busy && progress && (
+        <div className="progress">
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{
+                width: `${Math.round((progress.done / progress.total) * 100)}%`,
+              }}
+            />
+          </div>
+          <p className="progress-text muted">
+            Fetching from arXiv — day {progress.done}/{progress.total} ·{' '}
+            {progress.papers} paper{progress.papers === 1 ? '' : 's'} loaded
+          </p>
+        </div>
+      )}
+
+      {loading && !busy && papers.length === 0 ? (
+        <p className="muted">Loading…</p>
       ) : papers.length === 0 ? (
+        busy ? null : (
         <div className="empty">
-          <p>No papers for {activeDate}.</p>
+          <p>No papers for {rangeLabel}.</p>
           <p className="muted">
-            Nothing was found on arXiv for this date in your followed
-            categories. Try another date, broaden your{' '}
+            Nothing was found on arXiv for this range in your followed
+            categories. Try another range, broaden your{' '}
             <button className="link-btn inline" onClick={openCategories}>
               categories
             </button>
             , or pull again.
           </p>
-          <button className="btn" onClick={() => pull(activeDate)} disabled={busy}>
-            Pull papers for {activeDate}
+          <button
+            className="btn"
+            onClick={() => pull(startDate, endDate)}
+            disabled={busy}
+          >
+            Pull papers for {rangeLabel}
           </button>
         </div>
+        )
       ) : (
         <>
           <table>
@@ -417,7 +516,7 @@ export default function App() {
           {visiblePapers.length}
           {selected.length > 0 ? ` of ${papers.length}` : ''} papers
         </span>
-        <span> · {activeDate}</span>
+        <span> · {rangeLabel}</span>
       </footer>
     </div>
   )

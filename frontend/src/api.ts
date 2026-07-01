@@ -12,7 +12,8 @@ export interface Paper {
 }
 
 export interface PapersResponse {
-  date: string | null
+  start: string | null
+  end: string | null
   count: number
   papers: Paper[]
   dates: string[]
@@ -22,30 +23,42 @@ export interface PapersResponse {
 export interface RefreshResult {
   ok: boolean
   error?: string
-  emails_found?: number
-  papers_parsed?: number
+  papers_fetched?: number
   papers_new?: number
   papers_summarized?: number
-  digest_date?: string
+  start_date?: string
+  end_date?: string
 }
 
-export async function fetchPapers(date?: string): Promise<PapersResponse> {
-  const qs = date ? `?date=${encodeURIComponent(date)}` : ''
-  const res = await fetch(`/api/papers${qs}`)
+// Build a `?start=&end=` query string, omitting empty bounds.
+function rangeQuery(start?: string, end?: string): string {
+  const params = new URLSearchParams()
+  if (start) params.set('start', start)
+  if (end) params.set('end', end)
+  const qs = params.toString()
+  return qs ? `?${qs}` : ''
+}
+
+export async function fetchPapers(
+  start?: string,
+  end?: string,
+): Promise<PapersResponse> {
+  const res = await fetch(`/api/papers${rangeQuery(start, end)}`)
   if (!res.ok) throw new Error(`Failed to load papers (${res.status})`)
   return res.json()
 }
 
-// Pull papers submitted on `date` (default: today) from arXiv. Summaries are
-// generated per-row on demand, so this only fetches & stores the papers.
+// Pull papers submitted in [start, end] (default: today) from arXiv. Summaries
+// are generated per-row on demand, so this only fetches & stores the papers.
 export async function refresh(
-  date?: string,
+  start?: string,
+  end?: string,
   summarize = false,
 ): Promise<RefreshResult> {
   const res = await fetch('/api/refresh', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ date, summarize }),
+    body: JSON.stringify({ start, end, summarize }),
   })
   return res.json()
 }
@@ -100,7 +113,6 @@ export async function saveCategories(followed: string[]): Promise<string[]> {
 }
 
 // Returns the URL that downloads a NotebookLM-ready Markdown digest.
-export function notebookLmExportUrl(date?: string): string {
-  const qs = date ? `?date=${encodeURIComponent(date)}` : ''
-  return `/api/export/notebooklm${qs}`
+export function notebookLmExportUrl(start?: string, end?: string): string {
+  return `/api/export/notebooklm${rangeQuery(start, end)}`
 }
