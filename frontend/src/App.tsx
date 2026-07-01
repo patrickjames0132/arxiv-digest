@@ -113,7 +113,6 @@ function PaperRow({ paper }: { paper: Paper }) {
 export default function App() {
   const today = todayISO()
   const [papers, setPapers] = useState<Paper[]>([])
-  const [pulledDates, setPulledDates] = useState<string[]>([])
   const [followed, setFollowed] = useState<string[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [startDate, setStartDate] = useState<string>(today)
@@ -156,7 +155,6 @@ export default function App() {
       const data = await fetchPapers(start, end)
       if (activeRangeRef.current !== key) return data.papers // stale; don't apply
       setPapers(data.papers)
-      setPulledDates(data.dates)
       setFollowed(data.followed_categories ?? [])
       return data.papers
     } catch (e) {
@@ -170,17 +168,44 @@ export default function App() {
   // Pull the range one day at a time, streaming each day's papers into the table
   // as it arrives so a wide range fills in progressively instead of blocking on
   // one giant request. Aborts cleanly if the user changes the range mid-pull.
-  async function pull(start: string, end: string) {
+  async function pull(
+    start: string,
+    end: string,
+    opts: { force?: boolean } = {},
+  ) {
     const key = rangeKey(start, end)
     const span = start === end ? start : `${start} → ${end}`
-    const days = daysDescending(start, end)
+    const allDays = daysDescending(start, end)
+    // By default only fetch days that have no stored papers yet — re-pulling an
+    // overlapping range shouldn't re-download (slowly) what's already here.
+    // `force` re-fetches every day (to catch late/cross-listed arXiv additions).
+    const populated = new Set(papers.map((p) => p.digest_date))
+    const days = opts.force
+      ? allDays
+      : allDays.filter((d) => !populated.has(d))
+
+    if (days.length === 0) {
+      setStatus(
+        `Every day in ${span} is already downloaded — nothing new to pull. ` +
+          `Use “Re-pull all” to re-fetch from arXiv.`,
+      )
+      return
+    }
+
+    const skipped = allDays.length - days.length
     setBusy(true)
     setPage(1)
-    setPapers([]) // rebuild from scratch as days stream in (newest first)
-    setProgress({ done: 0, total: days.length, papers: 0 })
-    setStatus(`Fetching papers submitted ${span} from arXiv…`)
+    // Seed with what's already loaded (unless forcing a clean rebuild), so
+    // existing days stay visible while the new days stream in.
+    const acc: Paper[] = opts.force ? [] : [...papers]
+    if (opts.force) setPapers([])
+    setProgress({ done: 0, total: days.length, papers: acc.length })
+    setStatus(
+      skipped > 0
+        ? `Fetching ${days.length} new day(s) in ${span} — ${skipped} already downloaded…`
+        : `Fetching papers submitted ${span} from arXiv…`,
+    )
     try {
-      const acc: Paper[] = []
       for (let i = 0; i < days.length; i++) {
         const day = days[i]
         const result = await refresh(day, day)
@@ -191,14 +216,20 @@ export default function App() {
         }
         const data = await fetchPapers(day, day)
         if (activeRangeRef.current !== key) return
-        acc.push(...data.papers)
+        // Replace any existing rows for this day with the freshly pulled set,
+        // then keep the table sorted newest-day-first.
+        const merged = acc
+          .filter((p) => p.digest_date !== day)
+          .concat(data.papers)
+        merged.sort((a, b) => (a.digest_date < b.digest_date ? 1 : -1))
+        acc.length = 0
+        acc.push(...merged)
         setPapers([...acc])
-        setPulledDates(data.dates)
         setProgress({ done: i + 1, total: days.length, papers: acc.length })
       }
       setStatus(
         acc.length > 0
-          ? `Pulled ${acc.length} paper(s) for ${span}.`
+          ? `Pulled ${days.length} day(s) for ${span} — ${acc.length} paper(s) loaded.`
           : `No papers found on arXiv for ${span} in your followed categories.`,
       )
     } catch (e) {
@@ -405,7 +436,6 @@ export default function App() {
               type="date"
               value={startDate}
               max={today}
-              list="pulled-dates"
               onChange={(e) => onStartChange(e.target.value)}
             />
           </label>
@@ -416,24 +446,28 @@ export default function App() {
               value={endDate}
               min={startDate}
               max={today}
-              list="pulled-dates"
               onChange={(e) => onEndChange(e.target.value)}
             />
           </label>
-          <datalist id="pulled-dates">
-            {pulledDates.map((d) => (
-              <option key={d} value={d} />
-            ))}
-          </datalist>
           <button
             className={`icon-btn${busy ? ' spinning' : ''}`}
             onClick={() => pull(startDate, endDate)}
             disabled={busy}
-            title={`Re-pull ${rangeLabel} from arXiv`}
-            aria-label={`Re-pull ${rangeLabel} from arXiv`}
+            title={`Pull new days in ${rangeLabel} (skips days already downloaded)`}
+            aria-label={`Pull new days in ${rangeLabel}`}
           >
             ↻
           </button>
+          {papers.length > 0 && (
+            <button
+              className="btn small"
+              onClick={() => pull(startDate, endDate, { force: true })}
+              disabled={busy}
+              title={`Re-fetch every day in ${rangeLabel} from arXiv (catches late additions)`}
+            >
+              Re-pull all
+            </button>
+          )}
           <button className="btn secondary" onClick={openCategories}>
             Categories{followed.length > 0 ? ` (${followed.length})` : ''}
           </button>
