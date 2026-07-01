@@ -18,6 +18,8 @@ export interface PapersResponse {
   papers: Paper[]
   dates: string[]
   followed_categories: string[]
+  // date -> categories already fetched from arXiv for that day.
+  coverage: Record<string, string[]>
 }
 
 export interface RefreshResult {

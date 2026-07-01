@@ -165,6 +165,14 @@ stores each under its own submission day. There is no result cap; the whole
 matching batch is fetched. Papers are keyed by arXiv id, so re-pulling never
 duplicates a paper or re-pays to summarize one.
 
+**Smart, category-aware pulls.** The **↻** button skips days it has already
+downloaded so overlapping re-pulls stay fast — but "already downloaded" is
+tracked *per category* in a `pulls` ledger (date → categories fetched). A day is
+skipped only when **every** followed category has been pulled for it, so adding a
+new subject and hitting **Save & pull** correctly re-fetches days that already
+hold papers from other categories. **Re-pull all** ignores the ledger and
+re-fetches every day (catching late or newly cross-listed arXiv additions).
+
 ## How search works
 
 The search bar (and `GET /api/search?q=&start=&end=`) is **hybrid** — it runs a

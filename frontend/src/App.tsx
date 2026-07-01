@@ -114,6 +114,9 @@ export default function App() {
   const today = todayISO()
   const [papers, setPapers] = useState<Paper[]>([])
   const [followed, setFollowed] = useState<string[]>([])
+  // date -> categories already pulled for that day (from the backend ledger).
+  // A day is only skipped by the smart pull when every followed category is here.
+  const [coverage, setCoverage] = useState<Record<string, string[]>>({})
   const [selected, setSelected] = useState<string[]>([])
   const [startDate, setStartDate] = useState<string>(today)
   const [endDate, setEndDate] = useState<string>(today)
@@ -156,6 +159,7 @@ export default function App() {
       if (activeRangeRef.current !== key) return data.papers // stale; don't apply
       setPapers(data.papers)
       setFollowed(data.followed_categories ?? [])
+      setCoverage(data.coverage ?? {})
       return data.papers
     } catch (e) {
       if (activeRangeRef.current === key) setStatus(String(e))
@@ -171,23 +175,32 @@ export default function App() {
   async function pull(
     start: string,
     end: string,
-    opts: { force?: boolean } = {},
+    opts: { force?: boolean; categories?: string[] } = {},
   ) {
+    // The category set the skip decision is about. Defaults to current state, but
+    // callers (e.g. Save & Pull) pass the just-changed set, since setFollowed is
+    // async and this closure would otherwise see the stale value.
+    const activeCats = opts.categories ?? followed
     const key = rangeKey(start, end)
     const span = start === end ? start : `${start} → ${end}`
     const allDays = daysDescending(start, end)
-    // By default only fetch days that have no stored papers yet — re-pulling an
-    // overlapping range shouldn't re-download (slowly) what's already here.
-    // `force` re-fetches every day (to catch late/cross-listed arXiv additions).
-    const populated = new Set(papers.map((p) => p.digest_date))
-    const days = opts.force
-      ? allDays
-      : allDays.filter((d) => !populated.has(d))
+    // By default only fetch days not yet covered for every followed category —
+    // re-pulling an overlapping range shouldn't re-download (slowly) what's
+    // already here, but adding a new category must re-fetch days that hold papers
+    // from other categories yet were never pulled for the new one. `force`
+    // re-fetches every day (to catch late/cross-listed arXiv additions).
+    const isCovered = (d: string) => {
+      const have = coverage[d]
+      if (!have) return false
+      return activeCats.every((c) => have.includes(c))
+    }
+    const days = opts.force ? allDays : allDays.filter((d) => !isCovered(d))
 
     if (days.length === 0) {
       setStatus(
-        `Every day in ${span} is already downloaded — nothing new to pull. ` +
-          `Use “Re-pull all” to re-fetch from arXiv.`,
+        `Every day in ${span} is already downloaded for your followed ` +
+          `categories — nothing new to pull. Use “Re-pull all” to re-fetch ` +
+          `from arXiv.`,
       )
       return
     }
@@ -225,6 +238,9 @@ export default function App() {
         acc.length = 0
         acc.push(...merged)
         setPapers([...acc])
+        // The refresh above recorded this day's coverage; fold it in so an
+        // immediate re-pull correctly skips the day we just fetched.
+        if (data.coverage) setCoverage((prev) => ({ ...prev, ...data.coverage }))
         setProgress({ done: i + 1, total: days.length, papers: acc.length })
       }
       setStatus(
@@ -398,7 +414,7 @@ export default function App() {
       const saved = await saveCategories(codes)
       setFollowed(saved)
       setCatOpen(false)
-      await pull(startDate, endDate)
+      await pull(startDate, endDate, { categories: saved })
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
     } finally {

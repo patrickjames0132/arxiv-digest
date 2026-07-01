@@ -71,9 +71,11 @@ def get_papers() -> Response:
     start, end = _range_args()
     if start and end:
         papers = store.get_papers_in_range(start, end)
+        coverage = store.pull_coverage(start, end)
     else:
         # No range given: fall back to the latest date on record.
         papers = store.get_papers()
+        coverage = {}
     return jsonify(
         {
             "start": start,
@@ -82,6 +84,9 @@ def get_papers() -> Response:
             "papers": papers,
             "dates": store.available_dates(),
             "followed_categories": store.get_followed_categories(),
+            # date -> categories already fetched for it, so the dashboard can skip
+            # re-pulling a day only when every followed category is covered.
+            "coverage": coverage,
         }
     )
 

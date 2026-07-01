@@ -6,9 +6,21 @@ dashboard's Refresh button (POST /api/refresh).
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from . import arxiv_client, embeddings, store, summarizer
+
+
+def _days_in_range(start_date: str, end_date: str) -> list[str]:
+    """Every ISO day from start to end inclusive (start..end assumed valid)."""
+    start = date.fromisoformat(start_date)
+    end = date.fromisoformat(end_date)
+    days = []
+    cur = start
+    while cur <= end:
+        days.append(cur.isoformat())
+        cur += timedelta(days=1)
+    return days
 
 
 def embed_papers(papers: list[dict]) -> int:
@@ -60,6 +72,9 @@ def run(
     print("[2/4] Storing new papers ...")
     new_count = store.upsert_papers(papers)
     print(f"      {new_count} new paper(s) added to the database.")
+    # Record which categories are now covered for each day in the range, so a
+    # later pull can skip these days only while the followed set is unchanged.
+    store.record_pull(_days_in_range(start_date, end_date), categories)
 
     embedded = 0
     if embed:

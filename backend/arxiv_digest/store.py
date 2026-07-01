@@ -34,6 +34,17 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Ledger of which categories have been fetched from arXiv for each day. Lets the
+-- dashboard skip re-pulling a day only when every currently-followed category is
+-- already covered — so adding a new category correctly re-fetches days that hold
+-- papers from other categories but were never pulled for the new one.
+CREATE TABLE IF NOT EXISTS pulls (
+    digest_date TEXT NOT NULL,
+    category    TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (digest_date, category)
+);
 """
 
 # A full-text index over the searchable columns, kept in sync with `papers` by
@@ -76,6 +87,7 @@ _HAS_VEC: Optional[bool] = None
 
 # Key under which the user's followed categories live in the settings table.
 _FOLLOWED_KEY = "followed_categories"
+_PULLS_BACKFILLED_KEY = "pulls_backfilled"
 
 
 def _try_load_vec(conn: sqlite3.Connection) -> bool:
@@ -114,6 +126,7 @@ def init_db() -> None:
     global _HAS_FTS, _HAS_VEC
     with _connect() as conn:
         conn.executescript(SCHEMA)
+        _backfill_pulls(conn)
         _init_vec(conn)
         try:
             conn.executescript(_FTS_SCHEMA)
@@ -443,3 +456,73 @@ def available_dates() -> list[str]:
             "SELECT DISTINCT digest_date FROM papers ORDER BY digest_date DESC"
         ).fetchall()
     return [r["digest_date"] for r in rows]
+
+
+# --- Pull ledger (which categories were fetched for which days) --------------
+def _backfill_pulls(conn: sqlite3.Connection) -> None:
+    """One-time seed of the pulls ledger for papers stored before it existed.
+
+    The old smart-pull skipped any day that already had papers, i.e. it treated
+    every stored day as fully covered by the followed set. We can't recover which
+    categories were actually queried historically, so we reproduce that behaviour
+    exactly: mark each existing day as covered for the *currently*-followed
+    categories. Guarded by a settings flag so it runs once — a later category
+    change can't retroactively mark the new category as already-pulled.
+    """
+    done = conn.execute(
+        "SELECT 1 FROM settings WHERE key = ?", (_PULLS_BACKFILLED_KEY,)
+    ).fetchone()
+    if done:
+        return
+    followed_row = conn.execute(
+        "SELECT value FROM settings WHERE key = ?", (_FOLLOWED_KEY,)
+    ).fetchone()
+    followed = (
+        json.loads(followed_row["value"])
+        if followed_row
+        else list(config.ARXIV_CATEGORIES)
+    )
+    dates = [
+        r["digest_date"]
+        for r in conn.execute("SELECT DISTINCT digest_date FROM papers")
+    ]
+    pairs = [(d, c) for d in dates for c in followed]
+    if pairs:
+        conn.executemany(
+            "INSERT OR IGNORE INTO pulls (digest_date, category) VALUES (?, ?)",
+            pairs,
+        )
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?, '1') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (_PULLS_BACKFILLED_KEY,),
+    )
+
+
+def record_pull(dates: Iterable[str], categories: Iterable[str]) -> None:
+    """Record that ``categories`` were fetched from arXiv for each of ``dates``."""
+    pairs = [(d, c) for d in dates for c in categories]
+    if not pairs:
+        return
+    with _connect() as conn:
+        conn.executemany(
+            "INSERT OR IGNORE INTO pulls (digest_date, category) VALUES (?, ?)",
+            pairs,
+        )
+
+
+def pull_coverage(start_date: str, end_date: str) -> dict[str, list[str]]:
+    """Map each pulled day in [start_date, end_date] to the categories fetched for
+    it. Days never pulled are absent; a day maps to the list of categories the
+    dashboard has already downloaded for it."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT digest_date, category FROM pulls "
+            "WHERE digest_date BETWEEN ? AND ? "
+            "ORDER BY digest_date, category",
+            (start_date, end_date),
+        ).fetchall()
+    coverage: dict[str, list[str]] = {}
+    for r in rows:
+        coverage.setdefault(r["digest_date"], []).append(r["category"])
+    return coverage
