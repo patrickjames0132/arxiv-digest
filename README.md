@@ -58,20 +58,24 @@ Edit `.env`:
   running you manage the set from the dashboard's **Categories** button, and the
   choice is saved in the database. Full list:
   <https://arxiv.org/category_taxonomy>.
-- **`ARXIV_MAX_RESULTS`** (default `100`) — cap on papers pulled per day.
+
+There is no cap on how many papers a refresh pulls — the entire matching batch
+is fetched. A wide date range across many categories can therefore be large and
+slow (arXiv paginates ~100 results at a time).
 
 ### 2. Fetch papers
 
 ```bash
-uv run python backend/run.py refresh                 # papers submitted today
-uv run python backend/run.py refresh --date 2026-06-25
+uv run python backend/run.py refresh                          # papers submitted today
+uv run python backend/run.py refresh --start 2026-06-25       # a single day
+uv run python backend/run.py refresh --start 2026-06-20 --end 2026-06-25   # a range
 ```
 
-Pulls papers **submitted on the given date** (default today) in your categories
-and stores them under that date. Add `--no-summary` to skip summaries (the
-default in the dashboard, where you summarize each paper on demand via its **Get
-summary** button); without it the CLI also summarizes the batch, handy for a
-daily cron.
+Pulls papers **submitted in the given date range** (default: today; `--end`
+defaults to `--start`) in your categories and stores each under its own
+submission day. Add `--no-summary` to skip summaries (the default in the
+dashboard, where you summarize each paper on demand via its **Get summary**
+button); without it the CLI also summarizes the batch, handy for a daily cron.
 
 ### 3. Open the dashboard
 
@@ -96,11 +100,12 @@ uv run python backend/run.py serve             # serves dashboard + API at :5000
 
 Open <http://127.0.0.1:5000>. In the dashboard: the **Categories** button opens
 a searchable picker for the full arXiv taxonomy — the subjects you choose are
-the ones pulled from arXiv *and* offered as filters. Pick any **date** to view
-that day's papers (if none have been pulled yet, you'll see a prompt to fetch
-them), **Refresh papers** pulls the selected day's submissions in your followed
-categories, **Get summary** on any row summarizes that one paper on demand, the
-category chips filter the day's batch, and long days are paginated.
+the ones pulled from arXiv *and* offered as filters. Pick a **From / To** date
+range to view its papers (if none have been pulled yet, you'll see a prompt to
+fetch them), the **↻** button pulls the selected range's submissions in your
+followed categories, **Get summary** on any row summarizes that one paper on
+demand, the category chips filter the loaded batch, and long ranges are
+paginated.
 
 ---
 
@@ -124,7 +129,7 @@ arxiv-digest/
 │   ├── run.py                # CLI: serve | refresh
 │   └── arxiv_digest/
 │       ├── config.py         # all settings, from .env
-│       ├── arxiv_client.py   # fetch papers for a date from the arXiv API
+│       ├── arxiv_client.py   # fetch papers for a date range from the arXiv API
 │       ├── taxonomy.py       # full arXiv category taxonomy (+ taxonomy.json)
 │       ├── summarizer.py     # Claude summaries (cached by arXiv id)
 │       ├── store.py          # SQLite persistence (papers + settings)
@@ -136,10 +141,11 @@ arxiv-digest/
 
 ## How fetching works
 
-`arxiv_client.fetch_papers_for_date()` builds a query like
+`arxiv_client.fetch_papers_in_range()` builds a query like
 `(cat:cs.LG OR cat:cs.AI OR …) AND submittedDate:[YYYYMMDD0000 TO YYYYMMDD2359]`
-— i.e. papers **submitted on that date** (GMT) in your categories — and stores
-them under that date. Papers are keyed by arXiv id, so re-pulling a date never
+— i.e. papers **submitted in that date range** (GMT) in your categories — and
+stores each under its own submission day. There is no result cap; the whole
+matching batch is fetched. Papers are keyed by arXiv id, so re-pulling never
 duplicates a paper or re-pays to summarize one.
 
 ## Notes & next steps
