@@ -11,6 +11,7 @@ import {
   type GraphNode,
   type GraphResponse,
 } from './api'
+import Teacher from './Teacher'
 import './atlas.css'
 
 // The lib's generic prop typings fight our accessor signatures; render via an
@@ -83,6 +84,8 @@ export default function GraphExplorer() {
   const [yearHi, setYearHi] = useState(0)
   const [pinned, setPinned] = useState<Set<string>>(new Set())
   const [hoverId, setHoverId] = useState<string | null>(null)
+  // Nodes the AI teacher is currently talking about (active beat / cited papers).
+  const [highlightIds, setHighlightIds] = useState<Set<string>>(new Set())
 
   const wrapRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,6 +140,7 @@ export default function GraphExplorer() {
     setYearHi(base.maxYear)
     setPinned(new Set())
     setHoverId(null)
+    setHighlightIds(new Set())
   }, [base])
 
   // Filtered view. Nodes keep their identity (so positions/pins persist); links
@@ -168,6 +172,13 @@ export default function GraphExplorer() {
     })
     return s
   }, [base, hoverId])
+
+  // What to focus the canvas on: hovering wins; otherwise the papers the AI
+  // teacher is currently talking about (so beats/answers light up their nodes).
+  const focusSet = useMemo(
+    () => hoverSet ?? (highlightIds.size ? highlightIds : null),
+    [hoverSet, highlightIds],
+  )
 
   const selected = useMemo<VNode | null>(() => {
     if (!base || !selectedId) return null
@@ -295,7 +306,7 @@ export default function GraphExplorer() {
   // Repaint when highlight/selection/pins change (the sim may be at rest).
   useEffect(() => {
     fgRef.current?.refresh?.()
-  }, [hoverId, selectedId, pinned, view])
+  }, [hoverId, selectedId, pinned, view, highlightIds])
 
   const hasGraph = !!base && base.nodes.length > 0
   const showYears = !!base && base.maxYear > base.minYear
@@ -446,7 +457,7 @@ export default function GraphExplorer() {
               onEngineStop={onEngineStop}
               cooldownTicks={120}
               linkColor={(l: VLink) =>
-                hoverId && l._s !== hoverId && l._t !== hoverId
+                focusSet && !focusSet.has(l._s) && !focusSet.has(l._t)
                   ? DIM_EDGE
                   : EDGE_COLOR[l.type]
               }
@@ -463,14 +474,27 @@ export default function GraphExplorer() {
                 globalScale: number,
               ) => {
                 const r = nodeRadius(node)
-                const dim = hoverSet ? !hoverSet.has(node.id) : false
+                const dim = focusSet ? !focusSet.has(node.id) : false
                 const isPinned = pinned.has(node.id)
                 const isSel = selectedId === node.id
+                const isLit = highlightIds.has(node.id)
 
+                // Glow behind papers the teacher is highlighting.
+                if (isLit && !dim) {
+                  ctx.beginPath()
+                  ctx.arc(node.x, node.y, r + 5, 0, 2 * Math.PI)
+                  ctx.fillStyle = 'rgba(255,209,102,0.22)'
+                  ctx.fill()
+                }
                 ctx.beginPath()
                 ctx.arc(node.x, node.y, r, 0, 2 * Math.PI)
                 ctx.fillStyle = dim ? DIM_NODE : REL_COLOR[primaryRel(node)]
                 ctx.fill()
+                if (isLit && !dim) {
+                  ctx.lineWidth = 2 / globalScale
+                  ctx.strokeStyle = '#ffd166'
+                  ctx.stroke()
+                }
                 if (isPinned && !dim) {
                   ctx.lineWidth = 1.5 / globalScale
                   ctx.strokeStyle = 'rgba(242,244,248,0.55)'
@@ -481,7 +505,7 @@ export default function GraphExplorer() {
                   ctx.strokeStyle = '#f2f4f8'
                   ctx.stroke()
                 }
-                if (!dim && (node.is_seed || isSel || globalScale > 1.6)) {
+                if (!dim && (node.is_seed || isSel || isLit || globalScale > 1.6)) {
                   const fontSize = Math.max(11 / globalScale, 2)
                   ctx.font = `${fontSize}px -apple-system, sans-serif`
                   ctx.textAlign = 'center'
@@ -578,6 +602,10 @@ export default function GraphExplorer() {
               )}
             </div>
           </aside>
+        )}
+
+        {hasGraph && graph && (
+          <Teacher graph={graph} onHighlight={setHighlightIds} />
         )}
       </div>
     </div>

@@ -239,6 +239,120 @@ export async function fetchPaperDetail(arxivId: string): Promise<GraphNode> {
   return res.json()
 }
 
+// --- arXiv Atlas: the AI teacher (streaming lecture + Q&A) --------------------
+
+// One beat of a lecture: a paragraph of narration bound to the graph nodes it's
+// about, so they light up in sync as the beat is revealed.
+export interface Beat {
+  heading: string
+  text: string
+  node_ids: string[]
+}
+
+// A trimmed node the teacher needs — the visible graph is its grounding scope.
+export interface TeacherNode {
+  id: string
+  title: string
+  year: number | null
+  citation_count?: number | null
+  authors?: string | null
+  tldr?: string | null
+  abstract?: string | null
+  rels: string[]
+}
+
+export type LectureMode = 'history' | 'intuition' | 'bridge'
+
+// Read a `text/event-stream` POST response, dispatching each frame to `onEvent`
+// as (eventName, parsedData). Shared by the lecture + Q&A streamers.
+async function readSSE(
+  res: Response,
+  onEvent: (event: string, data: unknown) => void,
+): Promise<void> {
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error((data as { error?: string }).error || `Request failed (${res.status})`)
+  }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    let sep: number
+    // Frames are separated by a blank line.
+    while ((sep = buf.indexOf('\n\n')) !== -1) {
+      const frame = buf.slice(0, sep)
+      buf = buf.slice(sep + 2)
+      let event = 'message'
+      let data = ''
+      for (const line of frame.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim()
+        else if (line.startsWith('data:')) data += line.slice(5).trim()
+      }
+      if (!data) continue
+      try {
+        onEvent(event, JSON.parse(data))
+      } catch {
+        /* ignore malformed frame */
+      }
+    }
+  }
+}
+
+export interface LectureHandlers {
+  onBeat: (beat: Beat) => void
+  onDone?: () => void
+  onError?: (message: string) => void
+  signal?: AbortSignal
+}
+
+// Stream a lecture over the visible graph. Beats arrive one at a time.
+export async function streamLecture(
+  body: { seed: { title: string; id?: string }; nodes: TeacherNode[]; mode: LectureMode; target?: { title: string } },
+  h: LectureHandlers,
+): Promise<void> {
+  const res = await fetch('/api/lecture', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: h.signal,
+  })
+  await readSSE(res, (event, data) => {
+    if (event === 'beat') h.onBeat(data as Beat)
+    else if (event === 'done') h.onDone?.()
+    else if (event === 'error') h.onError?.((data as { error: string }).error)
+  })
+}
+
+export interface AskHandlers {
+  onToken: (text: string) => void
+  onCited: (nodeIds: string[]) => void
+  onDone?: () => void
+  onError?: (message: string) => void
+  signal?: AbortSignal
+}
+
+// Stream a grounded answer: prose tokens, then the nodes it cited.
+export async function streamAsk(
+  body: { question: string; session_id: string; seed: { title: string; id?: string }; nodes: TeacherNode[] },
+  h: AskHandlers,
+): Promise<void> {
+  const res = await fetch('/api/ask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: h.signal,
+  })
+  await readSSE(res, (event, data) => {
+    if (event === 'token') h.onToken((data as { text: string }).text)
+    else if (event === 'cited') h.onCited((data as { node_ids: string[] }).node_ids)
+    else if (event === 'done') h.onDone?.()
+    else if (event === 'error') h.onError?.((data as { error: string }).error)
+  })
+}
+
 // Returns the URL that downloads a NotebookLM-ready Markdown digest. When `q` is
 // given, the digest contains only that search's results (else the whole range).
 export function notebookLmExportUrl(

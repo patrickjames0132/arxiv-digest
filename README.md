@@ -1,7 +1,7 @@
 # arXiv Atlas
 
-**Explore how research papers connect — and (soon) have an AI teacher narrate
-the story of how a field got here.**
+**Explore how research papers connect — and have an AI teacher narrate the story
+of how a field got here.**
 
 Drop in a paper and Atlas renders a **Connected-Papers-style interactive graph**
 of how it links to the literature — the papers it cites (its intellectual
@@ -14,9 +14,12 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.0 — the graph explorer is live. The AI teacher, Q&A, concept
-> mindmaps, and audio lectures are on the roadmap — see
-> **[OnePager.md](OnePager.md)** for the full vision and phase plan.
+> **Status:** v1.1 — the graph explorer **and a streaming AI teacher** are live:
+> Claude narrates a lecture over the graph and lights up nodes in sync, and
+> answers follow-up questions grounded in the papers on screen. Full-text
+> reading + agentic graph traversal (Phase 3b), concept mindmaps, and audio
+> lectures are next — see **[OnePager.md](OnePager.md)** for the full vision and
+> phase plan.
 
 ```
 ┌──────────┐  find seed   ┌─────────┐  graph/refs/cites/recs  ┌──────────────────┐
@@ -35,7 +38,7 @@ graphs you've already looked at.
 [Semantic Scholar Academic Graph API](https://api.semanticscholar.org/api-docs/)
 (the same data backbone Connected Papers uses) · the
 [`arxiv`](https://pypi.org/project/arxiv/) package for seed search · Claude (via
-the `claude` CLI **or** the Anthropic API) for the upcoming AI-teacher features.
+the `claude` CLI **or** the Anthropic API) for the AI-teacher lecture + Q&A.
 Runs locally on your Mac.
 
 ---
@@ -102,6 +105,19 @@ The Vite dev server proxies `/api/*` to Flask.
    re-seed the whole graph on that paper. Re-seeding works by Semantic Scholar
    id, so you can hop onto cited **journal** papers with no arXiv id and keep
    going. Every hop is cached, so backtracking is instant.
+5. **Learn from the AI teacher** (right panel):
+   - **"How we got here"** — a chronological lecture across the neighborhood,
+     from the oldest references through the seed to the work it spawned. Beats
+     stream in one at a time, and the papers each beat is about **light up** on
+     the graph in sync.
+   - **"This paper's intuition"** — a deep-dive on the seed paper itself (what it
+     solved, the core idea, why it works), using the neighbors for contrast.
+   - **Ask** — type a question and get a streamed answer **grounded in the papers
+     on screen**; the papers it draws from light up. Follow-ups keep context.
+
+   The teacher uses Claude through the same dual backend as summaries — the
+   `claude` CLI (Pro/Max subscription, no API billing) or the Anthropic API. Set
+   `TEACHER_BACKEND=claude_cli` to prefer the subscription path.
 
 ---
 
@@ -144,10 +160,11 @@ arxiv-digest/                    # (repo name predates the "Atlas" rename)
 │       ├── graph.py             # assemble a paper's neighborhood graph
 │       ├── cache.py             # tiny TTL cache for dynamic artifacts
 │       ├── arxiv_client.py      # arXiv search (finds the seed paper)
-│       ├── app.py               # Flask API + serves the built frontend
+│       ├── teacher.py           # streaming AI lecture + grounded Q&A (dual backend)
+│       ├── app.py               # Flask API (incl. /api/lecture, /api/ask) + frontend
 │       └── … (summarizer, taxonomy, and legacy digest modules)
 └── frontend/                    # React + TS + Vite
-    └── src/{GraphExplorer.tsx, api.ts, atlas.css, main.tsx}
+    └── src/{GraphExplorer.tsx, Teacher.tsx, api.ts, atlas.css, main.tsx}
 ```
 
 *Legacy note:* the earlier "daily digest" era (local paper store, hybrid FTS5 +
@@ -157,8 +174,10 @@ dormant. They'll be retired as the v1.0 rewrite proceeds; see **OnePager.md**.
 
 ## Notes & next steps
 
-- **The AI teacher** is the headline of the roadmap: Claude narrating the
-  history and intuition of a field, synced to the graph, with follow-up Q&A —
-  plus concept mindmaps and Podcastfy audio lectures. See **[OnePager.md](OnePager.md)**.
+- **The AI teacher** (lecture + Q&A) is **live** — Claude narrates the history
+  and intuition of a field, synced to the graph, with follow-up Q&A grounded in
+  the visible papers. Next up: **full-text reading + agentic graph traversal**
+  (Phase 3b) so answers source the papers themselves, plus concept mindmaps and
+  Podcastfy audio lectures. See **[OnePager.md](OnePager.md)**.
 - **Secrets:** `.env` is gitignored — never commit it. Keys are optional; Atlas
   runs keyless (just rate-limited on Semantic Scholar).

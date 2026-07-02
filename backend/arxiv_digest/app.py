@@ -17,6 +17,7 @@ In production it also serves the built React app from frontend/dist.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import datetime
@@ -35,6 +36,7 @@ from . import (
     store,
     summarizer,
     taxonomy,
+    teacher,
 )
 
 # The built frontend lands in frontend/dist after `npm run build`.
@@ -123,6 +125,103 @@ def api_paper(arxiv_id: str) -> Response:
     if not node:
         return jsonify({"error": f"No paper found for {seed}."}), 404
     return jsonify(node)
+
+
+# --- AI teacher (Phase 3a): streaming lecture + grounded Q&A -----------------
+# Session-scoped Q&A history, kept in memory (cleared on restart — fine for v1).
+# Maps a client-generated session id -> [{role, content}, ...].
+_QA_SESSIONS: dict[str, list[dict]] = {}
+
+
+def _sse(event: str, data: object) -> str:
+    """Format one Server-Sent Event frame."""
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+def _sse_response(generator) -> Response:
+    """Wrap a generator of SSE frames as a streaming text/event-stream response.
+
+    X-Accel-Buffering:no keeps nginx (if ever put in front) from buffering the
+    stream; Cache-Control:no-cache stops intermediaries caching partial output.
+    """
+    return Response(
+        generator,
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/lecture")
+def api_lecture() -> Response:
+    """Stream a lecture over the visible graph as SSE ``beat`` events.
+
+    Body: {seed: {title,...}, nodes: [visible node objects], mode:
+    history|intuition|bridge, target?: {title,...}}. Each ``beat`` event carries
+    {heading, text, node_ids} so the frontend can reveal it and light up nodes.
+    """
+    payload = request.get_json(silent=True) or {}
+    nodes = payload.get("nodes")
+    if not isinstance(nodes, list) or not nodes:
+        return jsonify({"error": "nodes must be a non-empty list"}), 400
+    seed = payload.get("seed") or {}
+    mode = payload.get("mode") or "history"
+    target = payload.get("target")
+
+    def gen():
+        try:
+            for beat in teacher.lecture_beats(seed, nodes, mode=mode, target=target):
+                yield _sse("beat", beat)
+            yield _sse("done", {})
+        except Exception as exc:  # surface to the panel AND log the traceback
+            app.logger.exception("lecture failed")
+            yield _sse("error", {"error": str(exc)})
+
+    return _sse_response(gen())
+
+
+@app.post("/api/ask")
+def api_ask() -> Response:
+    """Answer a question grounded in the visible graph, streamed as SSE.
+
+    Body: {question, session_id, seed, nodes}. Emits ``token`` events (prose) then
+    a final ``cited`` event ({node_ids}). Conversation history is keyed by
+    session_id so follow-ups keep context.
+    """
+    payload = request.get_json(silent=True) or {}
+    question = (payload.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "question is required"}), 400
+    nodes = payload.get("nodes")
+    if not isinstance(nodes, list) or not nodes:
+        return jsonify({"error": "nodes must be a non-empty list"}), 400
+    seed = payload.get("seed") or {}
+    session_id = payload.get("session_id") or ""
+    history = _QA_SESSIONS.get(session_id, []) if session_id else []
+
+    def gen():
+        answer_parts: list[str] = []
+        try:
+            for kind, data in teacher.answer_stream(question, seed, nodes, history):
+                if kind == "token":
+                    answer_parts.append(data)
+                    yield _sse("token", {"text": data})
+                elif kind == "cited":
+                    yield _sse("cited", {"node_ids": data})
+            yield _sse("done", {})
+        except Exception as exc:
+            app.logger.exception("ask failed")
+            yield _sse("error", {"error": str(exc)})
+            return
+        # Persist the turn only on success, capped to the recent window.
+        if session_id:
+            convo = _QA_SESSIONS.setdefault(session_id, [])
+            convo.append({"role": "user", "content": question})
+            convo.append({"role": "assistant", "content": "".join(answer_parts).strip()})
+            keep = config.TEACHER_HISTORY_TURNS * 2
+            if len(convo) > keep:
+                del convo[:-keep]
+
+    return _sse_response(gen())
 
 
 @app.get("/api/papers")

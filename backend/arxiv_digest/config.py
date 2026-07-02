@@ -100,6 +100,23 @@ CLAUDE_CLI_MODEL = os.getenv("CLAUDE_CLI_MODEL", "haiku")
 # Per-paper timeout (seconds) for a headless CLI call.
 CLAUDE_CLI_TIMEOUT = int(os.getenv("CLAUDE_CLI_TIMEOUT", "120"))
 
+# --- AI teacher (Phase 3) ----------------------------------------------------
+# The narration/Q&A engine reuses the same dual-backend idea as summaries (API
+# or the `claude` CLI under a Pro/Max subscription) but STREAMS its output so the
+# frontend can reveal the lecture beat-by-beat and light up graph nodes in sync.
+# Defaults inherit the summary backend choice; override independently if you want
+# (e.g. cheap Haiku for bulk summaries, smarter Sonnet for narration).
+TEACHER_BACKEND = os.getenv("TEACHER_BACKEND", SUMMARY_BACKEND)
+TEACHER_FALLBACK_BACKEND = os.getenv("TEACHER_FALLBACK_BACKEND", SUMMARY_FALLBACK_BACKEND)
+# Narration wants a stronger model than the bulk summarizer's Haiku.
+TEACHER_MODEL = os.getenv("TEACHER_MODEL", "claude-sonnet-4-6")
+TEACHER_CLI_MODEL = os.getenv("TEACHER_CLI_MODEL", "sonnet")
+# Token/latency budgets for a single lecture or answer.
+TEACHER_MAX_TOKENS = int(os.getenv("TEACHER_MAX_TOKENS", "3000"))
+TEACHER_CLI_TIMEOUT = int(os.getenv("TEACHER_CLI_TIMEOUT", "180"))
+# How many past turns of a Q&A session to keep as context (user+assistant pairs).
+TEACHER_HISTORY_TURNS = int(os.getenv("TEACHER_HISTORY_TURNS", "8"))
+
 # --- Server ------------------------------------------------------------------
 FLASK_HOST = os.getenv("FLASK_HOST", "127.0.0.1")
 FLASK_PORT = int(os.getenv("FLASK_PORT", "5000"))

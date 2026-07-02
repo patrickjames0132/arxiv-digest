@@ -1,6 +1,6 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.0 planning · living document · last updated during the v0.11.0 → v1.0 pivot
+> **Status:** v1.1 · living document · AI teacher (lecture + Q&A) shipped in v1.1.0
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -114,11 +114,32 @@ optional, behind a key.
       all), **focus-on-hover** dimming, and a papers-shown readout. **Visual
       traversal:** double-click (or "Explore from here") re-seeds the graph on
       any node — journal papers included.
-- [ ] **Phase 3 — AI teacher + Q&A** — `teacher.py`, lecture beats synced to
-      graph highlights, `/api/lecture` (history / intuition / bridge modes); plus
-      conversational **Q&A** (`/api/ask`, session-scoped) grounded in the
-      on-screen graph, with cited nodes highlighting. Shared infrastructure, so
-      lecture and Q&A ship together.
+- [x] **Phase 3a — AI teacher + Q&A (grounded)** *(v1.1.0)* — `teacher.py` with
+      the dual Claude backend (Anthropic API **or** the `claude` CLI subscription)
+      **streamed** so narration reveals beat-by-beat. `/api/lecture` (SSE) emits
+      ordered lecture **beats**, each bound to graph nodes that **light up in
+      sync**; modes: *history* ("how we got here") and *intuition* (bridge mode
+      exists in the backend, no UI button yet). `/api/ask` (SSE) answers
+      conversational, **session-scoped** questions grounded in the on-screen
+      graph, streaming tokens then highlighting the **cited nodes**. Frontend:
+      the `Teacher.tsx` panel + a `highlightIds` glow/dim path reusing the
+      focus-on-hover machinery. *Grounded in the visible neighborhood only — no
+      full-text reading or graph-jumping yet (that's 3b).*
+- [ ] **Phase 3b — Agentic teacher** — a tool-use loop so the teacher can
+      **read papers' full text** (`read_paper`, via ar5iv/arXiv) and **traverse
+      to off-screen papers** (`expand_node`) on demand, under hard guardrails: a
+      **hop budget**, a **visited-set** (kills reference cycles), a total-step cap,
+      and size-capped tool results. This is what makes Q&A actually *source the
+      papers* rather than reason over titles + the seed's summary.
+- [ ] **Phase 3.5 — Timeline layout** — a **Force ↔ Timeline** toggle. Timeline
+      places nodes on an exact **year axis** (x) with the force sim resolving the
+      y-axis into citation "threads" flowing through time — so the chronological
+      lecture sweeps left→right as nodes light up. (Force layout stays the
+      default; a relation-band variant is a possible later sub-toggle.)
+- [ ] **Sidebar enrichment** — under the detail panel's TL;DR, show the paper's
+      **own figures with their captions** (extracted from **ar5iv** HTML, cached,
+      images proxied to dodge hotlink/CORS; graceful fallback where ar5iv has no
+      coverage), plus a **direct PDF link** alongside the arXiv-abstract link.
 - [ ] **Phase 4 — Concept mindmap** — Claude concept-map JSON, "bridge two
       topics," `/api/mindmap`.
 - [ ] **Phase 5 — Audio lecture** — Podcastfy integration, Edge TTS default,
