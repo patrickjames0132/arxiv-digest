@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import ForceGraph2DImport from 'react-force-graph-2d'
+// react-force-graph's own force lib (d3-force-3d) ships no types; we only need
+// forceCollide to space timeline nodes out by their radius.
+// @ts-expect-error - no type declarations
+import { forceCollide } from 'd3-force-3d'
 import {
   fetchFigures,
   fetchGraph,
@@ -39,6 +43,10 @@ const EDGE_COLOR: Record<EdgeType, string> = {
 }
 const DIM_NODE = 'rgba(120,130,150,0.18)'
 const DIM_EDGE = 'rgba(120,130,150,0.05)'
+
+// Timeline layout: graph-x units per publication year. Wide enough that year
+// columns read as distinct; zoomToFit handles the overall scale.
+const YEAR_SPACING = 120
 
 const REL_TYPES = ['reference', 'citation', 'similar'] as const
 const REL_LABEL: Record<string, string> = {
@@ -91,6 +99,8 @@ export default function GraphExplorer() {
   const [hoverId, setHoverId] = useState<string | null>(null)
   // Nodes the AI teacher is currently talking about (active beat / cited papers).
   const [highlightIds, setHighlightIds] = useState<Set<string>>(new Set())
+  // 'force' = organic force-directed; 'timeline' = x pinned to publication year.
+  const [layout, setLayout] = useState<'force' | 'timeline'>('force')
 
   const wrapRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -146,6 +156,23 @@ export default function GraphExplorer() {
     setPinned(new Set())
     setHoverId(null)
     setHighlightIds(new Set())
+  }, [base])
+
+  // Re-pin x by year when a new graph loads while Timeline is active (a fresh
+  // graph has no user pins yet, so every node gets its year column).
+  useEffect(() => {
+    if (!base || layout !== 'timeline') return
+    base.nodes.forEach((n) => {
+      n.fx = yearToX(n.year)
+      n.fy = undefined
+    })
+    const fg = fgRef.current
+    const charge = fg?.d3Force?.('charge')
+    if (charge) charge.strength(-30)
+    fg?.d3Force?.('collide', forceCollide((n: VNode) => nodeRadius(n) + 6))
+    fitDone.current = false
+    fg?.d3ReheatSimulation?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base])
 
   // Filtered view. Nodes keep their identity (so positions/pins persist); links
@@ -269,18 +296,39 @@ export default function GraphExplorer() {
     [details, loadGraph],
   )
 
-  const onNodeDragEnd = useCallback((node: VNode) => {
-    node.fx = node.x
-    node.fy = node.y
-    setPinned((p) => new Set(p).add(node.id))
-  }, [])
+  // Map a year to its x on the timeline. Papers with no year sit in an "n.d."
+  // lane just left of the earliest year.
+  const yearToX = useCallback(
+    (year: number | null | undefined) => {
+      if (!base) return 0
+      const y = typeof year === 'number' ? year : base.minYear - 1
+      return (y - base.minYear) * YEAR_SPACING
+    },
+    [base],
+  )
+
+  const onNodeDragEnd = useCallback(
+    (node: VNode) => {
+      if (layout === 'timeline') {
+        // Keep the paper in its year column; the drag only sets its height.
+        node.fx = yearToX(node.year)
+        node.fy = node.y
+      } else {
+        node.fx = node.x
+        node.fy = node.y
+      }
+      setPinned((p) => new Set(p).add(node.id))
+    },
+    [layout, yearToX],
+  )
 
   const togglePinSelected = useCallback(() => {
     if (!base || !selectedId) return
     const n = base.nodes.find((x) => x.id === selectedId)
     if (!n) return
     if (pinned.has(selectedId)) {
-      n.fx = undefined
+      // Unpin: in Timeline, keep the year-column x-pin; in Force, fully release.
+      n.fx = layout === 'timeline' ? yearToX(n.year) : undefined
       n.fy = undefined
       setPinned((p) => {
         const s = new Set(p)
@@ -293,16 +341,18 @@ export default function GraphExplorer() {
       n.fy = n.y
       setPinned((p) => new Set(p).add(selectedId))
     }
-  }, [base, selectedId, pinned])
+  }, [base, selectedId, pinned, layout, yearToX])
 
   const releaseAll = useCallback(() => {
     base?.nodes.forEach((n) => {
-      n.fx = undefined
+      // Clearing user pins keeps the timeline structure (re-pin x by year).
+      n.fx = base && layout === 'timeline' ? yearToX(n.year) : undefined
       n.fy = undefined
     })
     setPinned(new Set())
+    fitDone.current = false
     fgRef.current?.d3ReheatSimulation?.()
-  }, [base])
+  }, [base, layout, yearToX])
 
   const toggleType = useCallback((t: string) => {
     setEnabled((prev) => {
@@ -313,17 +363,107 @@ export default function GraphExplorer() {
     })
   }, [])
 
+  // Switch layout. Timeline pins each node's x to its year (y stays force-driven
+  // so citation threads form); Force releases those x-pins. User-pinned nodes
+  // keep their fixed position either way.
+  const applyLayout = useCallback(
+    (mode: 'force' | 'timeline') => {
+      if (!base) return
+      // Switching layout releases all user pins — otherwise a node pinned in one
+      // mode stays stuck at that position in the other.
+      base.nodes.forEach((n) => {
+        if (mode === 'timeline') {
+          n.fx = yearToX(n.year)
+          n.fy = undefined
+        } else {
+          n.fx = undefined
+          n.fy = undefined
+        }
+      })
+      setPinned(new Set())
+      // Timeline: a collision force sized to each node's radius spreads papers
+      // apart within a year column (no overlap, even spacing) rather than letting
+      // them clump. Force mode keeps the default (no collide).
+      const fg = fgRef.current
+      const charge = fg?.d3Force?.('charge')
+      if (charge) charge.strength(-30)
+      fg?.d3Force?.(
+        'collide',
+        mode === 'timeline' ? forceCollide((n: VNode) => nodeRadius(n) + 6) : null,
+      )
+      fitDone.current = false
+      fg?.d3ReheatSimulation?.()
+    },
+    [base, yearToX],
+  )
+
+  const setLayoutMode = useCallback(
+    (mode: 'force' | 'timeline') => {
+      setLayout(mode)
+      applyLayout(mode)
+    },
+    [applyLayout],
+  )
+
   const onEngineStop = useCallback(() => {
+    // In Timeline, once the sim settles, freeze y as well (x is already pinned by
+    // year) so the layout is stable and dragging one node can't re-relax the rest.
+    if (layout === 'timeline' && base) {
+      base.nodes.forEach((n) => {
+        if (!pinned.has(n.id) && typeof n.y === 'number') n.fy = n.y
+      })
+    }
     if (!fitDone.current && fgRef.current) {
       fgRef.current.zoomToFit(400, 60)
       fitDone.current = true
     }
-  }, [])
+  }, [layout, base, pinned])
 
-  // Repaint when highlight/selection/pins change (the sim may be at rest).
+  // Draw the year axis behind the graph in Timeline mode: a faint gridline +
+  // label per year, thinned out when zoomed too far to fit them all.
+  const drawAxis = useCallback(
+    (ctx: CanvasRenderingContext2D, globalScale: number) => {
+      const fg = fgRef.current
+      if (layout !== 'timeline' || !base || !fg || base.maxYear <= base.minYear)
+        return
+      const tl = fg.screen2GraphCoords(0, 0)
+      const br = fg.screen2GraphCoords(size.w, size.h)
+      // Only label as many years as comfortably fit (≥28px apart on screen).
+      const px = YEAR_SPACING * globalScale
+      const step = px < 28 ? Math.ceil(28 / px) : 1
+      ctx.save()
+      ctx.font = `${11 / globalScale}px -apple-system, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'top'
+      ctx.lineWidth = 1 / globalScale
+      for (let yr = base.minYear; yr <= base.maxYear; yr++) {
+        if ((yr - base.minYear) % step !== 0) continue
+        const x = yearToX(yr)
+        ctx.strokeStyle = 'rgba(120,130,150,0.12)'
+        ctx.beginPath()
+        ctx.moveTo(x, tl.y)
+        ctx.lineTo(x, br.y)
+        ctx.stroke()
+        ctx.fillStyle = 'rgba(150,160,180,0.65)'
+        ctx.fillText(String(yr), x, tl.y + 4 / globalScale)
+      }
+      ctx.restore()
+    },
+    [layout, base, size, yearToX],
+  )
+
+  // Repaint when highlight/selection/pins/layout change (the sim may be at rest).
   useEffect(() => {
     fgRef.current?.refresh?.()
-  }, [hoverId, selectedId, pinned, view, highlightIds])
+  }, [hoverId, selectedId, pinned, view, highlightIds, layout])
+
+  // In Timeline, refit when the visible year range changes so narrowing the
+  // slider zooms into those years — bigger nodes, less empty space.
+  useEffect(() => {
+    if (layout !== 'timeline') return
+    const id = setTimeout(() => fgRef.current?.zoomToFit(400, 60), 150)
+    return () => clearTimeout(id)
+  }, [layout, yearLo, yearHi])
 
   const hasGraph = !!base && base.nodes.length > 0
   const showYears = !!base && base.maxYear > base.minYear
@@ -392,6 +532,20 @@ export default function GraphExplorer() {
 
           {hasGraph && (
             <div className="controls">
+              <div className="layout-toggle">
+                <button
+                  className={layout === 'force' ? 'on' : ''}
+                  onClick={() => setLayoutMode('force')}
+                >
+                  Force
+                </button>
+                <button
+                  className={layout === 'timeline' ? 'on' : ''}
+                  onClick={() => setLayoutMode('timeline')}
+                >
+                  Timeline
+                </button>
+              </div>
               <div className="ctrl-chips">
                 {REL_TYPES.map((t) => (
                   <button
@@ -468,7 +622,9 @@ export default function GraphExplorer() {
                 </div>
               </div>
               <div className="ctrl-hint">
-                drag to pin · double-click a node to re-seed
+                {layout === 'timeline'
+                  ? 'papers placed left→right by year · double-click to re-seed'
+                  : 'drag to pin · double-click a node to re-seed'}
               </div>
             </div>
           )}
@@ -488,6 +644,7 @@ export default function GraphExplorer() {
               onNodeHover={(n: VNode | null) => setHoverId(n ? n.id : null)}
               onNodeDragEnd={onNodeDragEnd}
               onEngineStop={onEngineStop}
+              onRenderFramePre={drawAxis}
               cooldownTicks={120}
               linkColor={(l: VLink) =>
                 focusSet && !focusSet.has(l._s) && !focusSet.has(l._t)

@@ -14,12 +14,13 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.2 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.3 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync, and
-> answers follow-up questions grounded in the papers on screen. The detail panel
-> shows a paper's own **figures + captions** (via ar5iv) and links to both the
-> abstract and the PDF. Full-text reading + agentic graph traversal (Phase 3b),
-> concept mindmaps, and audio lectures are next — see
+> answers follow-up questions grounded in the papers on screen. A **Timeline
+> layout** arranges papers left→right by year (so the lecture sweeps through
+> time), and the detail panel shows a paper's own **figures + captions** (via
+> ar5iv) and links to both the abstract and the PDF. Full-text reading + agentic
+> graph traversal (Phase 3b), concept mindmaps, and audio lectures are next — see
 > **[OnePager.md](OnePager.md)** for the full vision and phase plan.
 
 ```
@@ -101,8 +102,11 @@ The Vite dev server proxies `/api/*` to Flask.
    [ar5iv](https://ar5iv.org) when available), and links to the **abstract** and
    the **PDF**.
 3. **Declutter** (top-left panel):
+   - **Layout** — toggle **Force** (organic force-directed) ↔ **Timeline** (x =
+     publication year, oldest left; papers spread into citation threads through
+     time). In Timeline, narrowing the year slider zooms into that span.
    - **Relation filters** — toggle references / citations / similar on and off.
-   - **Year range** — a dual slider to focus on an era (the seed always stays).
+   - **Year range** — a dual-thumb slider to focus on an era (the seed always stays).
    - **Drag-to-pin** — drag a node to fix it in place; *Release* unpins all.
    - **Focus-on-hover** — hover a node to fade everything not connected to it.
 4. **Traverse** — **double-click** any node (or use *Explore from here*) to

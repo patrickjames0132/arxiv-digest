@@ -1,7 +1,7 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.2 · living document · AI teacher shipped v1.1.0; sidebar figures
-> + PDF link + dual-thumb year slider shipped v1.2.0
+> **Status:** v1.3 · living document · AI teacher shipped v1.1.0; sidebar figures
+> + PDF link + dual-thumb year slider shipped v1.2.0; Timeline layout shipped v1.3.0
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -132,11 +132,15 @@ optional, behind a key.
       **hop budget**, a **visited-set** (kills reference cycles), a total-step cap,
       and size-capped tool results. This is what makes Q&A actually *source the
       papers* rather than reason over titles + the seed's summary.
-- [ ] **Phase 3.5 — Timeline layout** — a **Force ↔ Timeline** toggle. Timeline
-      places nodes on an exact **year axis** (x) with the force sim resolving the
-      y-axis into citation "threads" flowing through time — so the chronological
-      lecture sweeps left→right as nodes light up. (Force layout stays the
-      default; a relation-band variant is a possible later sub-toggle.)
+- [x] **Phase 3.5 — Timeline layout** *(v1.3.0)* — a **Force ↔ Timeline** toggle.
+      Timeline pins each node's x to its **publication year** (via `fx`) while the
+      sim resolves y; a `d3-force-3d` **collision force** (radius-sized) spreads
+      papers out within a year column, and once settled **y is frozen** so a drag
+      can't re-scramble the layout. A faint **year axis** is drawn behind the
+      graph (labels thinned when zoomed out); narrowing the year slider **zooms
+      into that span**. So the chronological lecture sweeps left→right as nodes
+      light up. Force stays the default; switching layout releases all pins. (A
+      relation-band variant remains a possible later sub-toggle.)
 - [x] **Sidebar enrichment** *(v1.2.0)* — under the detail panel's TL;DR, the
       paper's **own figures with their captions** (`figures.py` extracts them from
       **ar5iv** HTML, cached 30 days; images streamed through a same-origin
