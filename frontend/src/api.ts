@@ -73,6 +73,7 @@ export interface GraphNode {
   url: string | null
   rels: string[] // 'seed' | 'reference' | 'citation' | 'similar'
   is_seed: boolean
+  discovered?: boolean // added mid-conversation by the agent's expand_node tool
 }
 
 export interface GraphEdge {
@@ -227,19 +228,30 @@ export async function streamLecture(
   })
 }
 
-// A step the agent took — e.g. reading a paper. Surfaced live as the agent works.
+// A step the agent took — reading a paper, or expanding the graph to one not
+// yet shown. Surfaced live as the agent works.
 export interface TraceEvent {
-  action: string // 'read' (more in 3b.2)
+  action: 'read' | 'expand'
   ok: boolean
   title?: string | null
-  detail?: string // 'summary' | 'full'
   index?: number
+  detail?: string // 'summary' | 'full' — read_paper
+  relation?: string // 'references' | 'citations' | 'similar' — expand_node
+  found?: number // new papers discovered — expand_node
+}
+
+// New papers (+ the edges connecting them) the agent pulled in via expand_node,
+// to be merged into the live graph.
+export interface Discovery {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
 }
 
 export interface AskHandlers {
   onToken: (text: string) => void
   onCited: (nodeIds: string[]) => void
   onTrace?: (t: TraceEvent) => void
+  onNodes?: (d: Discovery) => void
   onDiscard?: () => void // drop streamed preamble that preceded a tool call
   onDone?: () => void
   onError?: (message: string) => void
@@ -261,6 +273,7 @@ export async function streamAsk(
   await readSSE(res, (event, data) => {
     if (event === 'token') h.onToken((data as { text: string }).text)
     else if (event === 'trace') h.onTrace?.(data as TraceEvent)
+    else if (event === 'nodes') h.onNodes?.(data as Discovery)
     else if (event === 'discard') h.onDiscard?.()
     else if (event === 'cited') h.onCited((data as { node_ids: string[] }).node_ids)
     else if (event === 'done') h.onDone?.()

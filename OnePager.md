@@ -1,9 +1,10 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.6 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.7 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
-> reading (v1.5.0), cache-first seed search (v1.6.0)
+> reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
+> `expand_node` + clickable answer highlights (v1.7.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -187,13 +188,17 @@ optional, behind a key.
       falls back gracefully to the Phase 3a grounded answer with the CLI backend.
 - [ ] **Phase 3c — Agentic reach beyond the graph** — the Q&A agent escapes the
       visible neighborhood, in two steps:
-  - **3c.1 — Graph traversal (`expand_node`)** — fetch papers **not yet on the
-    graph** (one hop of references / citations / similar from a paper already in
-    context) and auto-merge them as new nodes (distinct dashed **"discovered"
-    ring**), with a **hop budget** and **visited-set** to kill reference cycles;
-    discoveries feed back into the grounding context for follow-up questions.
-    *(Built 2026-07-03; browser testing paused — code stashed pending the S2 API
-    key / OpenAlex decision.)*
+  - [x] **3c.1 — Graph traversal (`expand_node`)** *(v1.7.0)* — the agent fetches
+    papers **not yet on the graph** (one hop of references / citations / similar
+    from a paper already in context) and auto-merges them as new nodes (distinct
+    dashed **"discovered" ring**, anchored near their source so they don't fly in
+    from the origin), with a **hop budget** (5) and **visited-set** to kill
+    reference cycles; each hop emits a live **trace event** (`🔗 Expanded
+    references of <title> · N new`) and discoveries feed back into the grounding
+    context for follow-up questions. Q&A answers are now **clickable sections**
+    like lecture beats — click to re-light the papers an answer was grounded in,
+    click again to clear. *(Shipped 2026-07-03; browser-tested. OpenAlex keyless
+    fallback still an open question — see below.)*
   - **3c.2 — Topic search (`search_papers`)** — traversal alone is lineage- and
     embedding-biased, not recency-biased: a 2026 paper citing a 2017 seed has had
     no time to accumulate citations of its own, so questions like *"what's the

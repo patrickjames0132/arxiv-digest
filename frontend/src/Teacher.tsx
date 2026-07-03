@@ -4,6 +4,9 @@ import {
   streamAsk,
   streamLecture,
   type Beat,
+  type Discovery,
+  type GraphEdge,
+  type GraphNode,
   type GraphResponse,
   type LectureMode,
   type TeacherNode,
@@ -11,9 +14,11 @@ import {
 } from './api'
 
 // The AI teacher panel: a streaming lecture over the visible graph plus a
-// grounded Q&A chat. Both light up graph nodes via `onHighlight` — the lecture
-// per-beat, Q&A on the papers an answer cites. Phase 3a: grounded in the
-// on-screen neighborhood only (no agentic traversal yet).
+// grounded, agentic Q&A chat. Both light up graph nodes via `onHighlight` — the
+// lecture per-beat, Q&A on the papers an answer cites. The Q&A agent can also
+// pull in papers not yet on screen via expand_node; discoveries flow back up
+// through `onDiscover` so the parent can merge them into the live graph and
+// keep grounding follow-up questions.
 
 type ChatMsg = {
   role: 'user' | 'assistant'
@@ -27,8 +32,8 @@ const MODES: { key: LectureMode; label: string }[] = [
   { key: 'intuition', label: "This paper's intuition" },
 ]
 
-function toTeacherNodes(graph: GraphResponse): TeacherNode[] {
-  return graph.nodes.map((n) => ({
+function toTeacherNodes(nodes: GraphNode[]): TeacherNode[] {
+  return nodes.map((n) => ({
     id: n.id,
     title: n.title,
     year: n.year,
@@ -42,13 +47,20 @@ function toTeacherNodes(graph: GraphResponse): TeacherNode[] {
 
 export default function Teacher({
   graph,
+  extraNodes,
   onHighlight,
+  onDiscover,
 }: {
   graph: GraphResponse
+  extraNodes: GraphNode[] // papers the agent discovered via expand_node, so far
   onHighlight: (ids: Set<string>) => void
+  onDiscover: (nodes: GraphNode[], edges: GraphEdge[]) => void
 }) {
   const [beats, setBeats] = useState<Beat[]>([])
   const [activeBeat, setActiveBeat] = useState<number | null>(null)
+  // Which chat answer is "active" (its cited papers lit on the graph) — mirrors
+  // activeBeat for lecture beats. Only one of the two is active at a time.
+  const [activeChat, setActiveChat] = useState<number | null>(null)
   const [teaching, setTeaching] = useState(false)
   const [chat, setChat] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
@@ -59,7 +71,16 @@ export default function Teacher({
     (crypto.randomUUID?.() as string) || String(Math.random()).slice(2),
   )
   const abortRef = useRef<AbortController | null>(null)
+  // Index of the assistant message the in-flight question is streaming into, so
+  // onCited can mark it active (its answer just lit up its cited papers).
+  const askIdxRef = useRef(0)
   const seed = useMemo(() => ({ title: graph.seed.title, id: graph.seed.id }), [graph])
+  // Grounding scope for the agent: the on-screen graph plus anything it has
+  // already discovered this session, so follow-up questions can build on it.
+  const teacherNodes = useMemo(
+    () => toTeacherNodes([...graph.nodes, ...extraNodes]),
+    [graph, extraNodes],
+  )
 
   const stopActive = useCallback(() => {
     abortRef.current?.abort()
@@ -68,10 +89,25 @@ export default function Teacher({
 
   const highlightBeat = useCallback(
     (i: number, beat: Beat) => {
-      setActiveBeat(i)
-      onHighlight(new Set(beat.node_ids))
+      // Click the active beat again to clear it and restore the graph.
+      const off = activeBeat === i
+      setActiveBeat(off ? null : i)
+      setActiveChat(null)
+      onHighlight(off ? new Set() : new Set(beat.node_ids))
     },
-    [onHighlight],
+    [activeBeat, onHighlight],
+  )
+
+  // Click a Q&A answer to re-light the papers it was grounded in — the chat
+  // analogue of clicking a lecture beat. Click the active one again to clear it.
+  const highlightChat = useCallback(
+    (i: number, cited: string[]) => {
+      const off = activeChat === i
+      setActiveChat(off ? null : i)
+      setActiveBeat(null)
+      onHighlight(off ? new Set() : new Set(cited))
+    },
+    [activeChat, onHighlight],
   )
 
   const runLecture = useCallback(
@@ -81,12 +117,13 @@ export default function Teacher({
       abortRef.current = ctrl
       setBeats([])
       setActiveBeat(null)
+      setActiveChat(null)
       setError(null)
       setTeaching(true)
       onHighlight(new Set())
       try {
         await streamLecture(
-          { seed, nodes: toTeacherNodes(graph), mode },
+          { seed, nodes: teacherNodes, mode },
           {
             signal: ctrl.signal,
             onBeat: (beat) =>
@@ -107,7 +144,7 @@ export default function Teacher({
         setTeaching(false)
       }
     },
-    [graph, seed, onHighlight, highlightBeat, stopActive],
+    [teacherNodes, seed, onHighlight, highlightBeat, stopActive],
   )
 
   const onAsk = useCallback(
@@ -122,10 +159,16 @@ export default function Teacher({
       setError(null)
       setAsking(true)
       onHighlight(new Set())
-      setChat((prev) => [...prev, { role: 'user', text: q }, { role: 'assistant', text: '' }])
+      setActiveBeat(null)
+      setActiveChat(null)
+      setChat((prev) => {
+        // The assistant reply is the second message we append here.
+        askIdxRef.current = prev.length + 1
+        return [...prev, { role: 'user', text: q }, { role: 'assistant', text: '' }]
+      })
       try {
         await streamAsk(
-          { question: q, session_id: sessionId.current, seed, nodes: toTeacherNodes(graph) },
+          { question: q, session_id: sessionId.current, seed, nodes: teacherNodes },
           {
             signal: ctrl.signal,
             onToken: (text) =>
@@ -150,8 +193,13 @@ export default function Teacher({
                 next[next.length - 1] = { ...next[next.length - 1], text: '' }
                 return next
               }),
+            onNodes: (d: Discovery) => onDiscover(d.nodes, d.edges),
             onCited: (ids) => {
               onHighlight(new Set(ids))
+              // Mark this answer active so its section shows the lit state, just
+              // like a beat lights up as it arrives.
+              setActiveBeat(null)
+              setActiveChat(askIdxRef.current)
               setChat((prev) => {
                 const next = [...prev]
                 next[next.length - 1] = { ...next[next.length - 1], cited: ids }
@@ -169,7 +217,7 @@ export default function Teacher({
         setAsking(false)
       }
     },
-    [input, asking, graph, seed, onHighlight, stopActive],
+    [input, asking, teacherNodes, seed, onHighlight, onDiscover, stopActive],
   )
 
   return (
@@ -211,26 +259,45 @@ export default function Teacher({
           </ol>
         )}
 
-        {chat.map((m, i) => (
-          <div key={`c${i}`} className={`chat ${m.role}`}>
+        {chat.map((m, i) => {
+          const clickable = m.role === 'assistant' && !!m.cited && m.cited.length > 0
+          return (
+          <div
+            key={`c${i}`}
+            className={`chat ${m.role}${clickable ? ' clickable' : ''}${
+              activeChat === i ? ' active' : ''
+            }`}
+            onClick={clickable ? () => highlightChat(i, m.cited!) : undefined}
+          >
             {m.trace && m.trace.length > 0 && (
               <div className="chat-trace">
-                {m.trace.map((t, j) => (
-                  <div key={j} className={`trace-line ${t.ok ? '' : 'fail'}`}>
-                    📖 {t.ok ? 'Read' : 'Tried'}{' '}
-                    <b>{t.title || `paper #${t.index}`}</b>
-                    <em>{t.detail === 'full' ? 'full text' : 'summary'}</em>
-                  </div>
-                ))}
+                {m.trace.map((t, j) =>
+                  t.action === 'expand' ? (
+                    <div key={j} className={`trace-line ${t.ok ? '' : 'fail'}`}>
+                      🔗 {t.ok ? 'Expanded' : 'Tried'} <b>{t.relation}</b> of{' '}
+                      <b>{t.title || `paper #${t.index}`}</b>
+                      {t.ok && (
+                        <em>{t.found ? `${t.found} new` : 'nothing new'}</em>
+                      )}
+                    </div>
+                  ) : (
+                    <div key={j} className={`trace-line ${t.ok ? '' : 'fail'}`}>
+                      📖 {t.ok ? 'Read' : 'Tried'}{' '}
+                      <b>{t.title || `paper #${t.index}`}</b>
+                      <em>{t.detail === 'full' ? 'full text' : 'summary'}</em>
+                    </div>
+                  ),
+                )}
               </div>
             )}
             {m.text ||
               (m.role === 'assistant' && asking && !m.trace?.length ? '…' : '')}
             {m.cited && m.cited.length > 0 && (
-              <div className="chat-cited">grounded in {m.cited.length} paper(s)</div>
+              <div className="chat-cited">grounded in {m.cited.length} paper(s) ✦</div>
             )}
           </div>
-        ))}
+          )
+        })}
 
         {beats.length === 0 && chat.length === 0 && !teaching && (
           <div className="teacher-hint">

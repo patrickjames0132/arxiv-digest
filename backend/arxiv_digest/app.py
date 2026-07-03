@@ -241,9 +241,11 @@ def api_lecture() -> Response:
 def api_ask() -> Response:
     """Answer a question grounded in the visible graph, streamed as SSE.
 
-    Body: {question, session_id, seed, nodes}. Emits ``token`` events (prose) then
-    a final ``cited`` event ({node_ids}). Conversation history is keyed by
-    session_id so follow-ups keep context.
+    Body: {question, session_id, seed, nodes}. With the agentic backend, also
+    emits ``trace`` events (tool steps) and ``nodes`` events ({nodes, edges}) as
+    expand_node discovers papers not yet on the graph; always emits ``token``
+    events (prose) then a final ``cited`` event ({node_ids}). Conversation
+    history is keyed by session_id so follow-ups keep context.
     """
     payload = request.get_json(silent=True) or {}
     question = (payload.get("question") or "").strip()
@@ -273,6 +275,8 @@ def api_ask() -> Response:
                     yield _sse("token", {"text": data})
                 elif kind == "trace":
                     yield _sse("trace", data)
+                elif kind == "nodes":
+                    yield _sse("nodes", data)
                 elif kind == "discard":
                     # Streamed preamble turned out to precede a tool call — drop it.
                     answer_parts.clear()

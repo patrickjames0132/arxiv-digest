@@ -422,6 +422,10 @@
   border-radius: 50%;
   display: inline-block;
 }
+.legend i.ring {
+  background: transparent;
+  border: 1.5px dashed rgba(242, 244, 248, 0.6);
+}
 
 /* --- detail panel --- */
 .detail {
@@ -631,6 +635,19 @@
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
+}
+/* An answer with cited papers is clickable to re-light them — same affordance
+   and active state as a lecture beat. */
+.chat.assistant.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.chat.assistant.clickable:hover {
+  border-color: var(--muted);
+}
+.chat.assistant.active {
+  border-color: var(--accent);
+  background: rgba(255, 209, 102, 0.06);
 }
 .chat-cited {
   margin-top: 6px;

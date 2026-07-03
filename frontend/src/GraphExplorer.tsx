@@ -129,6 +129,15 @@ export default function GraphExplorer() {
   const [highlightIds, setHighlightIds] = useState<Set<string>>(new Set())
   // 'force' = organic force-directed; 'timeline' = x pinned to publication year.
   const [layout, setLayout] = useState<'force' | 'timeline'>('force')
+  // Papers the Q&A agent has pulled in via expand_node this session (Phase 3b.2).
+  // Mirrors what's been pushed into `base.nodes` — kept separately so it can
+  // extend the teacher's grounding context on follow-up questions without
+  // forcing `base` to rebuild (which would drop the sim's x/y on every node).
+  const [discoveredNodes, setDiscoveredNodes] = useState<GraphNode[]>([])
+  // Bumped whenever discoveredNodes/edges are pushed into `base` in place, so
+  // `view` (and anything else keyed on it) recomputes despite `base` itself
+  // keeping the same object identity.
+  const [graphVersion, setGraphVersion] = useState(0)
 
   const wrapRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -184,6 +193,8 @@ export default function GraphExplorer() {
     setPinned(new Set())
     setHoverId(null)
     setHighlightIds(new Set())
+    setDiscoveredNodes([])
+    setGraphVersion(0)
   }, [base])
 
   // Re-pin x by year when a new graph loads while Timeline is active (a fresh
@@ -220,7 +231,10 @@ export default function GraphExplorer() {
       .filter((l) => enabled.has(l.type) && ids.has(l._s) && ids.has(l._t))
       .map((l) => ({ ...l, source: l._s, target: l._t }))
     return { nodes, links }
-  }, [base, enabled, yearLo, yearHi])
+    // graphVersion isn't read directly — it's a signal that base.nodes/links
+    // were mutated in place (expand_node discoveries) and this must recompute.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base, enabled, yearLo, yearHi, graphVersion])
 
   // Neighbors of the hovered node (for focus-on-hover dimming).
   const hoverSet = useMemo(() => {
@@ -356,6 +370,72 @@ export default function GraphExplorer() {
       return (y - base.minYear + frac) * YEAR_SPACING
     },
     [base],
+  )
+
+  // The Q&A agent pulled in papers not yet on the graph (expand_node). Merge
+  // them into `base` IN PLACE — appending to base.nodes/links, never rebuilding
+  // it — so react-force-graph's existing node objects (and the x/y/fx/fy the
+  // sim + user pins have set on them) survive. graphVersion signals `view` (and
+  // the repaint effect) to recompute since `base`'s own identity doesn't change.
+  const onDiscover = useCallback(
+    (newNodes: GraphNode[], newEdges: GraphEdge[]) => {
+      if (!base || (newNodes.length === 0 && newEdges.length === 0)) return
+      const knownIds = new Set(base.nodes.map((n) => n.id))
+      const addedNodes: GraphNode[] = []
+      for (const n of newNodes) {
+        if (knownIds.has(n.id)) continue
+        knownIds.add(n.id)
+        // Start near whichever already-placed node it was discovered from, so
+        // it doesn't fly in from the origin when the sim reheats.
+        const anchorEdge = newEdges.find((e) => e.source === n.id || e.target === n.id)
+        const anchorId = anchorEdge
+          ? anchorEdge.source === n.id
+            ? anchorEdge.target
+            : anchorEdge.source
+          : null
+        const anchor = anchorId ? base.nodes.find((x) => x.id === anchorId) : null
+        const vn: VNode = { ...n }
+        if (anchor && typeof anchor.x === 'number' && typeof anchor.y === 'number') {
+          vn.x = anchor.x + (Math.random() - 0.5) * 40
+          vn.y = anchor.y + (Math.random() - 0.5) * 40
+        }
+        if (layout === 'timeline') vn.fx = nodeTimelineX(vn)
+        base.nodes.push(vn)
+        addedNodes.push(n)
+        n.rels.forEach((r) => {
+          if (r in base.counts) base.counts[r]++
+        })
+        if (typeof n.year === 'number') {
+          if (n.year < base.minYear) {
+            base.minYear = n.year
+            setYearLo(n.year)
+          }
+          if (n.year > base.maxYear) {
+            base.maxYear = n.year
+            setYearHi(n.year)
+          }
+        }
+      }
+
+      const knownLinkKeys = new Set(base.links.map((l) => `${l._s}|${l._t}|${l.type}`))
+      let addedLinks = 0
+      for (const e of newEdges) {
+        const key = `${e.source}|${e.target}|${e.type}`
+        if (knownLinkKeys.has(key)) continue
+        knownLinkKeys.add(key)
+        base.links.push({ ...e, _s: e.source, _t: e.target })
+        addedLinks++
+      }
+
+      if (addedNodes.length) setDiscoveredNodes((prev) => [...prev, ...addedNodes])
+      if (addedNodes.length || addedLinks) {
+        setGraphVersion((v) => v + 1)
+        // Reheat so new nodes settle into place, but don't yank the camera —
+        // the user may be mid-conversation, not looking at the graph.
+        fgRef.current?.d3ReheatSimulation?.()
+      }
+    },
+    [base, layout, nodeTimelineX],
   )
 
   const onNodeDragEnd = useCallback(
@@ -779,6 +859,14 @@ export default function GraphExplorer() {
                 ctx.arc(node.x, node.y, r, 0, 2 * Math.PI)
                 ctx.fillStyle = dim ? DIM_NODE : REL_COLOR[primaryRel(node)]
                 ctx.fill()
+                if (node.discovered && !dim) {
+                  // Dashed ring marks a paper the AI teacher pulled in mid-chat.
+                  ctx.lineWidth = 1.2 / globalScale
+                  ctx.strokeStyle = 'rgba(242,244,248,0.6)'
+                  ctx.setLineDash([2 / globalScale, 2 / globalScale])
+                  ctx.stroke()
+                  ctx.setLineDash([])
+                }
                 if (isLit && !dim) {
                   ctx.lineWidth = 2 / globalScale
                   ctx.strokeStyle = '#ffd166'
@@ -839,6 +927,12 @@ export default function GraphExplorer() {
                 <i style={{ background: REL_COLOR.similar }} />
                 Similar
               </span>
+              {discoveredNodes.length > 0 && (
+                <span>
+                  <i className="ring" />
+                  Discovered by teacher
+                </span>
+              )}
             </div>
           )}
         </main>
@@ -924,7 +1018,12 @@ export default function GraphExplorer() {
         )}
 
         {hasGraph && graph && (
-          <Teacher graph={graph} onHighlight={setHighlightIds} />
+          <Teacher
+            graph={graph}
+            extraNodes={discoveredNodes}
+            onHighlight={setHighlightIds}
+            onDiscover={onDiscover}
+          />
         )}
       </div>
     </div>

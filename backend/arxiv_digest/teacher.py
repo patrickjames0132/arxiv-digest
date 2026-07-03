@@ -33,7 +33,7 @@ import tempfile
 import time
 from typing import Iterator, Optional
 
-from . import config, fulltext
+from . import cache, config, fulltext
 from . import semantic_scholar as s2
 
 log = logging.getLogger(__name__)
@@ -416,23 +416,30 @@ def _parse_citations(full: str, numbered: list[dict]) -> list[str]:
 
 
 # --- Agentic Q&A (Phase 3b) --------------------------------------------------
-# The agent answers by READING the visible papers (tool use) instead of reasoning
-# over titles alone. Guardrails (config.AGENT_*): a total-step cap, per-kind read
-# budgets, and a wall-clock ceiling. Requires the Anthropic API — the claude CLI
-# can't take our custom tools, so the CLI backend falls back to answer_stream.
+# The agent answers by READING the visible papers (tool use) and can EXPAND the
+# graph to papers not yet shown (Phase 3b.2) — one hop of references / citations
+# / similar work from a paper it already knows about. Guardrails (config.AGENT_*):
+# a total-step cap, per-kind read budgets, a hop budget for expansion, and a
+# wall-clock ceiling. Requires the Anthropic API — the claude CLI can't take our
+# custom tools, so the CLI backend falls back to answer_stream.
 _AGENT_SYSTEM = (
     "You are a sharp, friendly research teacher answering a student's question "
-    "about the papers on their citation graph (numbered below). You have a tool to "
-    "READ those papers, so answer from their actual content rather than guessing.\n\n"
+    "about the papers on their citation graph (numbered below). You have tools to "
+    "READ those papers and to EXPAND the graph to papers not yet shown, so answer "
+    "from real content and pull in outside papers when the visible ones don't have "
+    "what you need.\n\n"
     "Use read_paper to pull in what you need: detail='summary' for a quick "
     "abstract + TL;DR, detail='full' for the full text when the question needs "
-    "specifics (methods, results, numbers). Read only what you need — you have a "
-    "limited budget. Do NOT narrate that you're about to use a tool; just call it. "
-    "When you have enough, write the answer in at most a few short paragraphs, "
-    "grounded in what you read. Begin with the answer itself — do NOT preface it "
-    "with remarks about your reading process (no \"I found the sections\"). If the "
-    "visible papers don't support an answer, say so briefly. Never invent facts or "
-    "cite papers that aren't listed."
+    "specifics (methods, results, numbers). Use expand_node(index, relation) to "
+    "fetch a paper's references, citations, or similar work when the answer needs "
+    "a paper that isn't on the graph yet — the papers it finds get numbered and "
+    "added, so you can read_paper them right after. Read and expand only what you "
+    "need — both have limited budgets. Do NOT narrate that you're about to use a "
+    "tool; just call it. When you have enough, write the answer in at most a few "
+    "short paragraphs, grounded in what you read. Begin with the answer itself — "
+    "do NOT preface it with remarks about your reading process (no \"I found the "
+    "sections\"). If nothing you can reach supports an answer, say so briefly. "
+    "Never invent facts or cite papers you haven't read."
 )
 
 _TOOLS = [
@@ -458,7 +465,34 @@ _TOOLS = [
             },
             "required": ["index", "detail"],
         },
-    }
+    },
+    {
+        "name": "expand_node",
+        "description": (
+            "Pull one hop of neighbors — references, citations, or similar work — "
+            "for a paper that's already numbered, and add them to the graph as new "
+            "numbered papers you can then read_paper. Use when the question needs a "
+            "paper that isn't currently visible."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer",
+                    "description": "The [n] index of the paper to expand from.",
+                },
+                "relation": {
+                    "type": "string",
+                    "enum": ["references", "citations", "similar"],
+                    "description": (
+                        "references = papers it cites; citations = papers that cite "
+                        "it; similar = embedding-similar work."
+                    ),
+                },
+            },
+            "required": ["index", "relation"],
+        },
+    },
 ]
 
 
@@ -538,6 +572,123 @@ def _run_read(block, numbered: list[dict], budgets: dict, read_cache: dict) -> t
     return (text, {"action": "read", "ok": True, "index": idx, "title": title, "detail": detail}, node.get("id"))
 
 
+_REL_TAG = {"references": "reference", "citations": "citation", "similar": "similar"}
+
+
+def _s2_neighbors(paper_id: str, relation: str) -> list[dict]:
+    """S2 references/citations/recommendations for one hop, cached a day (same
+    TTL as a graph snapshot) so repeated expansion doesn't hammer the rate limit."""
+    cache_key = f"expand:{relation}:{paper_id}"
+    cached = cache.get(cache_key, config.GRAPH_CACHE_TTL)
+    if cached is not None:
+        return cached
+    if relation == "references":
+        hits = s2.references(paper_id, config.AGENT_EXPAND_LIMIT)
+    elif relation == "citations":
+        hits = s2.citations(paper_id, config.AGENT_EXPAND_LIMIT)
+    else:
+        hits = s2.recommendations(paper_id, config.AGENT_EXPAND_LIMIT)
+    cache.set(cache_key, hits)
+    return hits
+
+
+def _run_expand(
+    block,
+    numbered: list[dict],
+    known_ids: set[str],
+    expanded: set[tuple[str, str]],
+    hops: dict,
+) -> tuple[str, dict, Optional[dict]]:
+    """Execute an expand_node tool call: pull one hop of neighbors for a paper
+    already numbered and append any new ones to `numbered` so the agent can
+    read_paper them next turn.
+
+    Returns (tool_result_text, trace, discovery), where `discovery` is
+    ``{"nodes": [...], "edges": [...]}`` for the frontend to merge into the live
+    graph, or None when nothing new came back.
+    """
+    inp = getattr(block, "input", None) or {}
+    idx = inp.get("index")
+    relation = inp.get("relation")
+    node = _node_by_idx(numbered, idx)
+    if node is None or relation not in _REL_TAG:
+        return (
+            f"Invalid expand_node call (index={idx}, relation={relation!r}).",
+            {"action": "expand", "ok": False, "index": idx, "title": None, "relation": relation},
+            None,
+        )
+
+    title = node.get("title")
+    paper_id = node["id"]
+    if hops["left"] <= 0:
+        return (
+            "Expansion budget exhausted — work with what's already on the graph.",
+            {"action": "expand", "ok": False, "index": idx, "title": title, "relation": relation},
+            None,
+        )
+
+    key = (paper_id, relation)
+    if key in expanded:
+        return (
+            f"Already expanded {relation} of \"{title}\" — see the numbered papers above.",
+            {"action": "expand", "ok": True, "index": idx, "title": title, "relation": relation, "found": 0},
+            None,
+        )
+    expanded.add(key)
+    hops["left"] -= 1
+
+    rel_tag = _REL_TAG[relation]
+    try:
+        hits = _s2_neighbors(paper_id, relation)
+    except s2.S2Error as exc:
+        return (
+            f"Couldn't expand {relation} of \"{title}\": {exc}",
+            {"action": "expand", "ok": False, "index": idx, "title": title, "relation": relation},
+            None,
+        )
+
+    new_nodes: list[dict] = []
+    new_edges: list[dict] = []
+    lines: list[str] = []
+    next_idx = numbered[-1]["idx"] + 1
+    for hit in hits:
+        n = hit["node"]
+        nid = n["id"]
+        if nid == paper_id:
+            continue
+        if rel_tag == "reference":
+            edge = {"source": paper_id, "target": nid, "type": "reference", "influential": hit.get("influential", False)}
+        elif rel_tag == "citation":
+            edge = {"source": nid, "target": paper_id, "type": "citation", "influential": hit.get("influential", False)}
+        else:
+            edge = {"source": paper_id, "target": nid, "type": "similar"}
+        new_edges.append(edge)
+
+        if nid in known_ids:
+            continue
+        known_ids.add(nid)
+        disc = dict(n)
+        disc["rels"] = [rel_tag]
+        disc["is_seed"] = False
+        disc["discovered"] = True
+        disc["idx"] = next_idx
+        numbered.append(disc)
+        new_nodes.append(disc)
+        lines.append(f"[{next_idx}] ({disc.get('year') or 'n.d.'}) {disc.get('title', '')}")
+        next_idx += 1
+
+    if not lines:
+        text = f"No new papers — {relation} of \"{title}\" is already on the graph."
+    else:
+        text = (
+            f"Expanded {relation} of \"{title}\" — {len(lines)} new paper(s) added:\n"
+            + "\n".join(lines)
+        )
+    trace = {"action": "expand", "ok": True, "index": idx, "title": title, "relation": relation, "found": len(lines)}
+    discovery = {"nodes": new_nodes, "edges": new_edges} if (new_nodes or new_edges) else None
+    return (text, trace, discovery)
+
+
 def answer_agentic(
     question: str,
     seed: dict,
@@ -546,10 +697,11 @@ def answer_agentic(
 ) -> Iterator[tuple[str, object]]:
     """Agentic Q&A: Claude reads the visible papers via tool use, then answers.
 
-    Yields ``("trace", {...})`` as it reads papers, ``("token", str)`` for the
-    streamed answer, ``("discard", None)`` if streamed preamble must be dropped
-    (the turn turned out to be a tool call), and a final ``("cited", node_ids)``
-    (the papers it actually read)."""
+    Yields ``("trace", {...})`` as it reads/expands, ``("nodes", {...})`` when
+    expand_node discovers papers not previously on the graph, ``("token", str)``
+    for the streamed answer, ``("discard", None)`` if streamed preamble must be
+    dropped (the turn turned out to be a tool call), and a final
+    ``("cited", node_ids)`` (the papers it actually read)."""
     import anthropic
 
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
@@ -565,6 +717,9 @@ def answer_agentic(
 
     budgets = {"full": config.AGENT_MAX_FULL_READS, "summary": config.AGENT_MAX_SUMMARY_READS}
     read_cache: dict = {}
+    known_ids = {n["id"] for n in numbered if n.get("id")}
+    expanded: set[tuple[str, str]] = set()
+    hops = {"left": config.AGENT_MAX_HOPS}
     cited: list[str] = []
     start = time.time()
 
@@ -596,12 +751,21 @@ def answer_agentic(
             messages.append({"role": "assistant", "content": final.content})
             results = []
             for b in final.content:
-                if getattr(b, "type", "") == "tool_use" and b.name == "read_paper":
+                if getattr(b, "type", "") != "tool_use":
+                    continue
+                if b.name == "read_paper":
                     content, trace, read_id = _run_read(b, numbered, budgets, read_cache)
                     yield ("trace", trace)
                     if read_id and read_id not in cited:
                         cited.append(read_id)
-                    results.append({"type": "tool_result", "tool_use_id": b.id, "content": content})
+                elif b.name == "expand_node":
+                    content, trace, discovery = _run_expand(b, numbered, known_ids, expanded, hops)
+                    yield ("trace", trace)
+                    if discovery:
+                        yield ("nodes", discovery)
+                else:
+                    content = f"Unknown tool {b.name!r}."
+                results.append({"type": "tool_result", "tool_use_id": b.id, "content": content})
             messages.append({"role": "user", "content": results})
             continue
         # end_turn: the answer already streamed as tokens.

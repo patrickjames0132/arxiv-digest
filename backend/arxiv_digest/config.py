@@ -96,6 +96,13 @@ AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "12"))
 AGENT_MAX_FULL_READS = int(os.getenv("AGENT_MAX_FULL_READS", "4"))
 AGENT_MAX_SUMMARY_READS = int(os.getenv("AGENT_MAX_SUMMARY_READS", "12"))
 AGENT_WALLCLOCK = int(os.getenv("AGENT_WALLCLOCK", "90"))
+# Phase 3b.2 — expand_node lets the agent pull papers not yet on the graph (one
+# hop via references/citations/similar). AGENT_MAX_HOPS caps how many expand
+# calls a single question may make; AGENT_EXPAND_LIMIT caps how many neighbors
+# come back per hop (kept small — these land in the tool result, not just the
+# graph). A visited (paper, relation) set in teacher.py kills repeat traversal.
+AGENT_MAX_HOPS = int(os.getenv("AGENT_MAX_HOPS", "5"))
+AGENT_EXPAND_LIMIT = int(os.getenv("AGENT_EXPAND_LIMIT", "8"))
 # Max characters of full text loaded per paper read (keeps the context bounded).
 FULLTEXT_MAX_CHARS = int(os.getenv("FULLTEXT_MAX_CHARS", "8000"))
 
