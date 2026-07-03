@@ -40,10 +40,11 @@ it's locked in.
   `version` in `pyproject.toml`, then run `uv lock`. (History: the `0.x` line was
   the earlier "daily digest" era, ending at `v0.11.0`.)
 - **Commit:** stage files **explicitly** (see the config.py caveat below). End
-  the message with:
+  the message with a `Co-Authored-By` trailer naming **the Claude model actually
+  writing the commit** (don't copy an old commit's trailer verbatim), e.g.:
 
   ```
-  Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
   ```
 - **Tag in lockstep:** create an **annotated** tag `vX.Y.Z` matching the
   `pyproject.toml` version.
@@ -54,13 +55,12 @@ branch `main`.
 
 ## Caveats — read before committing
 
-- **`backend/arxiv_digest/config.py` has an intentional LOCAL change** that must
-  **never** be committed: `FLASK_PORT` is hardcoded to `8000` for Patrick's local
-  setup (the committed value is `int(os.getenv("FLASK_PORT", "5000"))`). It shows
-  as `M config.py` in every `git status`. When a real config change *does* need
-  committing (e.g. new settings), temporarily restore the committed `FLASK_PORT`
-  line, commit, then re-apply the local `= 8000` override. Otherwise just leave
-  config.py out of the commit.
+- **`backend/arxiv_digest/config.py`:** Patrick's local port override
+  (`FLASK_PORT=8000`) now lives in `.env`, so config.py should be **clean** in
+  `git status`. (Historically it carried a hardcoded local `= 8000` edit that
+  had to be kept out of every commit — if you ever see config.py modified with
+  a port change, that's what it is; don't commit it.) The local backend serves
+  on **port 8000**, not the committed default 5000.
 - **Secrets:** `.env` is gitignored — never commit it. `.env.example` holds only
   placeholders. All API keys (`S2_API_KEY`, `ANTHROPIC_API_KEY`, etc.) are
   optional; the app runs keyless (just rate-limited on Semantic Scholar).
