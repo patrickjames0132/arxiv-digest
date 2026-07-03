@@ -14,13 +14,15 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.3 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.5 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync, and
-> answers follow-up questions grounded in the papers on screen. A **Timeline
-> layout** arranges papers left→right by year (so the lecture sweeps through
-> time), and the detail panel shows a paper's own **figures + captions** (via
-> ar5iv) and links to both the abstract and the PDF. Full-text reading + agentic
-> graph traversal (Phase 3b), concept mindmaps, and audio lectures are next — see
+> answers follow-up questions grounded in the papers on screen. The Q&A agent
+> now **reads the papers' actual full text** (via ar5iv) before answering —
+> tool-use loop with live trace UI, read budgets, and wall-clock guardrails. A
+> **Timeline layout** arranges papers left→right by year (so the lecture sweeps
+> through time), and the detail panel shows a paper's own **figures + captions**
+> and links to both the abstract and the PDF. Agentic graph traversal (3b.2),
+> concept mindmaps, and audio lectures are next — see
 > **[OnePager.md](OnePager.md)** for the full vision and phase plan.
 
 ```

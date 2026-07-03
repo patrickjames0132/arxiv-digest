@@ -200,15 +200,27 @@ export async function streamLecture(
   })
 }
 
+// A step the agent took — e.g. reading a paper. Surfaced live as the agent works.
+export interface TraceEvent {
+  action: string // 'read' (more in 3b.2)
+  ok: boolean
+  title?: string | null
+  detail?: string // 'summary' | 'full'
+  index?: number
+}
+
 export interface AskHandlers {
   onToken: (text: string) => void
   onCited: (nodeIds: string[]) => void
+  onTrace?: (t: TraceEvent) => void
+  onDiscard?: () => void // drop streamed preamble that preceded a tool call
   onDone?: () => void
   onError?: (message: string) => void
   signal?: AbortSignal
 }
 
-// Stream a grounded answer: prose tokens, then the nodes it cited.
+// Stream a grounded answer: agent trace steps, prose tokens, then the nodes it
+// drew from. (Non-agentic backends just emit tokens + cited.)
 export async function streamAsk(
   body: { question: string; session_id: string; seed: { title: string; id?: string }; nodes: TeacherNode[] },
   h: AskHandlers,
@@ -221,6 +233,8 @@ export async function streamAsk(
   })
   await readSSE(res, (event, data) => {
     if (event === 'token') h.onToken((data as { text: string }).text)
+    else if (event === 'trace') h.onTrace?.(data as TraceEvent)
+    else if (event === 'discard') h.onDiscard?.()
     else if (event === 'cited') h.onCited((data as { node_ids: string[] }).node_ids)
     else if (event === 'done') h.onDone?.()
     else if (event === 'error') h.onError?.((data as { error: string }).error)

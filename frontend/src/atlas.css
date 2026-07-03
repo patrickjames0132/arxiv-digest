@@ -606,6 +606,32 @@
   font-size: 11px;
   color: var(--accent);
 }
+.chat-trace {
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.trace-line {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 3px 7px;
+  border-left: 2px solid var(--accent-strong);
+  background: rgba(255, 209, 102, 0.05);
+  border-radius: 0 4px 4px 0;
+}
+.trace-line.fail {
+  border-left-color: #f78ca0;
+}
+.trace-line b {
+  color: var(--text);
+  font-weight: 500;
+}
+.trace-line em {
+  font-style: normal;
+  color: var(--accent);
+  margin-left: 5px;
+}
 
 .teacher-ask {
   display: flex;

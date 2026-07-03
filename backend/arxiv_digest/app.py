@@ -232,13 +232,27 @@ def api_ask() -> Response:
     session_id = payload.get("session_id") or ""
     history = _QA_SESSIONS.get(session_id, []) if session_id else []
 
+    # Agentic Q&A (reads papers via tool use) when the API backend is available;
+    # otherwise the non-agentic grounded answer (e.g. the claude CLI backend).
+    source = (
+        teacher.answer_agentic(question, seed, nodes, history)
+        if teacher.agentic_available()
+        else teacher.answer_stream(question, seed, nodes, history)
+    )
+
     def gen():
         answer_parts: list[str] = []
         try:
-            for kind, data in teacher.answer_stream(question, seed, nodes, history):
+            for kind, data in source:
                 if kind == "token":
                     answer_parts.append(data)
                     yield _sse("token", {"text": data})
+                elif kind == "trace":
+                    yield _sse("trace", data)
+                elif kind == "discard":
+                    # Streamed preamble turned out to precede a tool call — drop it.
+                    answer_parts.clear()
+                    yield _sse("discard", {})
                 elif kind == "cited":
                     yield _sse("cited", {"node_ids": data})
             yield _sse("done", {})

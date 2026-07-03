@@ -1,8 +1,9 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.4 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.5 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
-> v1.3.1), legacy digest backend retired (v1.4.0)
+> v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
+> reading (v1.5.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -126,12 +127,19 @@ optional, behind a key.
       the `Teacher.tsx` panel + a `highlightIds` glow/dim path reusing the
       focus-on-hover machinery. *Grounded in the visible neighborhood only — no
       full-text reading or graph-jumping yet (that's 3b).*
-- [ ] **Phase 3b — Agentic teacher** — a tool-use loop so the teacher can
-      **read papers' full text** (`read_paper`, via ar5iv/arXiv) and **traverse
-      to off-screen papers** (`expand_node`) on demand, under hard guardrails: a
-      **hop budget**, a **visited-set** (kills reference cycles), a total-step cap,
-      and size-capped tool results. This is what makes Q&A actually *source the
-      papers* rather than reason over titles + the seed's summary.
+- [x] **Phase 3b.1 — Agentic Q&A: full-text reading** *(v1.5.0)* — the Q&A agent
+      now runs a **tool-use loop** (`read_paper` tool, via ar5iv full text or
+      abstract+TL;DR summary) before answering. Hard guardrails: 4 full-text reads,
+      12 summary reads, 12 agent steps, 90 s wall-clock. Each read emits a live
+      **trace event** (`📖 Read <title> · full text`) in the chat before the answer
+      streams. `fulltext.py` extracts readable body text from ar5iv HTML (math,
+      scripts, and figures stripped; 30-day cache). Requires the Anthropic API;
+      falls back gracefully to the Phase 3a grounded answer with the CLI backend.
+- [ ] **Phase 3b.2 — Agentic graph traversal** — `expand_node` tool lets the agent
+      fetch papers **not yet on the graph** and auto-merge them as new nodes (distinct
+      "discovered" ring), with a **hop budget** and **visited-set** to kill reference
+      cycles. This is what makes Q&A able to say "let me look at a paper outside
+      your current view."
 - [x] **Phase 3.5 — Timeline layout** *(v1.3.0, month granularity v1.3.1)* — a
       **Force ↔ Timeline** toggle. Timeline pins each node's x to its **publication
       date** (year + month fraction from S2 `publicationDate`, so papers sit

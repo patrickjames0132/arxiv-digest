@@ -85,6 +85,20 @@ TEACHER_CLI_TIMEOUT = int(os.getenv("TEACHER_CLI_TIMEOUT", "180"))
 # How many past turns of a Q&A session to keep as context (user+assistant pairs).
 TEACHER_HISTORY_TURNS = int(os.getenv("TEACHER_HISTORY_TURNS", "8"))
 
+# --- Agentic teacher (Phase 3b) ----------------------------------------------
+# The Q&A agent can pull full paper text into context via tool use, grounding its
+# answer in what it actually reads. Hard guardrails keep it from wandering: caps
+# on total tool-loop steps and on how many papers it may read (full vs summary),
+# plus a wall-clock ceiling. Agentic Q&A needs the Anthropic API (tool use); with
+# the claude CLI backend, Q&A falls back to the non-agentic grounded answer.
+AGENT_MODEL = os.getenv("AGENT_MODEL", TEACHER_MODEL)
+AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "12"))
+AGENT_MAX_FULL_READS = int(os.getenv("AGENT_MAX_FULL_READS", "4"))
+AGENT_MAX_SUMMARY_READS = int(os.getenv("AGENT_MAX_SUMMARY_READS", "12"))
+AGENT_WALLCLOCK = int(os.getenv("AGENT_WALLCLOCK", "90"))
+# Max characters of full text loaded per paper read (keeps the context bounded).
+FULLTEXT_MAX_CHARS = int(os.getenv("FULLTEXT_MAX_CHARS", "8000"))
+
 # --- Server ------------------------------------------------------------------
 FLASK_HOST = os.getenv("FLASK_HOST", "127.0.0.1")
 FLASK_PORT = int(os.getenv("FLASK_PORT", "5000"))

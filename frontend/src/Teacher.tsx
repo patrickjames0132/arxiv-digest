@@ -7,6 +7,7 @@ import {
   type GraphResponse,
   type LectureMode,
   type TeacherNode,
+  type TraceEvent,
 } from './api'
 
 // The AI teacher panel: a streaming lecture over the visible graph plus a
@@ -14,7 +15,12 @@ import {
 // per-beat, Q&A on the papers an answer cites. Phase 3a: grounded in the
 // on-screen neighborhood only (no agentic traversal yet).
 
-type ChatMsg = { role: 'user' | 'assistant'; text: string; cited?: string[] }
+type ChatMsg = {
+  role: 'user' | 'assistant'
+  text: string
+  cited?: string[]
+  trace?: TraceEvent[] // agent steps (papers read) for an assistant turn
+}
 
 const MODES: { key: LectureMode; label: string }[] = [
   { key: 'history', label: 'How we got here' },
@@ -131,6 +137,19 @@ export default function Teacher({
                 }
                 return next
               }),
+            onTrace: (t) =>
+              setChat((prev) => {
+                const next = [...prev]
+                const last = next[next.length - 1]
+                next[next.length - 1] = { ...last, trace: [...(last.trace ?? []), t] }
+                return next
+              }),
+            onDiscard: () =>
+              setChat((prev) => {
+                const next = [...prev]
+                next[next.length - 1] = { ...next[next.length - 1], text: '' }
+                return next
+              }),
             onCited: (ids) => {
               onHighlight(new Set(ids))
               setChat((prev) => {
@@ -194,7 +213,19 @@ export default function Teacher({
 
         {chat.map((m, i) => (
           <div key={`c${i}`} className={`chat ${m.role}`}>
-            {m.text || (m.role === 'assistant' && asking ? '…' : '')}
+            {m.trace && m.trace.length > 0 && (
+              <div className="chat-trace">
+                {m.trace.map((t, j) => (
+                  <div key={j} className={`trace-line ${t.ok ? '' : 'fail'}`}>
+                    📖 {t.ok ? 'Read' : 'Tried'}{' '}
+                    <b>{t.title || `paper #${t.index}`}</b>
+                    <em>{t.detail === 'full' ? 'full text' : 'summary'}</em>
+                  </div>
+                ))}
+              </div>
+            )}
+            {m.text ||
+              (m.role === 'assistant' && asking && !m.trace?.length ? '…' : '')}
             {m.cited && m.cited.length > 0 && (
               <div className="chat-cited">grounded in {m.cited.length} paper(s)</div>
             )}

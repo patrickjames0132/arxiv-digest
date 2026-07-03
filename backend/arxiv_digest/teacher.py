@@ -30,9 +30,11 @@ import logging
 import os
 import subprocess
 import tempfile
+import time
 from typing import Iterator, Optional
 
-from . import config
+from . import config, fulltext
+from . import semantic_scholar as s2
 
 log = logging.getLogger(__name__)
 
@@ -411,3 +413,209 @@ def _parse_citations(full: str, numbered: list[dict]) -> list[str]:
     except json.JSONDecodeError:
         return []
     return _idx_to_id(numbered, indices)
+
+
+# --- Agentic Q&A (Phase 3b) --------------------------------------------------
+# The agent answers by READING the visible papers (tool use) instead of reasoning
+# over titles alone. Guardrails (config.AGENT_*): a total-step cap, per-kind read
+# budgets, and a wall-clock ceiling. Requires the Anthropic API — the claude CLI
+# can't take our custom tools, so the CLI backend falls back to answer_stream.
+_AGENT_SYSTEM = (
+    "You are a sharp, friendly research teacher answering a student's question "
+    "about the papers on their citation graph (numbered below). You have a tool to "
+    "READ those papers, so answer from their actual content rather than guessing.\n\n"
+    "Use read_paper to pull in what you need: detail='summary' for a quick "
+    "abstract + TL;DR, detail='full' for the full text when the question needs "
+    "specifics (methods, results, numbers). Read only what you need — you have a "
+    "limited budget. Do NOT narrate that you're about to use a tool; just call it. "
+    "When you have enough, write the answer in at most a few short paragraphs, "
+    "grounded in what you read. Begin with the answer itself — do NOT preface it "
+    "with remarks about your reading process (no \"I found the sections\"). If the "
+    "visible papers don't support an answer, say so briefly. Never invent facts or "
+    "cite papers that aren't listed."
+)
+
+_TOOLS = [
+    {
+        "name": "read_paper",
+        "description": (
+            "Read one of the numbered papers on the graph to ground your answer. "
+            "detail='summary' returns its abstract + TL;DR (cheap); detail='full' "
+            "returns the full text via ar5iv (use sparingly — limited budget)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer",
+                    "description": "The [n] index of the paper from the numbered list.",
+                },
+                "detail": {
+                    "type": "string",
+                    "enum": ["summary", "full"],
+                    "description": "summary = abstract + TL;DR; full = full text.",
+                },
+            },
+            "required": ["index", "detail"],
+        },
+    }
+]
+
+
+def agentic_available() -> bool:
+    """True when we can run the tool-use agent (Anthropic API + key)."""
+    return config.TEACHER_BACKEND == "api" and bool(config.ANTHROPIC_API_KEY)
+
+
+def _node_by_idx(numbered: list[dict], idx: object) -> Optional[dict]:
+    if not isinstance(idx, int) or isinstance(idx, bool):
+        return None
+    for n in numbered:
+        if n.get("idx") == idx:
+            return n
+    return None
+
+
+def _paper_text(node: dict, detail: str) -> str:
+    """Assemble the text handed back to the agent for one paper read."""
+    title = node.get("title") or "(untitled)"
+    year = node.get("year")
+    arxiv_id = node.get("arxiv_id")
+    abstract = node.get("abstract")
+    tldr = node.get("tldr")
+    # Neighbor nodes arrive without abstract/tldr — hydrate on demand.
+    if abstract is None and tldr is None:
+        lookup = f"ARXIV:{arxiv_id}" if arxiv_id else node.get("id")
+        hydrated = s2.get_paper(lookup) if lookup else None
+        if hydrated:
+            abstract = hydrated.get("abstract")
+            tldr = hydrated.get("tldr")
+
+    header = f"Title: {title}" + (f" ({year})" if year else "")
+    if detail == "full" and arxiv_id:
+        ft = fulltext.get_fulltext(arxiv_id)
+        if ft.get("available") and ft.get("text"):
+            body = ft["text"][: config.FULLTEXT_MAX_CHARS]
+            tail = "\n\n[...truncated]" if len(ft["text"]) > config.FULLTEXT_MAX_CHARS else ""
+            return f"{header}\nTL;DR: {tldr or '—'}\n\nFull text:\n{body}{tail}"
+
+    parts = [header]
+    if tldr:
+        parts.append(f"TL;DR: {tldr}")
+    parts.append(f"Abstract: {abstract}" if abstract else "Abstract: (unavailable)")
+    if detail == "full" and not arxiv_id:
+        parts.append("(No arXiv full text for this paper — summary only.)")
+    return "\n".join(parts)
+
+
+def _run_read(block, numbered: list[dict], budgets: dict, read_cache: dict) -> tuple[str, dict, Optional[str]]:
+    """Execute a read_paper tool call. Returns (tool_result_text, trace, node_id)."""
+    inp = getattr(block, "input", None) or {}
+    idx = inp.get("index")
+    detail = "full" if inp.get("detail") == "full" else "summary"
+    node = _node_by_idx(numbered, idx)
+    if node is None:
+        return (f"No paper at index {idx}.", {"action": "read", "ok": False, "index": idx, "title": None, "detail": detail}, None)
+
+    title = node.get("title")
+    # Downgrade a full read to summary when the full budget is spent.
+    if detail == "full" and budgets["full"] <= 0:
+        detail = "summary"
+    if budgets[detail] <= 0:
+        return (
+            "Read budget exhausted — answer now with what you've already gathered.",
+            {"action": "read", "ok": False, "index": idx, "title": title, "detail": detail},
+            node.get("id"),
+        )
+
+    ck = (node.get("id"), detail)
+    if ck in read_cache:
+        text = read_cache[ck]
+    else:
+        text = _paper_text(node, detail)
+        read_cache[ck] = text
+        budgets[detail] -= 1
+    return (text, {"action": "read", "ok": True, "index": idx, "title": title, "detail": detail}, node.get("id"))
+
+
+def answer_agentic(
+    question: str,
+    seed: dict,
+    nodes: list[dict],
+    history: Optional[list[dict]] = None,
+) -> Iterator[tuple[str, object]]:
+    """Agentic Q&A: Claude reads the visible papers via tool use, then answers.
+
+    Yields ``("trace", {...})`` as it reads papers, ``("token", str)`` for the
+    streamed answer, ``("discard", None)`` if streamed preamble must be dropped
+    (the turn turned out to be a tool call), and a final ``("cited", node_ids)``
+    (the papers it actually read)."""
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    numbered = _number_nodes(nodes)
+
+    messages: list[dict] = []
+    for turn in history or []:
+        if turn.get("role") in ("user", "assistant") and isinstance(turn.get("content"), str):
+            messages.append({"role": turn["role"], "content": turn["content"]})
+    messages.append(
+        {"role": "user", "content": f"{_qa_context(seed, numbered)}\n\nQuestion: {question}"}
+    )
+
+    budgets = {"full": config.AGENT_MAX_FULL_READS, "summary": config.AGENT_MAX_SUMMARY_READS}
+    read_cache: dict = {}
+    cited: list[str] = []
+    start = time.time()
+
+    for _ in range(config.AGENT_MAX_STEPS):
+        use_tools = (time.time() - start) < config.AGENT_WALLCLOCK
+        turn_text = ""
+        tool_turn = False
+        with client.messages.stream(
+            model=config.AGENT_MODEL,
+            max_tokens=config.TEACHER_MAX_TOKENS,
+            system=_AGENT_SYSTEM,
+            messages=messages,
+            tools=_TOOLS if use_tools else [],
+        ) as stream:
+            for event in stream:
+                et = getattr(event, "type", "")
+                if et == "content_block_start" and getattr(event.content_block, "type", "") == "tool_use":
+                    if not tool_turn:
+                        tool_turn = True
+                        if turn_text.strip():
+                            yield ("discard", None)  # streamed preamble wasn't the answer
+                elif et == "content_block_delta" and getattr(event.delta, "type", "") == "text_delta":
+                    turn_text += event.delta.text
+                    if not tool_turn:
+                        yield ("token", event.delta.text)
+            final = stream.get_final_message()
+
+        if final.stop_reason == "tool_use":
+            messages.append({"role": "assistant", "content": final.content})
+            results = []
+            for b in final.content:
+                if getattr(b, "type", "") == "tool_use" and b.name == "read_paper":
+                    content, trace, read_id = _run_read(b, numbered, budgets, read_cache)
+                    yield ("trace", trace)
+                    if read_id and read_id not in cited:
+                        cited.append(read_id)
+                    results.append({"type": "tool_result", "tool_use_id": b.id, "content": content})
+            messages.append({"role": "user", "content": results})
+            continue
+        # end_turn: the answer already streamed as tokens.
+        yield ("cited", cited)
+        return
+
+    # Step budget spent mid-investigation — force a tool-free answer.
+    messages.append({"role": "user", "content": "Answer now with what you've gathered."})
+    with client.messages.stream(
+        model=config.AGENT_MODEL,
+        max_tokens=config.TEACHER_MAX_TOKENS,
+        system=_AGENT_SYSTEM,
+        messages=messages,
+    ) as stream:
+        for text in stream.text_stream:
+            yield ("token", text)
+    yield ("cited", cited)
