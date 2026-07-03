@@ -272,7 +272,17 @@ export default function Teacher({
             {m.trace && m.trace.length > 0 && (
               <div className="chat-trace">
                 {m.trace.map((t, j) =>
-                  t.action === 'expand' ? (
+                  t.action === 'search' ? (
+                    <div key={j} className={`trace-line ${t.ok ? '' : 'fail'}`}>
+                      🔎 {t.ok ? 'Searched' : 'Tried'} <b>“{t.query}”</b>
+                      {t.year_from || t.year_to ? (
+                        <span> ({t.year_from ?? '…'}–{t.year_to ?? 'now'})</span>
+                      ) : null}
+                      {t.ok && (
+                        <em>{t.found ? `${t.found} new` : 'nothing new'}</em>
+                      )}
+                    </div>
+                  ) : t.action === 'expand' ? (
                     <div key={j} className={`trace-line ${t.ok ? '' : 'fail'}`}>
                       🔗 {t.ok ? 'Expanded' : 'Tried'} <b>{t.relation}</b> of{' '}
                       <b>{t.title || `paper #${t.index}`}</b>

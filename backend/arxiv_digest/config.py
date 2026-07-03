@@ -103,6 +103,14 @@ AGENT_WALLCLOCK = int(os.getenv("AGENT_WALLCLOCK", "90"))
 # graph). A visited (paper, relation) set in teacher.py kills repeat traversal.
 AGENT_MAX_HOPS = int(os.getenv("AGENT_MAX_HOPS", "5"))
 AGENT_EXPAND_LIMIT = int(os.getenv("AGENT_EXPAND_LIMIT", "8"))
+# Phase 3c.2 — search_papers runs an UNGROUNDED free-text search against S2's
+# paper-search endpoint (optional year filter) to reach recent / topical work
+# that citation & similarity hops can't (those are lineage- and embedding-biased:
+# a 2026 paper citing a 2017 seed has no citations of its own yet). It gets its
+# OWN budget, separate from AGENT_MAX_HOPS, because open-ended search wanders more
+# freely than a graph hop. AGENT_SEARCH_LIMIT caps results per search.
+AGENT_MAX_SEARCHES = int(os.getenv("AGENT_MAX_SEARCHES", "3"))
+AGENT_SEARCH_LIMIT = int(os.getenv("AGENT_SEARCH_LIMIT", "8"))
 # Max characters of full text loaded per paper read (keeps the context bounded).
 FULLTEXT_MAX_CHARS = int(os.getenv("FULLTEXT_MAX_CHARS", "8000"))
 

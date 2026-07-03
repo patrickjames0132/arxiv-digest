@@ -71,7 +71,7 @@ export interface GraphNode {
   citation_count: number | null
   authors?: string | null
   url: string | null
-  rels: string[] // 'seed' | 'reference' | 'citation' | 'similar'
+  rels: string[] // 'seed' | 'reference' | 'citation' | 'similar' | 'search'
   is_seed: boolean
   discovered?: boolean // added mid-conversation by the agent's expand_node tool
 }
@@ -228,16 +228,19 @@ export async function streamLecture(
   })
 }
 
-// A step the agent took — reading a paper, or expanding the graph to one not
-// yet shown. Surfaced live as the agent works.
+// A step the agent took — reading a paper, expanding the graph to one not yet
+// shown, or searching S2 for off-graph papers. Surfaced live as the agent works.
 export interface TraceEvent {
-  action: 'read' | 'expand'
+  action: 'read' | 'expand' | 'search'
   ok: boolean
   title?: string | null
   index?: number
   detail?: string // 'summary' | 'full' — read_paper
   relation?: string // 'references' | 'citations' | 'similar' — expand_node
-  found?: number // new papers discovered — expand_node
+  found?: number // new papers discovered — expand_node / search_papers
+  query?: string // free-text query — search_papers
+  year_from?: number | null // year filter — search_papers
+  year_to?: number | null
 }
 
 // New papers (+ the edges connecting them) the agent pulled in via expand_node,

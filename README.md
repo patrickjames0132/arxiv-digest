@@ -14,22 +14,24 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.7 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.8 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync, and
 > answers follow-up questions grounded in the papers on screen. The Q&A agent
-> **reads the papers' actual full text** (via ar5iv) and can **traverse to
-> papers not yet on the graph** (`expand_node` — one hop of references /
-> citations / similar work, auto-merged as new nodes with a dashed "discovered"
-> ring) before answering — a tool-use loop with live trace UI, read/hop budgets,
-> and wall-clock guardrails. Each answer is a **clickable section** that
-> re-lights the papers it was grounded in, just like a lecture beat. A
-> **Timeline layout** arranges papers left→right by year (so the lecture sweeps
-> through time), and the detail panel shows a paper's own **figures + captions**
-> and links to both the abstract and the PDF. Seed search is **cache-first**:
-> papers you've already seen appear instantly (and still work when the APIs are
-> rate-limiting). Agentic topic search (Phase 3c.2), concept mindmaps, and audio
-> lectures are next — see **[OnePager.md](OnePager.md)** for the full vision and
-> phase plan.
+> **reads the papers' actual full text** (via ar5iv), can **traverse to papers
+> not yet on the graph** (`expand_node` — one hop of references / citations /
+> similar work), and can **search all of Semantic Scholar** for off-graph work
+> (`search_papers`, with a year filter, for recent/topical papers citation hops
+> can't reach) before answering — a tool-use loop with live trace UI, read/hop/
+> search budgets, and wall-clock guardrails. Discovered papers merge into the
+> graph (a dashed "discovered" ring; search hits get their own pink "found by
+> search" color). Each answer is a **clickable section** that re-lights the
+> papers it drew on, just like a lecture beat. A **Timeline layout** arranges
+> papers left→right by year (so the lecture sweeps through time), and the detail
+> panel shows a paper's own **figures + captions** and links to both the abstract
+> and the PDF. Seed search is **cache-first**: papers you've already seen appear
+> instantly (and still work when the APIs are rate-limiting). Concept mindmaps
+> and audio lectures are next — see **[OnePager.md](OnePager.md)** for the full
+> vision and phase plan.
 
 ```
 ┌──────────┐  find seed   ┌─────────┐  graph/refs/cites/recs  ┌──────────────────┐

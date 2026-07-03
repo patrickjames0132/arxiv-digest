@@ -1,10 +1,11 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.7 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.8 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
-> `expand_node` + clickable answer highlights (v1.7.0)
+> `expand_node` + clickable answer highlights (v1.7.0), agentic topic search
+> `search_papers` (v1.8.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -199,18 +200,26 @@ optional, behind a key.
     like lecture beats — click to re-light the papers an answer was grounded in,
     click again to clear. *(Shipped 2026-07-03; browser-tested. OpenAlex keyless
     fallback still an open question — see below.)*
-  - **3c.2 — Topic search (`search_papers`)** — traversal alone is lineage- and
-    embedding-biased, not recency-biased: a 2026 paper citing a 2017 seed has had
-    no time to accumulate citations of its own, so questions like *"what's the
-    latest transformer architecture in 2026?"* can't be reached by hops from an
-    old seed. Add a `search_papers(query, year_from?, year_to?)` tool hitting
-    S2's paper-search endpoint directly (**ungrounded** — no source node
-    required) with a **year filter** so "latest" queries bias recent; hits merge
-    in under a **distinct relation type** (not `similar`, which would imply a
-    verified embedding link) with its own edge style and its **own budget**,
-    separate from the hop budget (open-ended search can wander topically in a
-    way graph hops can't). Generalizes the earlier `find_paper(title)` idea.
-    *(Scoped; not started.)*
+  - [x] **3c.2 — Topic search (`search_papers`)** *(v1.8.0)* — traversal alone is
+    lineage- and embedding-biased, not recency-biased: a 2026 paper citing a 2017
+    seed has had no time to accumulate citations of its own, so questions like
+    *"what's the latest transformer architecture in 2026?"* can't be reached by
+    hops from an old seed. The agent now has a `search_papers(query, year_from?,
+    year_to?)` tool hitting S2's paper-search endpoint directly (**ungrounded** —
+    no source node) with a **year filter** so "latest" queries bias recent. Hits
+    merge in under a distinct **`search` relation** (its own pink color +
+    "Found by search" legend, *not* `similar`) with its **own budget** (3 searches,
+    separate from the hop budget) and its own visited-set; results **float,
+    anchored near the seed** (no edge — the link is topical, not verified) and feed
+    back into the grounding context. Live **trace event** (`🔎 Searched "query"
+    (2024–now) · N new`). Also this cut: Q&A answers now emit the same `<<CITED>>`
+    sentinel as the grounded path, so a **follow-up answered from context** (no
+    re-read) still highlights the papers it drew on. *(Shipped 2026-07-03;
+    browser-tested.)*
+  - **CLI/MCP path + lecture enrichment** remain unscoped stretch ideas beyond
+    3c.2. **OpenAlex** keyless traversal fallback is still an open question (see
+    costs / open questions below) — not built; a manual `S2_API_KEY` is the
+    reliable path for `expand_node` / `search_papers` under rate limits.
 - [ ] **Phase 3d — Bring your own sources** — pull the user's own material into
       the teacher's context so Q&A can read it alongside the papers it fetches
       via `read_paper` — "how does this paper relate to chapter 3 of my

@@ -415,6 +415,31 @@ def _parse_citations(full: str, numbered: list[dict]) -> list[str]:
     return _idx_to_id(numbered, indices)
 
 
+def _emit_hiding_sentinel(chunks: Iterator[str], full_box: list[str]) -> Iterator[str]:
+    """Yield the visible prose from `chunks`, withholding the ``<<CITED>>`` sentinel
+    and everything after it (holding back a tail so a split sentinel never leaks).
+    Appends the complete raw text to ``full_box[0]`` for citation parsing."""
+    buf = ""
+    cut = False
+    hold = len(_CITED)
+    for chunk in chunks:
+        full_box[0] += chunk
+        if cut:
+            continue
+        buf += chunk
+        if _CITED in buf:
+            visible = buf.split(_CITED, 1)[0]
+            if visible:
+                yield visible
+            cut = True
+            buf = ""
+        elif len(buf) > hold:
+            out, buf = buf[:-hold], buf[-hold:]
+            yield out
+    if not cut and buf:
+        yield buf
+
+
 # --- Agentic Q&A (Phase 3b) --------------------------------------------------
 # The agent answers by READING the visible papers (tool use) and can EXPAND the
 # graph to papers not yet shown (Phase 3b.2) — one hop of references / citations
@@ -433,13 +458,22 @@ _AGENT_SYSTEM = (
     "specifics (methods, results, numbers). Use expand_node(index, relation) to "
     "fetch a paper's references, citations, or similar work when the answer needs "
     "a paper that isn't on the graph yet — the papers it finds get numbered and "
-    "added, so you can read_paper them right after. Read and expand only what you "
-    "need — both have limited budgets. Do NOT narrate that you're about to use a "
-    "tool; just call it. When you have enough, write the answer in at most a few "
-    "short paragraphs, grounded in what you read. Begin with the answer itself — "
-    "do NOT preface it with remarks about your reading process (no \"I found the "
-    "sections\"). If nothing you can reach supports an answer, say so briefly. "
-    "Never invent facts or cite papers you haven't read."
+    "added, so you can read_paper them right after. Use search_papers(query, "
+    "year_from?, year_to?) when the answer needs work not connected to the graph "
+    "at all — recent or topical papers that citation and similarity hops can't "
+    "reach (e.g. \"the latest approach to X in 2026\"); pass year_from to bias "
+    "toward recent work. Its hits also get numbered and added for you to read. "
+    "Read, expand, and search only what you need — each has its own limited "
+    "budget. Do NOT narrate that you're about to use a tool; just call it. When "
+    "you have enough, write the answer in at most a few short paragraphs, grounded "
+    "in what you read. Begin with the answer itself — do NOT preface it with "
+    "remarks about your reading process (no \"I found the sections\"). If nothing "
+    "you can reach supports an answer, say so briefly. Never invent facts or cite "
+    "papers you haven't read.\n\n"
+    "After your answer, on a new final line, emit exactly " + _CITED + " followed "
+    "by a JSON array of the indices of the papers your answer draws on, e.g. "
+    + _CITED + " [1, 4]. Use " + _CITED + " [] if you drew on none. Output nothing "
+    "after that line."
 )
 
 _TOOLS = [
@@ -491,6 +525,35 @@ _TOOLS = [
                 },
             },
             "required": ["index", "relation"],
+        },
+    },
+    {
+        "name": "search_papers",
+        "description": (
+            "Free-text search across all of Semantic Scholar for papers matching a "
+            "query, optionally bounded by year — NOT limited to the graph or its "
+            "citation neighborhood. Use for recent or topical work that references / "
+            "citations / similar hops can't reach (e.g. the newest paper on a topic, "
+            "which an old seed can't cite). Hits get numbered and added so you can "
+            "read_paper them."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Free-text query — keywords or a topic, not an id.",
+                },
+                "year_from": {
+                    "type": "integer",
+                    "description": "Earliest publication year (inclusive). Omit for no floor.",
+                },
+                "year_to": {
+                    "type": "integer",
+                    "description": "Latest publication year (inclusive). Omit for no ceiling.",
+                },
+            },
+            "required": ["query"],
         },
     },
 ]
@@ -689,6 +752,113 @@ def _run_expand(
     return (text, trace, discovery)
 
 
+def _s2_search(query: str, year_from: Optional[int], year_to: Optional[int]) -> list[dict]:
+    """Cached free-text S2 search (same day-TTL as a graph snapshot) so repeated
+    queries in a session don't re-hit the rate-limited endpoint."""
+    cache_key = f"search:{query.strip().lower()}:{year_from or ''}-{year_to or ''}"
+    cached = cache.get(cache_key, config.GRAPH_CACHE_TTL)
+    if cached is not None:
+        return cached
+    hits = s2.search_papers(query, config.AGENT_SEARCH_LIMIT, year_from, year_to)
+    cache.set(cache_key, hits)
+    return hits
+
+
+def _search_scope(year_from: Optional[int], year_to: Optional[int]) -> str:
+    if year_from and year_to:
+        return f" ({year_from}–{year_to})"
+    if year_from:
+        return f" (since {year_from})"
+    if year_to:
+        return f" (through {year_to})"
+    return ""
+
+
+def _run_search(
+    block,
+    numbered: list[dict],
+    known_ids: set[str],
+    searched: set,
+    searches: dict,
+) -> tuple[str, dict, Optional[dict]]:
+    """Execute a search_papers tool call: run an ungrounded free-text S2 search
+    and append any papers not already numbered so the agent can read_paper them.
+
+    Returns (tool_result_text, trace, discovery). Discovery carries only nodes —
+    no edges — since a topic search links the hits to no specific paper; the
+    frontend anchors them near the seed so they don't fly in from the origin.
+    """
+    inp = getattr(block, "input", None) or {}
+    query = (inp.get("query") or "").strip()
+    year_from = inp.get("year_from")
+    year_to = inp.get("year_to")
+    if not query:
+        return (
+            "Invalid search_papers call (empty query).",
+            {"action": "search", "ok": False, "query": query},
+            None,
+        )
+    if searches["left"] <= 0:
+        return (
+            "Search budget exhausted — answer with what you've found.",
+            {"action": "search", "ok": False, "query": query},
+            None,
+        )
+
+    key = (query.lower(), year_from, year_to)
+    if key in searched:
+        return (
+            f'Already searched "{query}" — see the numbered papers above.',
+            {"action": "search", "ok": True, "query": query, "found": 0},
+            None,
+        )
+    searched.add(key)
+    searches["left"] -= 1
+
+    try:
+        hits = _s2_search(query, year_from, year_to)
+    except s2.S2Error as exc:
+        return (
+            f'Couldn\'t search "{query}": {exc}',
+            {"action": "search", "ok": False, "query": query},
+            None,
+        )
+
+    new_nodes: list[dict] = []
+    lines: list[str] = []
+    next_idx = numbered[-1]["idx"] + 1
+    for hit in hits:
+        n = hit["node"]
+        nid = n["id"]
+        if nid in known_ids:
+            continue
+        known_ids.add(nid)
+        disc = dict(n)
+        disc["rels"] = ["search"]
+        disc["is_seed"] = False
+        disc["discovered"] = True
+        disc["idx"] = next_idx
+        numbered.append(disc)
+        new_nodes.append(disc)
+        lines.append(f"[{next_idx}] ({disc.get('year') or 'n.d.'}) {disc.get('title', '')}")
+        next_idx += 1
+
+    scope = _search_scope(year_from, year_to)
+    if not lines:
+        text = f'Search "{query}"{scope} returned nothing new.'
+    else:
+        text = (
+            f'Search "{query}"{scope} — {len(lines)} new paper(s) added:\n'
+            + "\n".join(lines)
+        )
+    trace = {
+        "action": "search", "ok": True, "query": query, "found": len(lines),
+        "year_from": year_from, "year_to": year_to,
+    }
+    discovery = {"nodes": new_nodes, "edges": []} if new_nodes else None
+    return (text, trace, discovery)
+
+
 def answer_agentic(
     question: str,
     seed: dict,
@@ -720,6 +890,8 @@ def answer_agentic(
     known_ids = {n["id"] for n in numbered if n.get("id")}
     expanded: set[tuple[str, str]] = set()
     hops = {"left": config.AGENT_MAX_HOPS}
+    searched: set = set()
+    searches = {"left": config.AGENT_MAX_SEARCHES}
     cited: list[str] = []
     start = time.time()
 
@@ -727,6 +899,9 @@ def answer_agentic(
         use_tools = (time.time() - start) < config.AGENT_WALLCLOCK
         turn_text = ""
         tool_turn = False
+        emit_buf = ""  # held-back tail so a split <<CITED>> sentinel never leaks
+        cut = False  # once we hit the sentinel, stop emitting this turn's prose
+        hold = len(_CITED)
         with client.messages.stream(
             model=config.AGENT_MODEL,
             max_tokens=config.TEACHER_MAX_TOKENS,
@@ -739,13 +914,28 @@ def answer_agentic(
                 if et == "content_block_start" and getattr(event.content_block, "type", "") == "tool_use":
                     if not tool_turn:
                         tool_turn = True
+                        emit_buf = ""  # this turn is a tool call, not the answer
                         if turn_text.strip():
                             yield ("discard", None)  # streamed preamble wasn't the answer
                 elif et == "content_block_delta" and getattr(event.delta, "type", "") == "text_delta":
                     turn_text += event.delta.text
-                    if not tool_turn:
-                        yield ("token", event.delta.text)
+                    if tool_turn or cut:
+                        continue
+                    # Stream the answer while hiding the <<CITED>> sentinel from view.
+                    emit_buf += event.delta.text
+                    if _CITED in emit_buf:
+                        visible = emit_buf.split(_CITED, 1)[0]
+                        if visible:
+                            yield ("token", visible)
+                        cut = True
+                        emit_buf = ""
+                    elif len(emit_buf) > hold:
+                        out, emit_buf = emit_buf[:-hold], emit_buf[-hold:]
+                        yield ("token", out)
             final = stream.get_final_message()
+        # Flush the held tail once we know this turn was the spoken answer.
+        if not tool_turn and not cut and emit_buf:
+            yield ("token", emit_buf)
 
         if final.stop_reason == "tool_use":
             messages.append({"role": "assistant", "content": final.content})
@@ -763,23 +953,37 @@ def answer_agentic(
                     yield ("trace", trace)
                     if discovery:
                         yield ("nodes", discovery)
+                elif b.name == "search_papers":
+                    content, trace, discovery = _run_search(b, numbered, known_ids, searched, searches)
+                    yield ("trace", trace)
+                    if discovery:
+                        yield ("nodes", discovery)
                 else:
                     content = f"Unknown tool {b.name!r}."
                 results.append({"type": "tool_result", "tool_use_id": b.id, "content": content})
             messages.append({"role": "user", "content": results})
             continue
-        # end_turn: the answer already streamed as tokens.
+        # end_turn: the answer already streamed as tokens. Fold the papers it
+        # named via <<CITED>> into `cited` (so a follow-up answered from context,
+        # without re-reading, still highlights the papers it drew on).
+        for cid in _parse_citations(turn_text, numbered):
+            if cid not in cited:
+                cited.append(cid)
         yield ("cited", cited)
         return
 
     # Step budget spent mid-investigation — force a tool-free answer.
     messages.append({"role": "user", "content": "Answer now with what you've gathered."})
+    full_box = [""]
     with client.messages.stream(
         model=config.AGENT_MODEL,
         max_tokens=config.TEACHER_MAX_TOKENS,
         system=_AGENT_SYSTEM,
         messages=messages,
     ) as stream:
-        for text in stream.text_stream:
+        for text in _emit_hiding_sentinel(stream.text_stream, full_box):
             yield ("token", text)
+    for cid in _parse_citations(full_box[0], numbered):
+        if cid not in cited:
+            cited.append(cid)
     yield ("cited", cited)

@@ -196,3 +196,35 @@ def recommendations(paper_id: str, limit: int,
         if node:
             out.append({"node": node})
     return out
+
+
+def _year_range(lo: Optional[int], hi: Optional[int]) -> Optional[str]:
+    """S2's `year` filter accepts "2019", "2016-2020", "2020-" or "-2015"."""
+    if lo and hi:
+        return f"{lo}-{hi}"
+    if lo:
+        return f"{lo}-"
+    if hi:
+        return f"-{hi}"
+    return None
+
+
+def search_papers(query: str, limit: int, year_from: Optional[int] = None,
+                  year_to: Optional[int] = None) -> list[dict]:
+    """Relevance search across S2's corpus for papers matching a free-text query,
+    optionally bounded by publication year. Unlike references/citations/
+    recommendations this is UNGROUNDED — no source paper — so it reaches recent or
+    topical work that citation & similarity hops (lineage- and embedding-biased)
+    can't. Returns [{node}] in the same shape as the traversal helpers."""
+    params = {"query": query, "fields": _NEIGHBOR_FIELDS, "limit": limit}
+    year = _year_range(year_from, year_to)
+    if year:
+        params["year"] = year
+    url = f"{config.S2_GRAPH_URL}/paper/search?{urllib.parse.urlencode(params)}"
+    data = _request(url)
+    out = []
+    for paper in (data.get("data") or []) if isinstance(data, dict) else []:
+        node = _node(paper)
+        if node:
+            out.append({"node": node})
+    return out

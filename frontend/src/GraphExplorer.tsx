@@ -37,6 +37,7 @@ const REL_COLOR: Record<string, string> = {
   reference: '#6ea8fe', // blue — ancestors it cites
   citation: '#4ade80', // green — descendants that cite it
   similar: '#c084fc', // purple — embedding-similar papers
+  search: '#f472b6', // pink — pulled in by the teacher's topic search (3c.2)
 }
 const EDGE_COLOR: Record<EdgeType, string> = {
   reference: 'rgba(110,168,254,0.30)',
@@ -91,6 +92,8 @@ function formatPubDate(pubDate?: string | null, year?: number | null): string {
 function primaryRel(node: GraphNode): string {
   if (node.is_seed) return 'seed'
   for (const rel of REL_TYPES) if (node.rels.includes(rel)) return rel
+  // Ungrounded topic-search hits (no graph relation) get their own color.
+  if (node.rels.includes('search')) return 'search'
   return 'similar'
 }
 
@@ -120,7 +123,9 @@ export default function GraphExplorer() {
   const [figLoading, setFigLoading] = useState<string | null>(null)
 
   // Declutter controls.
-  const [enabled, setEnabled] = useState<Set<string>>(new Set(REL_TYPES))
+  // 'search' is always on (no filter chip): topic-search hits are agent-
+  // discovered and few, so they stay visible; the year slider still filters them.
+  const [enabled, setEnabled] = useState<Set<string>>(new Set([...REL_TYPES, 'search']))
   const [yearLo, setYearLo] = useState(0)
   const [yearHi, setYearHi] = useState(0)
   const [pinned, setPinned] = useState<Set<string>>(new Set())
@@ -187,7 +192,7 @@ export default function GraphExplorer() {
   // Reset controls whenever a new graph loads.
   useEffect(() => {
     if (!base) return
-    setEnabled(new Set(REL_TYPES))
+    setEnabled(new Set([...REL_TYPES, 'search']))
     setYearLo(base.minYear)
     setYearHi(base.maxYear)
     setPinned(new Set())
@@ -386,18 +391,23 @@ export default function GraphExplorer() {
         if (knownIds.has(n.id)) continue
         knownIds.add(n.id)
         // Start near whichever already-placed node it was discovered from, so
-        // it doesn't fly in from the origin when the sim reheats.
+        // it doesn't fly in from the origin when the sim reheats. Topic-search
+        // hits have no edge (ungrounded) — anchor them on the seed and scatter
+        // wider so they settle into a loose cluster instead of stacking on it.
         const anchorEdge = newEdges.find((e) => e.source === n.id || e.target === n.id)
         const anchorId = anchorEdge
           ? anchorEdge.source === n.id
             ? anchorEdge.target
             : anchorEdge.source
           : null
-        const anchor = anchorId ? base.nodes.find((x) => x.id === anchorId) : null
+        const anchor = anchorId
+          ? base.nodes.find((x) => x.id === anchorId)
+          : base.nodes.find((x) => x.is_seed)
+        const spread = anchorEdge ? 40 : 120
         const vn: VNode = { ...n }
         if (anchor && typeof anchor.x === 'number' && typeof anchor.y === 'number') {
-          vn.x = anchor.x + (Math.random() - 0.5) * 40
-          vn.y = anchor.y + (Math.random() - 0.5) * 40
+          vn.x = anchor.x + (Math.random() - 0.5) * spread
+          vn.y = anchor.y + (Math.random() - 0.5) * spread
         }
         if (layout === 'timeline') vn.fx = nodeTimelineX(vn)
         base.nodes.push(vn)
@@ -931,6 +941,12 @@ export default function GraphExplorer() {
                 <span>
                   <i className="ring" />
                   Discovered by teacher
+                </span>
+              )}
+              {discoveredNodes.some((n) => n.rels.includes('search')) && (
+                <span>
+                  <i style={{ background: REL_COLOR.search }} />
+                  Found by search
                 </span>
               )}
             </div>
