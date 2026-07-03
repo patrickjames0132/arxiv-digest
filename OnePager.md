@@ -316,6 +316,16 @@ optional, behind a key.
       New route `POST /api/ask_sources` (SSE, own session store) + a `LibraryChat`
       modal reachable from a top-bar "💬 Ask library" button and an empty-state CTA
       (both shown only when a library exists).
+- [ ] **Parallel multi-file source upload** — the Sources drawer ingests one PDF
+      at a time (single-file picker, synchronous ingest). Let the user select /
+      drop **multiple files at once** and embed them **in parallel** (with
+      per-file progress), so loading a stack of books isn't a serial wait. *(From
+      the `todos.md` inbox, 2026-07-03.)*
+- [ ] **Toggle between graph view and library-agent view** — a clean way to switch
+      **off the graph** and into the **offline library chat** (and back) as a
+      first-class mode, rather than the current modal-over-graph. E.g. a top-level
+      view switch so "chat with my library" is a place you go, not just an overlay.
+      *(From the `todos.md` inbox, 2026-07-03.)*
 - [ ] **Publication date in search results + date filter** — surface each result's
       **publication date** in the semantic search results list, and add a way to
       **filter search results by publication date** (e.g. a date/year control on the
