@@ -279,19 +279,20 @@ optional, behind a key.
 
 **Beyond the teacher**
 
-- [ ] **Phase 4 — Concept mindmap** — Claude concept-map JSON, "bridge two
-      topics," `/api/mindmap`.
-- [ ] **Phase 5 — Audio lecture** — Podcastfy integration, Edge TTS default,
-      ElevenLabs optional, `/api/lecture/audio`.
-- [ ] **Phase 6 — Polished media (optional)** — `autocontent.py` behind
-      `AUTOCONTENT_API_KEY`; "Generate visuals" button.
-- [ ] **Phase 7 — Saved sessions & workspaces** — persistence, deliberately
+- [ ] **Phase 4 — Saved sessions & workspaces** — persistence, deliberately
       dropped at the v1.0 pivot, reintroduced as opt-in: save & restore a **graph**
       (including nodes the agent discovered / expanded / searched in) and a **chat
       session**, plus a "my saved graphs / sessions" surface to reopen them. Also a
       lighter in-session control that ships alongside: **clear chat history on
       demand**, e.g. when re-seeding via "Explore from here" (a new seed = a fresh
       conversation). Needs a storage layer — the app is otherwise dynamic/ephemeral.
+      *(Prioritized ahead of the media phases — more foundational.)*
+- [ ] **Phase 5 — Concept mindmap** — Claude concept-map JSON, "bridge two
+      topics," `/api/mindmap`.
+- [ ] **Phase 6 — Audio lecture** — Podcastfy integration, Edge TTS default,
+      ElevenLabs optional, `/api/lecture/audio`.
+- [ ] **Phase 7 — Polished media (optional)** — `autocontent.py` behind
+      `AUTOCONTENT_API_KEY`; "Generate visuals" button.
 
 **Enhancements & tech debt** *(unscheduled; from the `todos.md` inbox)*
 
@@ -312,7 +313,7 @@ optional, behind a key.
 - [ ] **Figures in agent answers** *(teacher/media-adjacent)* — let the Q&A agent
       pull relevant figures from the papers it reads into its answer, to illustrate
       an explanation inline. Reuses the existing figure extraction (`figures.py`
-      via ar5iv) already shown in the detail panel; sits near Phase 6's media
+      via ar5iv) already shown in the detail panel; sits near Phase 7's media
       intent but surfaces *existing* figures rather than generating new visuals.
 - [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
       `run.py` with a `click` group (same command names: `serve`, `ingest`,
