@@ -231,14 +231,14 @@ export async function streamLecture(
 // A step the agent took — reading a paper, expanding the graph to one not yet
 // shown, or searching S2 for off-graph papers. Surfaced live as the agent works.
 export interface TraceEvent {
-  action: 'read' | 'expand' | 'search'
+  action: 'read' | 'expand' | 'search' | 'search_sources'
   ok: boolean
   title?: string | null
   index?: number
   detail?: string // 'summary' | 'full' — read_paper
   relation?: string // 'references' | 'citations' | 'similar' — expand_node
-  found?: number // new papers discovered — expand_node / search_papers
-  query?: string // free-text query — search_papers
+  found?: number // new papers discovered / passages found
+  query?: string // free-text query — search_papers / search_sources
   year_from?: number | null // year filter — search_papers
   year_to?: number | null
 }
@@ -282,4 +282,64 @@ export async function streamAsk(
     else if (event === 'done') h.onDone?.()
     else if (event === 'error') h.onError?.((data as { error: string }).error)
   })
+}
+
+// --- Bring-your-own sources: the user's local semantic library (Phase 3d) ----
+
+export interface Source {
+  id: string
+  title: string
+  kind: 'pdf' | 'url'
+  origin: string | null
+  pages: number | null
+  n_chunks: number
+  created_at: string
+}
+
+export interface SourcesResponse {
+  available: boolean // local embeddings + sqlite-vec loaded
+  sources: Source[]
+}
+
+export async function listSources(): Promise<SourcesResponse> {
+  try {
+    const res = await fetch('/api/sources')
+    if (!res.ok) return { available: false, sources: [] }
+    return (await res.json()) as SourcesResponse
+  } catch {
+    return { available: false, sources: [] }
+  }
+}
+
+async function ingestResult(res: Response): Promise<Source> {
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data as { error?: string }).error || `Ingest failed (${res.status})`)
+  return data as Source
+}
+
+export async function uploadSource(file: File, title?: string): Promise<Source> {
+  const form = new FormData()
+  form.append('file', file)
+  if (title) form.append('title', title)
+  return ingestResult(await fetch('/api/sources', { method: 'POST', body: form }))
+}
+
+export async function ingestUrl(url: string, title?: string): Promise<Source> {
+  return ingestResult(
+    await fetch('/api/sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, title }),
+    }),
+  )
+}
+
+export async function deleteSource(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/sources/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    if (!res.ok) return false
+    return ((await res.json()) as { deleted: boolean }).deleted
+  } catch {
+    return false
+  }
 }

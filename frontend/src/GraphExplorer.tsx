@@ -20,6 +20,7 @@ import {
   type LocalHit,
 } from './api'
 import Teacher from './Teacher'
+import Sources from './Sources'
 import './atlas.css'
 
 // The lib's generic prop typings fight our accessor signatures; render via an
@@ -143,6 +144,8 @@ export default function GraphExplorer() {
   // `view` (and anything else keyed on it) recomputes despite `base` itself
   // keeping the same object identity.
   const [graphVersion, setGraphVersion] = useState(0)
+  // The Sources drawer (Phase 3d) — the user's local semantic library.
+  const [showSources, setShowSources] = useState(false)
 
   const wrapRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -635,7 +638,16 @@ export default function GraphExplorer() {
             {graph.seed.title}
           </div>
         )}
+        <button
+          className="sources-toggle"
+          onClick={() => setShowSources(true)}
+          title="Your sources — books, PDFs, and pages the teacher can search"
+        >
+          📚 Sources
+        </button>
       </header>
+
+      <Sources open={showSources} onClose={() => setShowSources(false)} />
 
       <div className="atlas-body">
         <main className="canvas-wrap" ref={wrapRef}>

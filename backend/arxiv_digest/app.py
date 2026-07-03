@@ -11,6 +11,9 @@ GET  /api/arxiv_search?q=&limit=       -> live seed search across arXiv
 GET  /api/local_search?q=&limit=       -> instant seed search over the local cache
 POST /api/lecture                      -> streamed AI lecture over the visible graph
 POST /api/ask                          -> streamed grounded Q&A over the visible graph
+GET  /api/sources                      -> list the user's local semantic library
+POST /api/sources                      -> ingest a PDF upload or a {url} into the library
+DEL  /api/sources/<id>                 -> remove a source from the library
 
 In production it also serves the built React app from frontend/dist.
 """
@@ -32,6 +35,7 @@ from . import (
     graph,
     search,
     semantic_scholar,
+    sources,
     teacher,
 )
 
@@ -46,6 +50,8 @@ logging.basicConfig(
 )
 
 app = Flask(__name__, static_folder=None)
+# Books can be large — allow generous uploads for source ingestion (Phase 3d).
+app.config["MAX_CONTENT_LENGTH"] = 256 * 1024 * 1024  # 256 MB
 # Allow the Vite dev server (localhost:5173) to call the API during development.
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
@@ -298,6 +304,56 @@ def api_ask() -> Response:
                 del convo[:-keep]
 
     return _sse_response(gen())
+
+
+# --- Bring-your-own sources (Phase 3d): the user's local semantic library -----
+@app.get("/api/sources")
+def api_sources_list() -> Response:
+    """List the user's uploaded sources. ``available`` reports whether local
+    embeddings + sqlite-vec loaded (so the UI can explain a disabled state)."""
+    try:
+        available = sources.available()
+    except Exception:
+        app.logger.exception("sources availability check failed")
+        available = False
+    return jsonify({"available": available, "sources": sources.list_sources()})
+
+
+@app.post("/api/sources")
+def api_sources_add() -> Response:
+    """Ingest a source: either a multipart PDF upload (field ``file``) or a JSON
+    body ``{"url": ...}``. Returns the created source record. Synchronous — a big
+    book takes a bit while it chunks + embeds."""
+    import tempfile
+
+    title = None
+    try:
+        upload = request.files.get("file")
+        if upload and upload.filename:
+            title = (request.form.get("title") or "").strip() or None
+            suffix = Path(upload.filename).suffix or ".pdf"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
+                upload.save(tmp.name)
+                src = sources.ingest_pdf(tmp.name, title=title or Path(upload.filename).stem)
+        else:
+            payload = request.get_json(silent=True) or {}
+            url = (payload.get("url") or "").strip()
+            title = (payload.get("title") or "").strip() or None
+            if not url:
+                return jsonify({"error": "provide a PDF file or a url"}), 400
+            src = sources.ingest_url(url, title=title)
+    except sources.SourceError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("source ingest failed")
+        return jsonify({"error": str(exc)}), 500
+    return jsonify(src)
+
+
+@app.delete("/api/sources/<source_id>")
+def api_sources_delete(source_id: str) -> Response:
+    """Remove a source and its chunks/vectors from the library."""
+    return jsonify({"deleted": sources.delete_source(source_id)})
 
 
 # --- Serve the built frontend (production) -----------------------------------

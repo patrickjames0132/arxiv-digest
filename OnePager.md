@@ -1,12 +1,12 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.9 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.10 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
 > `expand_node` + clickable answer highlights (v1.7.0), agentic topic search
 > `search_papers` (v1.8.0), local semantic library for your own PDFs/URLs
-> (v1.9.0)
+> (v1.9.0), teacher searches your uploaded books in Q&A (v1.10.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -235,11 +235,17 @@ optional, behind a key.
     (survives across graphs) with CLI ingest/search/list/forget (`run.py`).
     Degrades gracefully via `available()` if the model / sqlite-vec can't load.
     *(Shipped 2026-07-03; verified on real books via CLI.)*
-  - **3d.2 — Agent tools + UI** *(next)* — expose `search_sources(query,
-    source_id?)` + `list_sources()` to the agentic loop (own budget
-    `AGENT_MAX_SOURCE_SEARCHES`, `📚` trace line), an upload / paste-URL **Sources
-    panel** + library management, and **inline page citations** in answers
-    (sources aren't graph nodes, so they cite rather than highlight the graph).
+  - [x] **3d.2 — Agent tools + UI** *(v1.10.0)* — the agentic loop gets a
+    `search_sources(query, source_id?)` tool (own budget
+    `AGENT_MAX_SOURCE_SEARCHES=5`, `📚 Searched your sources` trace line), offered
+    **only when a library exists** (an empty library never loads the embedding
+    model). The agent sees the library listed in its context (so it can scope to
+    one source) and **cites passages inline by page** — "(Deep Learning, p.243)".
+    A **📚 Sources drawer** (top bar) uploads PDFs / pastes URLs and manages the
+    library (`GET/POST /api/sources`, `DELETE /api/sources/<id>`; 256 MB uploads).
+    Sources aren't graph nodes, so they cite rather than highlight the graph.
+    *(Shipped 2026-07-03; browser-tested — the teacher pulls from uploaded books
+    in Q&A with page citations.)*
   - **3d.3 — polish** *(scoped)* — hybrid **FTS5 + vector (RRF)** for exact-term /
     proper-noun lookups, per-source scoping in the UI, figure/image handling
     (OCR for scanned PDFs), and an optional stronger embed model (`bge-small`).

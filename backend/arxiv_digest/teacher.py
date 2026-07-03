@@ -33,7 +33,7 @@ import tempfile
 import time
 from typing import Iterator, Optional
 
-from . import cache, config, fulltext
+from . import cache, config, fulltext, sources
 from . import semantic_scholar as s2
 
 log = logging.getLogger(__name__)
@@ -469,12 +469,36 @@ _AGENT_SYSTEM = (
     "in what you read. Begin with the answer itself — do NOT preface it with "
     "remarks about your reading process (no \"I found the sections\"). If nothing "
     "you can reach supports an answer, say so briefly. Never invent facts or cite "
-    "papers you haven't read.\n\n"
-    "After your answer, on a new final line, emit exactly " + _CITED + " followed "
+    "papers you haven't read."
+)
+# Appended only when the user has a source library (Phase 3d): tells the agent it
+# can search the user's own uploaded books / pages and how to attribute them.
+_SOURCES_PARA = (
+    "\n\nThe student has also uploaded their own sources (books, PDFs, web pages), "
+    "listed under \"Your library\" below. Use search_sources(query, source_id?) to "
+    "semantically search them for relevant passages when the question touches their "
+    "own material (e.g. \"how does this relate to my textbook?\") — pass a source_id "
+    "to search one source, or omit it to search the whole library. When you use a "
+    "passage, attribute it inline in your prose, e.g. \"(Deep Learning, p.243)\". "
+    "Source passages are NOT graph papers — don't put them in the " + _CITED + " list."
+)
+# The final-line citation instruction (kept separate so _SOURCES_PARA can slot in
+# ahead of it — nothing may come after this line).
+_CITED_INSTRUCTION = (
+    "\n\nAfter your answer, on a new final line, emit exactly " + _CITED + " followed "
     "by a JSON array of the indices of the papers your answer draws on, e.g. "
     + _CITED + " [1, 4]. Use " + _CITED + " [] if you drew on none. Output nothing "
     "after that line."
 )
+_AGENT_SYSTEM += _CITED_INSTRUCTION
+
+
+def _agent_system(has_sources: bool) -> str:
+    """The agent system prompt, with source-search guidance slotted in ahead of
+    the citation instruction when the user has a library."""
+    if not has_sources:
+        return _AGENT_SYSTEM
+    return _AGENT_SYSTEM[: -len(_CITED_INSTRUCTION)] + _SOURCES_PARA + _CITED_INSTRUCTION
 
 _TOOLS = [
     {
@@ -557,6 +581,32 @@ _TOOLS = [
         },
     },
 ]
+
+# Added to the tool set only when the user has a source library (Phase 3d).
+_SOURCE_TOOL = {
+    "name": "search_sources",
+    "description": (
+        "Semantic search over the student's OWN uploaded sources (books, PDFs, web "
+        "pages) — not the citation graph or Semantic Scholar. Returns the most "
+        "relevant passages, each with its source title and page. Use when the "
+        "question touches their own material. Omit source_id to search everything, "
+        "or pass one from \"Your library\" to search a single source."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "What to look for — a concept or question, not an id.",
+            },
+            "source_id": {
+                "type": "string",
+                "description": "Restrict to one source's id from the library (optional).",
+            },
+        },
+        "required": ["query"],
+    },
+}
 
 
 def agentic_available() -> bool:
@@ -859,6 +909,55 @@ def _run_search(
     return (text, trace, discovery)
 
 
+def _sources_context(library: list[dict]) -> str:
+    """A compact listing of the user's uploaded sources for the agent's context,
+    so it knows what it can search and can scope search_sources by id."""
+    lines = []
+    for s in library:
+        loc = f"{s['pages']}pp" if s.get("pages") else s.get("kind", "")
+        lines.append(f"- [{s['id']}] \"{s['title']}\" ({loc})")
+    return "Your library (search with search_sources):\n" + "\n".join(lines)
+
+
+def _run_search_sources(block, source_searches: dict) -> tuple[str, dict]:
+    """Execute a search_sources tool call: semantic search over the user's own
+    uploaded library. Returns (tool_result_text, trace). No graph discovery —
+    source passages aren't graph nodes; the agent cites them inline by page."""
+    inp = getattr(block, "input", None) or {}
+    query = (inp.get("query") or "").strip()
+    source_id = inp.get("source_id") or None
+    if not query:
+        return (
+            "Invalid search_sources call (empty query).",
+            {"action": "search_sources", "ok": False, "query": query},
+        )
+    if source_searches["left"] <= 0:
+        return (
+            "Source-search budget exhausted — answer with what you've found.",
+            {"action": "search_sources", "ok": False, "query": query},
+        )
+    source_searches["left"] -= 1
+    try:
+        hits = sources.search(query, source_id=source_id)
+    except Exception as exc:
+        log.exception("search_sources failed")
+        return (
+            f"Couldn't search your sources: {exc}",
+            {"action": "search_sources", "ok": False, "query": query},
+        )
+    if not hits:
+        return (
+            f'No passages in your library matched "{query}".',
+            {"action": "search_sources", "ok": True, "query": query, "found": 0},
+        )
+    lines = []
+    for h in hits:
+        loc = f", p.{h['page']}" if h.get("page") else ""
+        lines.append(f"[{h['source_title']}{loc}] {' '.join(h['text'].split())}")
+    trace = {"action": "search_sources", "ok": True, "query": query, "found": len(hits)}
+    return (f'Passages from your library for "{query}":\n\n' + "\n\n".join(lines), trace)
+
+
 def answer_agentic(
     question: str,
     seed: dict,
@@ -877,13 +976,22 @@ def answer_agentic(
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
     numbered = _number_nodes(nodes)
 
+    # Offer the source-search tool only when the user actually has a library
+    # (checked before touching the embedding model, so an empty library never
+    # pays the torch load). list_sources is cheap; available() loads the model.
+    library = sources.list_sources()
+    has_sources = bool(library) and sources.available()
+    tools = _TOOLS + [_SOURCE_TOOL] if has_sources else _TOOLS
+    system = _agent_system(has_sources)
+
     messages: list[dict] = []
     for turn in history or []:
         if turn.get("role") in ("user", "assistant") and isinstance(turn.get("content"), str):
             messages.append({"role": turn["role"], "content": turn["content"]})
-    messages.append(
-        {"role": "user", "content": f"{_qa_context(seed, numbered)}\n\nQuestion: {question}"}
-    )
+    context = _qa_context(seed, numbered)
+    if has_sources:
+        context += "\n\n" + _sources_context(library)
+    messages.append({"role": "user", "content": f"{context}\n\nQuestion: {question}"})
 
     budgets = {"full": config.AGENT_MAX_FULL_READS, "summary": config.AGENT_MAX_SUMMARY_READS}
     read_cache: dict = {}
@@ -892,6 +1000,7 @@ def answer_agentic(
     hops = {"left": config.AGENT_MAX_HOPS}
     searched: set = set()
     searches = {"left": config.AGENT_MAX_SEARCHES}
+    source_searches = {"left": config.AGENT_MAX_SOURCE_SEARCHES}
     cited: list[str] = []
     start = time.time()
 
@@ -905,9 +1014,9 @@ def answer_agentic(
         with client.messages.stream(
             model=config.AGENT_MODEL,
             max_tokens=config.TEACHER_MAX_TOKENS,
-            system=_AGENT_SYSTEM,
+            system=system,
             messages=messages,
-            tools=_TOOLS if use_tools else [],
+            tools=tools if use_tools else [],
         ) as stream:
             for event in stream:
                 et = getattr(event, "type", "")
@@ -958,6 +1067,9 @@ def answer_agentic(
                     yield ("trace", trace)
                     if discovery:
                         yield ("nodes", discovery)
+                elif b.name == "search_sources":
+                    content, trace = _run_search_sources(b, source_searches)
+                    yield ("trace", trace)
                 else:
                     content = f"Unknown tool {b.name!r}."
                 results.append({"type": "tool_result", "tool_use_id": b.id, "content": content})
@@ -978,7 +1090,7 @@ def answer_agentic(
     with client.messages.stream(
         model=config.AGENT_MODEL,
         max_tokens=config.TEACHER_MAX_TOKENS,
-        system=_AGENT_SYSTEM,
+        system=system,
         messages=messages,
     ) as stream:
         for text in _emit_hiding_sentinel(stream.text_stream, full_box):
