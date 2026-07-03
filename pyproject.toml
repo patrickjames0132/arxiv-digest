@@ -1,6 +1,6 @@
 [project]
 name = "arxiv-digest"
-version = "1.8.0"
+version = "1.9.0"
 description = "arXiv Atlas — an interactive citation/similarity graph explorer with an AI teacher that narrates a field's history over the graph."
 requires-python = ">=3.11"
 dependencies = [
@@ -11,6 +11,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "sentence-transformers>=3.0",
     "sqlite-vec>=0.1.6",
+    "pymupdf>=1.24",
 ]
 
 [tool.uv]

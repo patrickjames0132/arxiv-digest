@@ -25,6 +25,9 @@ def _path(env_name: str, default: Path) -> Path:
 # --- Storage -----------------------------------------------------------------
 DATA_DIR = _path("ARXIV_DATA_DIR", PROJECT_ROOT / "data")
 DB_PATH = DATA_DIR / "digest.db"
+# Bring-your-own sources (Phase 3d) live in their own DB — a persistent user
+# library with a different lifecycle than the 1-day graph cache in digest.db.
+SOURCES_DB_PATH = DATA_DIR / "sources.db"
 
 # --- Semantic Scholar (dynamic academic graph) -------------------------------
 # arXiv Atlas connects to Semantic Scholar dynamically instead of storing a paper
@@ -113,6 +116,25 @@ AGENT_MAX_SEARCHES = int(os.getenv("AGENT_MAX_SEARCHES", "3"))
 AGENT_SEARCH_LIMIT = int(os.getenv("AGENT_SEARCH_LIMIT", "8"))
 # Max characters of full text loaded per paper read (keeps the context bounded).
 FULLTEXT_MAX_CHARS = int(os.getenv("FULLTEXT_MAX_CHARS", "8000"))
+
+# --- Bring-your-own sources (Phase 3d) ---------------------------------------
+# Uploaded books/PDFs and fetched web pages are chunked, embedded LOCALLY (no
+# API, no key — the text never leaves the machine, which matters for copyrighted
+# books) and stored in a sqlite-vec index the teacher can semantic-search. All of
+# it degrades gracefully: if the embedding model can't load, `available()` is
+# False and ingestion/search report unavailable rather than crashing.
+SEMANTIC_ENABLED = os.getenv("ARXIV_SEMANTIC", "1").lower() not in ("0", "false", "no")
+EMBED_MODEL = os.getenv("ARXIV_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+EMBED_DIM = int(os.getenv("ARXIV_EMBED_DIM", "384"))
+# Chunking is char-based (cheap, model-agnostic). all-MiniLM-L6-v2 truncates at
+# ~256 word-pieces, so keep a chunk under ~1000 chars (~250 tokens) or its tail
+# is embedded into nothing. Overlap preserves context across chunk boundaries.
+SOURCE_CHUNK_CHARS = int(os.getenv("SOURCE_CHUNK_CHARS", "900"))
+SOURCE_CHUNK_OVERLAP = int(os.getenv("SOURCE_CHUNK_OVERLAP", "150"))
+# How many passages a single source search returns, and how many such searches
+# the agent may run per question (its own budget, separate from S2 search).
+SOURCE_SEARCH_K = int(os.getenv("SOURCE_SEARCH_K", "6"))
+AGENT_MAX_SOURCE_SEARCHES = int(os.getenv("AGENT_MAX_SOURCE_SEARCHES", "5"))
 
 # --- Server ------------------------------------------------------------------
 FLASK_HOST = os.getenv("FLASK_HOST", "127.0.0.1")

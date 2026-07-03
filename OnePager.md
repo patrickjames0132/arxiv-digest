@@ -1,11 +1,12 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.8 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.9 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
 > `expand_node` + clickable answer highlights (v1.7.0), agentic topic search
-> `search_papers` (v1.8.0)
+> `search_papers` (v1.8.0), local semantic library for your own PDFs/URLs
+> (v1.9.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -221,17 +222,27 @@ optional, behind a key.
     costs / open questions below) — not built; a manual `S2_API_KEY` is the
     reliable path for `expand_node` / `search_papers` under rate limits.
 - [ ] **Phase 3d — Bring your own sources** — pull the user's own material into
-      the teacher's context so Q&A can read it alongside the papers it fetches
-      via `read_paper` — "how does this paper relate to chapter 3 of my
-      textbook?" Two intake paths:
-  - **Uploaded files** — books, PDFs, notes (text extracted server-side).
-  - **Web links** — paste a URL (blog post, docs page, another paper's page)
-    and the teacher fetches + extracts the readable text, the same way
-    `fulltext.py` already strips ar5iv HTML down to body text. Handy for
-    material that isn't a formal paper on Semantic Scholar.
-      Both land as first-class sources the agent reads through a
-      `read_source`-style tool (mirroring `read_paper`), under their own read
-      budget. *(From the backlog; unscoped.)*
+      the teacher's reach so Q&A can draw on it alongside the papers it fetches —
+      "how does this paper relate to chapter 3 of my textbook?" Books are far too
+      big to stuff into context, so this is **local RAG**: chunk → embed → search.
+  - [x] **3d.1 — Ingest + local semantic library** *(v1.9.0)* — uploaded **PDFs**
+    (per-page text via `pymupdf`, so retrieval cites an exact page) and **web
+    pages** (paste a URL; readable text via the shared `fulltext.html_to_text`)
+    are split into overlapping page-aware chunks, embedded **locally** (revived
+    `embeddings.py`, all-MiniLM-L6-v2, 384-dim — no API/key, so copyrighted books
+    never leave the machine) and stored in a dedicated **sqlite-vec** index
+    (`sources.py`, `data/sources.db`, cosine KNN). A **global persistent library**
+    (survives across graphs) with CLI ingest/search/list/forget (`run.py`).
+    Degrades gracefully via `available()` if the model / sqlite-vec can't load.
+    *(Shipped 2026-07-03; verified on real books via CLI.)*
+  - **3d.2 — Agent tools + UI** *(next)* — expose `search_sources(query,
+    source_id?)` + `list_sources()` to the agentic loop (own budget
+    `AGENT_MAX_SOURCE_SEARCHES`, `📚` trace line), an upload / paste-URL **Sources
+    panel** + library management, and **inline page citations** in answers
+    (sources aren't graph nodes, so they cite rather than highlight the graph).
+  - **3d.3 — polish** *(scoped)* — hybrid **FTS5 + vector (RRF)** for exact-term /
+    proper-noun lookups, per-source scoping in the UI, figure/image handling
+    (OCR for scanned PDFs), and an optional stronger embed model (`bge-small`).
 
 **Beyond the teacher**
 

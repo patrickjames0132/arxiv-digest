@@ -59,6 +59,15 @@ class _TextParser(HTMLParser):
             self._cur.append(data)
 
 
+def html_to_text(html: str) -> str:
+    """Strip an HTML document down to readable body text (block-level elements,
+    with math / scripts / figures / citations dropped). Shared by the ar5iv paper
+    reader and the Phase 3d web-page source ingester."""
+    parser = _TextParser()
+    parser.feed(html)
+    return "\n\n".join(parser.blocks)
+
+
 def get_fulltext(arxiv_id: str, *, refresh: bool = False) -> dict:
     """Return ``{"available": bool, "text": str}`` — the paper's body text from
     ar5iv, cached. ``available`` is false when ar5iv has no render for the paper."""
@@ -78,8 +87,6 @@ def get_fulltext(arxiv_id: str, *, refresh: bool = False) -> dict:
         cache.set(key, result)
         return result
 
-    parser = _TextParser()
-    parser.feed(html)
-    result = {"available": True, "text": "\n\n".join(parser.blocks)}
+    result = {"available": True, "text": html_to_text(html)}
     cache.set(key, result)
     return result

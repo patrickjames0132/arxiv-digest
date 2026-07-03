@@ -14,7 +14,7 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.8 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.9 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync, and
 > answers follow-up questions grounded in the papers on screen. The Q&A agent
 > **reads the papers' actual full text** (via ar5iv), can **traverse to papers
@@ -29,9 +29,12 @@ graphs you've already looked at.
 > papers left→right by year (so the lecture sweeps through time), and the detail
 > panel shows a paper's own **figures + captions** and links to both the abstract
 > and the PDF. Seed search is **cache-first**: papers you've already seen appear
-> instantly (and still work when the APIs are rate-limiting). Concept mindmaps
-> and audio lectures are next — see **[OnePager.md](OnePager.md)** for the full
-> vision and phase plan.
+> instantly (and still work when the APIs are rate-limiting). You can also **bring
+> your own sources** — upload a PDF/book or paste a URL and it's chunked, embedded
+> **locally** (no API key; the text never leaves your machine), and made
+> semantically searchable via sqlite-vec (CLI today; teacher tools + UI next).
+> Concept mindmaps and audio lectures follow — see **[OnePager.md](OnePager.md)**
+> for the full vision and phase plan.
 
 ```
 ┌──────────┐  find seed   ┌─────────┐  graph/refs/cites/recs  ┌──────────────────┐
