@@ -14,7 +14,7 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.14 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.15 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync — and the
 > **"How we got here" lecture time-travels**, walking backward through references
 > to a field's older roots before it narrates, so the story starts at the
@@ -39,7 +39,9 @@ graphs you've already looked at.
 > in Q&A and cites it by page** ("*per your textbook, p.243…*"). You can also
 > **chat with your library directly** — an "💬 Ask library" mode answers straight
 > from your uploaded sources, no graph or seed search needed, optionally **scoped
-> to one source**. Concept mindmaps
+> to one source**. And you can **save a session** — the whole graph (including the
+> papers the teacher discovered) plus its chat — and **reopen it later** with no
+> API calls, from a 🗂 Sessions drawer. Concept mindmaps
 > and audio lectures follow — see **[OnePager.md](OnePager.md)** for the full
 > vision and phase plan.
 

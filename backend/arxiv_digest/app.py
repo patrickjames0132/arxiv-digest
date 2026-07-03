@@ -14,6 +14,10 @@ POST /api/ask                          -> streamed grounded Q&A over the visible
 GET  /api/sources                      -> list the user's local semantic library
 POST /api/sources                      -> ingest a PDF upload or a {url} into the library
 DEL  /api/sources/<id>                 -> remove a source from the library
+GET  /api/sessions                     -> list saved sessions (graph + chat)
+POST /api/sessions                     -> save the current workspace (new, or overwrite by id)
+GET  /api/sessions/<id>                -> full saved session to restore
+DEL  /api/sessions/<id>                -> delete a saved session
 
 In production it also serves the built React app from frontend/dist.
 """
@@ -36,6 +40,7 @@ from . import (
     graph,
     search,
     semantic_scholar,
+    sessions,
     sources,
     teacher,
 )
@@ -420,6 +425,46 @@ def api_sources_add() -> Response:
 def api_sources_delete(source_id: str) -> Response:
     """Remove a source and its chunks/vectors from the library."""
     return jsonify({"deleted": sources.delete_source(source_id)})
+
+
+# --- Saved sessions & workspaces (Phase 4) -----------------------------------
+@app.get("/api/sessions")
+def api_sessions_list() -> Response:
+    """List the user's saved sessions (metadata only — no graph/chat payload)."""
+    return jsonify({"sessions": sessions.list_sessions()})
+
+
+@app.post("/api/sessions")
+def api_sessions_save() -> Response:
+    """Save the current workspace (graph + teacher transcript). A body with an
+    ``id`` overwrites that saved session; without one, a new session is created.
+    Returns the stored metadata row."""
+    payload = request.get_json(silent=True) or {}
+    nodes = payload.get("nodes")
+    if not isinstance(nodes, list) or not nodes:
+        return jsonify({"error": "nodes must be a non-empty list"}), 400
+    session_id = payload.get("id") or None
+    try:
+        record = sessions.save_session(payload, session_id=session_id)
+    except Exception as exc:
+        app.logger.exception("session save failed")
+        return jsonify({"error": str(exc)}), 500
+    return jsonify(record)
+
+
+@app.get("/api/sessions/<session_id>")
+def api_sessions_get(session_id: str) -> Response:
+    """The full saved session (graph + transcript) to restore into the explorer."""
+    record = sessions.get_session(session_id)
+    if not record:
+        return jsonify({"error": "no such session"}), 404
+    return jsonify(record)
+
+
+@app.delete("/api/sessions/<session_id>")
+def api_sessions_delete(session_id: str) -> Response:
+    """Delete a saved session."""
+    return jsonify({"deleted": sessions.delete_session(session_id)})
 
 
 # --- Serve the built frontend (production) -----------------------------------

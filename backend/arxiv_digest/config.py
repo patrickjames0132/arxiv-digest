@@ -28,6 +28,10 @@ DB_PATH = DATA_DIR / "digest.db"
 # Bring-your-own sources (Phase 3d) live in their own DB — a persistent user
 # library with a different lifecycle than the 1-day graph cache in digest.db.
 SOURCES_DB_PATH = DATA_DIR / "sources.db"
+# Saved sessions & workspaces (Phase 4) — a saved graph + chat transcript the
+# user can reopen. Persistent, own lifecycle (never TTL-evicted), so its own DB
+# apart from the ephemeral graph cache in digest.db.
+SESSIONS_DB_PATH = DATA_DIR / "sessions.db"
 
 # --- Semantic Scholar (dynamic academic graph) -------------------------------
 # arXiv Atlas connects to Semantic Scholar dynamically instead of storing a paper

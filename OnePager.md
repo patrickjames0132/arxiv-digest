@@ -1,12 +1,14 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.10 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.15 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
 > `expand_node` + clickable answer highlights (v1.7.0), agentic topic search
 > `search_papers` (v1.8.0), local semantic library for your own PDFs/URLs
-> (v1.9.0), teacher searches your uploaded books in Q&A (v1.10.0)
+> (v1.9.0), teacher searches your uploaded books in Q&A (v1.10.0), offline library
+> chat (v1.12.0), per-source scoping + stronger embed model (v1.13.0), "how we got
+> here" time-travel (v1.14.0), saved sessions & workspaces (v1.15.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -279,14 +281,25 @@ optional, behind a key.
 
 **Beyond the teacher**
 
-- [ ] **Phase 4 — Saved sessions & workspaces** — persistence, deliberately
-      dropped at the v1.0 pivot, reintroduced as opt-in: save & restore a **graph**
-      (including nodes the agent discovered / expanded / searched in) and a **chat
-      session**, plus a "my saved graphs / sessions" surface to reopen them. Also a
-      lighter in-session control that ships alongside: **clear chat history on
-      demand**, e.g. when re-seeding via "Explore from here" (a new seed = a fresh
-      conversation). Needs a storage layer — the app is otherwise dynamic/ephemeral.
-      *(Prioritized ahead of the media phases — more foundational.)*
+- [x] **Phase 4 — Saved sessions & workspaces** *(v1.15.0)* — persistence,
+      deliberately dropped at the v1.0 pivot, reintroduced as opt-in. A **🗂
+      Sessions drawer** saves the current workspace — the full graph as it stands
+      (every node/edge, **including the papers the agent discovered / expanded /
+      searched in**, with their flags), the layout mode, and the teacher
+      transcript (chat + lecture beats + history trace) — into a dedicated
+      persistent store (`sessions.py`, `data/sessions.db`; own lifecycle, never
+      TTL-evicted). Reopening rebuilds the graph **directly from the save — no
+      Semantic Scholar rebuild**, so a restore costs zero rate-limited calls and
+      the exact discovered papers come back; the teacher remounts with the saved
+      conversation (restored answers/beats still re-light their nodes on click).
+      **Save-as-new** or **Update** an existing session in place (overwrite by id),
+      plus delete. Shipped with the bundled lighter control: **clear chat on
+      demand** — a **Clear** button in the teacher header, and re-seeding via
+      "Explore from here" now auto-starts a fresh conversation (the panel remounts
+      per graph). New routes `GET/POST /api/sessions`, `GET/DELETE
+      /api/sessions/<id>`. *(Known limit: the server-side Q&A memory is ephemeral,
+      so a follow-up after reopening starts without the earlier turns as context —
+      it still answers against the fully restored graph. Deliberately left as-is.)*
 - [ ] **Phase 5 — Concept mindmap** — Claude concept-map JSON, "bridge two
       topics," `/api/mindmap`.
 - [ ] **Phase 6 — Audio lecture** — Podcastfy integration, Edge TTS default,
@@ -303,6 +316,11 @@ optional, behind a key.
       New route `POST /api/ask_sources` (SSE, own session store) + a `LibraryChat`
       modal reachable from a top-bar "💬 Ask library" button and an empty-state CTA
       (both shown only when a library exists).
+- [ ] **Publication date in search results + date filter** — surface each result's
+      **publication date** in the semantic search results list, and add a way to
+      **filter search results by publication date** (e.g. a date/year control on the
+      search surface, complementing the graph's existing year-range slider). *(From
+      the `todos.md` inbox, 2026-07-03.)*
 - [ ] **Frontend/backend package refactor** — break large modules into logical
       packages/groups so the code is easier to follow (e.g. `GraphExplorer.tsx`
       is 1,000+ lines; some backend grouping too).

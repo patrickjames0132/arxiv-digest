@@ -392,3 +392,98 @@ export async function deleteSource(id: string): Promise<boolean> {
     return false
   }
 }
+
+// --- Saved sessions & workspaces (Phase 4) -----------------------------------
+
+// One chat turn in the teacher transcript. Hoisted here (shared by Teacher.tsx
+// and the saved-session payload) so a restored session rehydrates the exact
+// messages — text, the papers an answer cited, and the agent's trace steps.
+export interface ChatMsg {
+  role: 'user' | 'assistant'
+  text: string
+  cited?: string[]
+  trace?: TraceEvent[]
+}
+
+// The seed a session was explored from (enough to re-open without a rebuild).
+export interface SessionSeed {
+  id: string
+  arxiv_id?: string | null
+  title: string
+}
+
+// The heavy payload of a saved session: the full graph as it stood (every node
+// and edge, including agent-discovered ones, with their flags) plus the teacher
+// transcript. Restored straight into the explorer — no Semantic Scholar rebuild.
+export interface SessionData {
+  seed: SessionSeed
+  layout: 'force' | 'timeline'
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  chat: ChatMsg[]
+  beats: Beat[]
+  hist_trace: LectureTrace[]
+}
+
+// A lightweight saved-session row for the list view (no graph/chat payload).
+export interface SavedSessionMeta {
+  id: string
+  name: string
+  seed_id: string | null
+  seed_title: string | null
+  n_nodes: number
+  created_at: number
+  updated_at: number
+}
+
+// A full saved session, as returned by GET /api/sessions/<id>.
+export interface SavedSession extends SavedSessionMeta {
+  data: SessionData
+}
+
+// The body POSTed to save a workspace. An `id` overwrites that session in place;
+// omit it to create a new one.
+export interface SaveSessionBody extends SessionData {
+  id?: string
+  name: string
+}
+
+export async function listSessions(): Promise<SavedSessionMeta[]> {
+  try {
+    const res = await fetch('/api/sessions')
+    if (!res.ok) return []
+    return ((await res.json()) as { sessions: SavedSessionMeta[] }).sessions ?? []
+  } catch {
+    return []
+  }
+}
+
+export async function getSession(id: string): Promise<SavedSession> {
+  const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`)
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error((data as { error?: string }).error || `Failed to load session (${res.status})`)
+  }
+  return (await res.json()) as SavedSession
+}
+
+export async function saveSession(body: SaveSessionBody): Promise<SavedSessionMeta> {
+  const res = await fetch('/api/sessions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data as { error?: string }).error || `Save failed (${res.status})`)
+  return data as SavedSessionMeta
+}
+
+export async function deleteSession(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    if (!res.ok) return false
+    return ((await res.json()) as { deleted: boolean }).deleted
+  } catch {
+    return false
+  }
+}

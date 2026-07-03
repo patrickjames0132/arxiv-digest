@@ -9,19 +9,26 @@ import {
   fetchFigures,
   fetchGraph,
   fetchPaperDetail,
+  getSession,
+  saveSession,
   searchArxiv,
   searchLocal,
   type ArxivHit,
+  type Beat,
+  type ChatMsg,
   type EdgeType,
   type FiguresResponse,
   type GraphEdge,
   type GraphNode,
   type GraphResponse,
+  type LectureTrace,
   type LocalHit,
+  type SavedSessionMeta,
   listSources,
 } from './api'
 import Teacher from './Teacher'
 import Sources from './Sources'
+import Sessions from './Sessions'
 import LibraryChat from './LibraryChat'
 import './atlas.css'
 
@@ -106,6 +113,41 @@ function nodeRadius(node: GraphNode): number {
   return Math.min(3 + Math.sqrt(c) / 6, 18)
 }
 
+// Strip a live VNode back to its persistable GraphNode fields — dropping the
+// sim's x/y and any fx/fy pins, which are re-derived on restore (Phase 4).
+function cleanNode(n: VNode): GraphNode {
+  return {
+    id: n.id,
+    arxiv_id: n.arxiv_id,
+    title: n.title,
+    abstract: n.abstract,
+    tldr: n.tldr,
+    year: n.year,
+    month: n.month,
+    pub_date: n.pub_date,
+    citation_count: n.citation_count,
+    authors: n.authors,
+    url: n.url,
+    rels: n.rels,
+    is_seed: n.is_seed,
+    discovered: n.discovered,
+  }
+}
+
+// Rebuild a GraphResponse's relation counts from its nodes — used when restoring
+// a saved session (whose stored node set already includes discovered papers).
+function countRels(nodes: GraphNode[]): GraphResponse['counts'] {
+  const c = { references: 0, citations: 0, similar: 0, nodes: nodes.length }
+  nodes.forEach((n) =>
+    n.rels.forEach((r) => {
+      if (r === 'reference') c.references++
+      else if (r === 'citation') c.citations++
+      else if (r === 'similar') c.similar++
+    }),
+  )
+  return c
+}
+
 export default function GraphExplorer() {
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<ArxivHit[] | null>(null)
@@ -153,6 +195,32 @@ export default function GraphExplorer() {
   // when there's something to ask; refreshed whenever the Sources drawer closes.
   const [showLibraryChat, setShowLibraryChat] = useState(false)
   const [libraryCount, setLibraryCount] = useState(0)
+  // Saved sessions & workspaces (Phase 4).
+  const [showSessions, setShowSessions] = useState(false)
+  // Bumped on every graph load / restore. Used as the Teacher's key so it
+  // remounts with a fresh conversation on each re-seed (or the restored one).
+  const [graphKey, setGraphKey] = useState(0)
+  // The transcript to seed the NEXT Teacher mount: empty for a fresh re-seed,
+  // the saved chat/beats when restoring. Read at mount, so it's a ref.
+  const teacherInitRef = useRef<{ chat: ChatMsg[]; beats: Beat[]; histTrace: LectureTrace[] }>({
+    chat: [],
+    beats: [],
+    histTrace: [],
+  })
+  // The Teacher's latest transcript, reported up so Save can capture it.
+  const teacherStateRef = useRef<{ chat: ChatMsg[]; beats: Beat[]; histTrace: LectureTrace[] }>({
+    chat: [],
+    beats: [],
+    histTrace: [],
+  })
+  // A layout to apply once a restored graph is in place (see effect below).
+  const restoreLayoutRef = useRef<'force' | 'timeline' | null>(null)
+  const handleTeacherState = useCallback(
+    (s: { chat: ChatMsg[]; beats: Beat[]; histTrace: LectureTrace[] }) => {
+      teacherStateRef.current = s
+    },
+    [],
+  )
 
   const refreshLibraryCount = useCallback(() => {
     listSources().then((res) => setLibraryCount(res.sources.length)).catch(() => {})
@@ -213,7 +281,9 @@ export default function GraphExplorer() {
     setPinned(new Set())
     setHoverId(null)
     setHighlightIds(new Set())
-    setDiscoveredNodes([])
+    // Usually empty (discoveries arrive later via onDiscover); on a restored
+    // session the saved node set already carries its discovered papers.
+    setDiscoveredNodes(base.nodes.filter((n) => n.discovered))
     setGraphVersion(0)
   }, [base])
 
@@ -302,8 +372,12 @@ export default function GraphExplorer() {
     fitDone.current = false
     try {
       const g = await fetchGraph(seed)
+      // A fresh seed starts a fresh conversation — remount the teacher empty.
+      teacherInitRef.current = { chat: [], beats: [], histTrace: [] }
+      restoreLayoutRef.current = null
       setGraph(g)
       setSelectedId(g.seed.id)
+      setGraphKey((k) => k + 1)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -561,6 +635,90 @@ export default function GraphExplorer() {
     [applyLayout],
   )
 
+  // Apply a restored session's layout once its graph has been rebuilt into
+  // `base`. Routed through the ref (rather than setLayoutMode in the restore
+  // handler) so applyLayout runs against the NEW base — setting the right forces
+  // and pinning timeline columns. No-ops for a normal graph load.
+  useEffect(() => {
+    if (!base) return
+    const want = restoreLayoutRef.current
+    if (!want) return
+    restoreLayoutRef.current = null
+    setLayoutMode(want)
+  }, [base, setLayoutMode])
+
+  // --- Saved sessions & workspaces (Phase 4) ---------------------------------
+  // Save the current workspace: the full graph as it stands (every node/edge,
+  // including agent-discovered ones) + the teacher transcript. `base` is the
+  // source of truth — it holds the merged, mutated node/edge objects.
+  const handleSave = useCallback(
+    async (name: string, id?: string): Promise<SavedSessionMeta> => {
+      if (!base || !graph) throw new Error('No graph to save yet.')
+      const ts = teacherStateRef.current
+      return saveSession({
+        id, // set → overwrite that saved session in place; omitted → create new
+        name,
+        seed: {
+          id: graph.seed.id,
+          arxiv_id: graph.seed.arxiv_id,
+          title: graph.seed.title,
+        },
+        layout,
+        nodes: base.nodes.map(cleanNode),
+        edges: base.links.map((l) => ({
+          source: l._s,
+          target: l._t,
+          type: l.type,
+          influential: l.influential,
+        })),
+        chat: ts.chat,
+        beats: ts.beats,
+        hist_trace: ts.histTrace,
+      })
+    },
+    [base, graph, layout],
+  )
+
+  // Reopen a saved session: rebuild its graph directly (no Semantic Scholar
+  // fetch, so no rate-limit cost and the exact discovered papers are preserved)
+  // and remount the teacher with the saved transcript + layout.
+  const restoreSession = useCallback(async (id: string) => {
+    setLoadingGraph(true)
+    setError(null)
+    try {
+      const s = await getSession(id)
+      const d = s.data
+      teacherInitRef.current = {
+        chat: d.chat ?? [],
+        beats: d.beats ?? [],
+        histTrace: d.hist_trace ?? [],
+      }
+      restoreLayoutRef.current = d.layout ?? 'force'
+      setHits(null)
+      setLocalHits(null)
+      setDetails({})
+      setFigures({})
+      fitDone.current = false
+      setGraph({
+        seed: {
+          id: d.seed.id,
+          arxiv_id: d.seed.arxiv_id ?? '',
+          title: d.seed.title,
+        },
+        nodes: d.nodes,
+        edges: d.edges,
+        counts: countRels(d.nodes),
+      })
+      setSelectedId(d.seed.id)
+      setGraphKey((k) => k + 1)
+      setShowSessions(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoadingGraph(false)
+    }
+  }, [])
+
   const onEngineStop = useCallback(() => {
     // In Timeline, once the sim settles, freeze y as well (x is already pinned by
     // year) so the layout is stable and dragging one node can't re-relax the rest.
@@ -666,6 +824,13 @@ export default function GraphExplorer() {
             💬 Ask library
           </button>
         )}
+        <button
+          className="sources-toggle"
+          onClick={() => setShowSessions(true)}
+          title="Save the current graph + chat, or reopen a saved one"
+        >
+          🗂 Sessions
+        </button>
         <a
           className="cc-credit"
           href="https://www.anthropic.com/claude"
@@ -705,6 +870,15 @@ export default function GraphExplorer() {
         }}
       />
       {showLibraryChat && <LibraryChat onClose={() => setShowLibraryChat(false)} />}
+
+      <Sessions
+        open={showSessions}
+        onClose={() => setShowSessions(false)}
+        onSave={handleSave}
+        onOpen={restoreSession}
+        canSave={hasGraph}
+        defaultName={graph?.seed.title ?? ''}
+      />
 
       <div className="atlas-body">
         <main className="canvas-wrap" ref={wrapRef}>
@@ -1115,10 +1289,15 @@ export default function GraphExplorer() {
 
         {hasGraph && graph && (
           <Teacher
+            key={graphKey}
             graph={graph}
             extraNodes={discoveredNodes}
             onHighlight={setHighlightIds}
             onDiscover={onDiscover}
+            onStateChange={handleTeacherState}
+            initialChat={teacherInitRef.current.chat}
+            initialBeats={teacherInitRef.current.beats}
+            initialHistTrace={teacherInitRef.current.histTrace}
           />
         )}
       </div>

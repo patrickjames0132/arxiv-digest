@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   streamAsk,
   streamLecture,
   type Beat,
+  type ChatMsg,
   type Discovery,
   type GraphEdge,
   type GraphNode,
@@ -11,7 +12,6 @@ import {
   type LectureMode,
   type LectureTrace,
   type TeacherNode,
-  type TraceEvent,
 } from './api'
 
 // The AI teacher panel: a streaming lecture over the visible graph plus a
@@ -20,13 +20,12 @@ import {
 // pull in papers not yet on screen via expand_node; discoveries flow back up
 // through `onDiscover` so the parent can merge them into the live graph and
 // keep grounding follow-up questions.
-
-type ChatMsg = {
-  role: 'user' | 'assistant'
-  text: string
-  cited?: string[]
-  trace?: TraceEvent[] // agent steps (papers read) for an assistant turn
-}
+//
+// The transcript (chat + lecture beats + history trace) is seeded from
+// `initial*` props and reported up through `onStateChange`, so the parent can
+// persist it with a saved session (Phase 4) and rehydrate it on restore. The
+// panel is remounted (keyed on the graph) whenever a new graph loads, so a
+// re-seed starts a fresh conversation unless we're restoring a saved one.
 
 const MODES: { key: LectureMode; label: string }[] = [
   { key: 'history', label: 'How we got here' },
@@ -51,25 +50,41 @@ export default function Teacher({
   extraNodes,
   onHighlight,
   onDiscover,
+  onStateChange,
+  initialChat = [],
+  initialBeats = [],
+  initialHistTrace = [],
 }: {
   graph: GraphResponse
   extraNodes: GraphNode[] // papers the agent discovered via expand_node, so far
   onHighlight: (ids: Set<string>) => void
   onDiscover: (nodes: GraphNode[], edges: GraphEdge[]) => void
+  // Reports the live transcript up so the parent can save it (Phase 4).
+  onStateChange?: (s: { chat: ChatMsg[]; beats: Beat[]; histTrace: LectureTrace[] }) => void
+  // Seed state — populated when restoring a saved session, empty otherwise.
+  initialChat?: ChatMsg[]
+  initialBeats?: Beat[]
+  initialHistTrace?: LectureTrace[]
 }) {
-  const [beats, setBeats] = useState<Beat[]>([])
+  const [beats, setBeats] = useState<Beat[]>(initialBeats)
   // History-mode backward hops (Phase 3e), shown above the beats as the lecture
   // traces a field back to its roots before narrating.
-  const [histTrace, setHistTrace] = useState<LectureTrace[]>([])
+  const [histTrace, setHistTrace] = useState<LectureTrace[]>(initialHistTrace)
   const [activeBeat, setActiveBeat] = useState<number | null>(null)
   // Which chat answer is "active" (its cited papers lit on the graph) — mirrors
   // activeBeat for lecture beats. Only one of the two is active at a time.
   const [activeChat, setActiveChat] = useState<number | null>(null)
   const [teaching, setTeaching] = useState(false)
-  const [chat, setChat] = useState<ChatMsg[]>([])
+  const [chat, setChat] = useState<ChatMsg[]>(initialChat)
   const [input, setInput] = useState('')
   const [asking, setAsking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Report the transcript up whenever it changes, so the parent always holds the
+  // latest to persist. (Cheap — these arrays are small and change on user turns.)
+  useEffect(() => {
+    onStateChange?.({ chat, beats, histTrace })
+  }, [chat, beats, histTrace, onStateChange])
 
   const sessionId = useRef(
     (crypto.randomUUID?.() as string) || String(Math.random()).slice(2),
@@ -81,15 +96,42 @@ export default function Teacher({
   const seed = useMemo(() => ({ title: graph.seed.title, id: graph.seed.id }), [graph])
   // Grounding scope for the agent: the on-screen graph plus anything it has
   // already discovered this session, so follow-up questions can build on it.
-  const teacherNodes = useMemo(
-    () => toTeacherNodes([...graph.nodes, ...extraNodes]),
-    [graph, extraNodes],
-  )
+  // Deduped by id — a restored session carries its discovered papers in both
+  // graph.nodes and extraNodes, and we don't want them grounded twice.
+  const teacherNodes = useMemo(() => {
+    const seen = new Set<string>()
+    const merged: GraphNode[] = []
+    for (const n of [...graph.nodes, ...extraNodes]) {
+      if (seen.has(n.id)) continue
+      seen.add(n.id)
+      merged.push(n)
+    }
+    return toTeacherNodes(merged)
+  }, [graph, extraNodes])
 
   const stopActive = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
   }, [])
+
+  // Wipe the transcript on demand — a fresh conversation without re-seeding the
+  // graph. (Re-seeding via "Explore from here" remounts this panel, which also
+  // clears it; this is the explicit in-place button.) A new session id detaches
+  // follow-ups from the old backend-side history too.
+  const clearChat = useCallback(() => {
+    stopActive()
+    setBeats([])
+    setHistTrace([])
+    setChat([])
+    setActiveBeat(null)
+    setActiveChat(null)
+    setError(null)
+    setTeaching(false)
+    setAsking(false)
+    onHighlight(new Set())
+    sessionId.current =
+      (crypto.randomUUID?.() as string) || String(Math.random()).slice(2)
+  }, [stopActive, onHighlight])
 
   const highlightBeat = useCallback(
     (i: number, beat: Beat) => {
@@ -244,6 +286,15 @@ export default function Teacher({
               {teaching ? '…' : m.label}
             </button>
           ))}
+          {(beats.length > 0 || chat.length > 0) && (
+            <button
+              className="teach-btn clear-btn"
+              onClick={clearChat}
+              title="Clear the lecture and chat — start a fresh conversation"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
