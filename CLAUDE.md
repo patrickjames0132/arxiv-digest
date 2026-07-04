@@ -107,8 +107,13 @@ in `noxfile.py`, all reusing the uv env (no per-session installs):
   boundaries prefer isinstance narrowing on real types (see `teacher/agentic.py`)
   over `getattr` duck-typing, and use `flask.typing.ResponseReturnValue` for
   views that return `(body, status)` tuples.
-- **`tests`** — `pytest` over `test/` (offline; no live arXiv/S2 calls). Add
-  new tests there; pass args through with `uv run nox -s tests -- -k foo`.
+- **`tests`** — `pytest` over `test/`, which **mirrors `src/arxiv_digest/`**
+  (105 offline tests; no live arXiv/S2/Anthropic calls, ever). Shared fixtures
+  in `test/conftest.py`: autouse temp-DB isolation (tests can't touch real
+  `data/`), `fake_claude` (a scripted Anthropic client built from **real SDK
+  event objects** — use it for anything agentic), and `stub_embeddings`
+  (deterministic hash embedder, no torch). Put new tests in the folder matching
+  the module under test; pass args through with `uv run nox -s tests -- -k foo`.
 - **`security`** — **Trivy** filesystem scan; **skips cleanly when `trivy`
   isn't on PATH**, so the gate stays green locally without it (install Trivy to
   enable).

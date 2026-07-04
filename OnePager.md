@@ -434,11 +434,23 @@ optional, behind a key.
       only the latest. Mirrors the Phase 3e history-backfill's "prefer influential
       edges" idea, applied forward to citations. *(From the `todos.md` inbox,
       2026-07-04.)*
-- [ ] **Expand test coverage (a lot)** — the `test/` suite is still just smoke
-      tests plus the hybrid-search unit tests; grow it broadly — the S2/graph
-      builders, the agentic tool loop and budgets, the sources library
-      (ingest/chunk/scope), and the Flask routes — all offline (mock S2/arXiv/
-      Anthropic; no live calls in the gate). Pairs with the `noxfile` backbone.
+- [x] **Expand test coverage (a lot)** *(v1.21.3)* — the suite went from 7 smoke
+      tests to **105 offline tests**, in a `test/` tree that **mirrors
+      `src/arxiv_digest/`**. Five layers: the **agentic loop** (driven by a
+      scripted `FakeClaude` emitting *real* SDK event objects — discard,
+      split-sentinel hiding, budgets, wallclock), the **tool runners** (budgets,
+      visited-sets, edge directions, scope override), the **S2 client + graph
+      service** (node normalization, 429 backoff, batch chunking, cache = zero
+      repeat calls), the **routes** (error mapping, SSE framing, sessions CRUD,
+      SSRF lock), and the **library** (chunker semantics, real in-memory PDFs via
+      pymupdf incl. scanned rejection, scope semantics, delete cascade). Shared
+      `conftest.py` fixtures isolate every test onto temp DBs (the real `data/`
+      is untouchable) and stub embeddings deterministically (no torch load). The
+      route tests **found and fixed a real bug**: all three SSE generators in
+      `routes/teacher.py` logged via `current_app` during response iteration
+      (outside the request context), so a mid-stream failure raised RuntimeError
+      and killed the stream before the `error` event reached the panel — now a
+      module logger, with the `token → error` framing locked in by a test.
       *(From the `todos.md` inbox, 2026-07-04.)*
 - [ ] **Papers-with-code / implementation links** — surface code + notebooks for a
       selected paper when available (Papers with Code / Hugging Face Papers), so a

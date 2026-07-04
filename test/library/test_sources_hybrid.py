@@ -9,6 +9,7 @@ exercises the lexical + fusion path end-to-end (triggers keep FTS5 in sync).
 from __future__ import annotations
 
 import pytest
+
 from arxiv_digest import config
 from arxiv_digest.library import embeddings, sources
 

@@ -9,9 +9,10 @@ POST /api/ask_sources  -> streamed chat answered purely from the local library
 from __future__ import annotations
 
 import json
+import logging
 from typing import Iterator
 
-from flask import Blueprint, Response, current_app, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 
 from .. import config
@@ -19,6 +20,12 @@ from .. import teacher as teacher_service
 from ..library import sources
 
 bp = Blueprint("teacher", __name__)
+
+# Module logger, NOT current_app.logger: the SSE generators below run during
+# response iteration, after the request/app context is gone — touching
+# current_app there raises RuntimeError and kills the stream before the
+# `error` event the frontend waits for can be sent.
+log = logging.getLogger(__name__)
 
 # Session-scoped Q&A history, kept in memory (cleared on restart — fine for v1).
 # Maps a client-generated session id -> [{role, content}, ...].
@@ -127,7 +134,7 @@ def api_lecture() -> ResponseReturnValue:
                 yield _sse("beat", beat)
             yield _sse("done", {})
         except Exception as exc:  # surface to the panel AND log the traceback
-            current_app.logger.exception("lecture failed")
+            log.exception("lecture failed")
             yield _sse("error", {"error": str(exc)})
 
     return _sse_response(gen())
@@ -201,7 +208,7 @@ def api_ask() -> ResponseReturnValue:
                     yield _sse("cited", {"node_ids": data})
             yield _sse("done", {})
         except Exception as exc:
-            current_app.logger.exception("ask failed")
+            log.exception("ask failed")
             yield _sse("error", {"error": str(exc)})
             return
         # Persist the turn only on success, capped to the recent window.
@@ -258,7 +265,7 @@ def api_ask_sources() -> ResponseReturnValue:
                     yield _sse("trace", data)
             yield _sse("done", {})
         except Exception as exc:
-            current_app.logger.exception("ask_sources failed")
+            log.exception("ask_sources failed")
             yield _sse("error", {"error": str(exc)})
             return
         if session_id:
