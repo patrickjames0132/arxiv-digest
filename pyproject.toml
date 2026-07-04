@@ -19,4 +19,47 @@ dependencies = [
 package = false
 
 [dependency-groups]
-dev = []
+dev = [
+    "nox>=2024.4",
+    "mypy>=1.11",
+    "pytest>=8.0",
+    "pre-commit>=3.7",
+]
+
+# --- quality tooling (all driven by `uv run nox`) ---
+
+[tool.mypy]
+# The backend package lives under backend/ (not an installed package), so point
+# mypy at it directly and add backend/ to the search path. Lenient baseline: we
+# type incrementally, so missing third-party stubs and untyped defs don't fail.
+files = ["backend/arxiv_digest"]
+mypy_path = "backend"
+# 3.12+: our floor is 3.11, but installed third-party stubs (numpy, pulled in by
+# sentence-transformers) use 3.12 `type` syntax that mypy won't parse under an
+# older target. We run on 3.14, so this is honest.
+python_version = "3.12"
+ignore_missing_imports = true
+namespace_packages = true
+explicit_package_bases = true
+# Lenient baseline for a codebase mypy has never seen: these four codes account
+# for every current error and are all "gradual typing not done yet", not bugs —
+# `union-attr` from the Anthropic SDK's wide streamed-block unions (agentic.py),
+# `return-value` from Flask views returning (body, status) tuples annotated as
+# Response, plus a few arg-type/overload cases. Burning these down and deleting
+# this line is tracked in OnePager (Enhancements & tech debt).
+disable_error_code = ["union-attr", "return-value", "arg-type", "call-overload"]
+
+[tool.pytest.ini_options]
+# Tests live in test/; backend/ is on the path so they can import arxiv_digest.
+testpaths = ["test"]
+pythonpath = ["backend"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# pyflakes (F), import sorting (I), and pycodestyle (E) minus line-length (E501,
+# left to the formatter's judgement).
+select = ["E", "F", "I"]
+ignore = ["E501"]

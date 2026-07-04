@@ -24,9 +24,9 @@ from pathlib import Path
 from typing import Iterator, Optional
 from uuid import uuid4
 
-from . import embeddings
 from .. import config
 from ..integrations import fulltext
+from . import embeddings
 
 log = logging.getLogger(__name__)
 

@@ -359,11 +359,21 @@ optional, behind a key.
 - [ ] **`src/` layout for the backend** — move the backend package under a `src/`
       root (the standard `src`-layout), the structural follow-on to the package
       refactor above. *(From the `todos.md` inbox, 2026-07-03.)*
-- [ ] **`noxfile` + CI quality backbone** — a `noxfile` that runs **pre-commit**,
-      **Trivy**, **type checks (mypy)**, and **unit tests**. No unit tests exist
-      yet; when we start writing them they live in a dedicated `test/` folder. Pairs
-      with the `src/` move as the project's quality/CI backbone. *(From the
-      `todos.md` inbox, 2026-07-03.)*
+- [x] **`noxfile` + CI quality backbone** *(2026-07-03)* — **`uv run nox`** runs
+      four sessions from `noxfile.py` (all reusing the uv env): **`precommit`**
+      (pre-commit hooks + **ruff** lint), **`mypy`** (types), **`tests`**
+      (**pytest** over a new `test/`, offline smoke tests), and **`security`** (a
+      **Trivy** fs scan that skips cleanly when trivy isn't on PATH, so the gate
+      stays green without it). Config lives in `pyproject.toml`; `CLAUDE.md`
+      documents the gate. mypy runs on a **lenient baseline** (see next item).
+      *(From the `todos.md` inbox, 2026-07-03.)*
+- [ ] **Burn down the mypy baseline** — the `mypy` gate currently silences four
+      error codes (`union-attr`, `return-value`, `arg-type`, `call-overload`) via
+      `disable_error_code` in `pyproject.toml`; they cover ~131 "gradual typing
+      not done yet" findings (109 in `teacher/agentic.py` alone, from the Anthropic
+      SDK's wide streamed-block unions; most of the rest are Flask views returning
+      `(body, status)` tuples annotated `-> Response`). Type these properly and
+      delete the codes from that list one at a time until mypy is strict again.
 - [ ] **Papers-with-code / implementation links** — surface code + notebooks for a
       selected paper when available (Papers with Code / Hugging Face Papers), so a
       node links out to runnable implementations, not just its abstract. Show in

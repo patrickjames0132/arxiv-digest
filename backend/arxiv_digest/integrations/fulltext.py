@@ -15,8 +15,8 @@ from __future__ import annotations
 import logging
 from html.parser import HTMLParser
 
-from . import figures
 from ..storage import cache
+from . import figures
 
 log = logging.getLogger(__name__)
 

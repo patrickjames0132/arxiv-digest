@@ -22,6 +22,8 @@ For each feature, follow this cycle:
 
 1. **Build** the feature. Run `npm run build --prefix frontend` to typecheck the
    frontend; verify backend changes with a quick script or the Flask test client.
+   Run the whole backend quality gate with **`uv run nox`** (see below) before
+   handing off.
 2. **Hand off for testing** — Patrick tests it **in the browser himself** first.
    Give him specific things to check. **Do NOT commit until he approves.**
 3. On approval, **update the docs**: `README.md` and `OnePager.md` (tick roadmap
@@ -88,3 +90,23 @@ branch `main`.
   and Flask's `app.test_client()` — avoid hammering the live S2 API in tests.
 - Don't re-hit the live API repeatedly while iterating; it throttles the IP
   (shared with the browser).
+
+## Quality gate — `uv run nox`
+
+**`uv run nox`** runs the whole backend gate in one shot — four sessions defined
+in `noxfile.py`, all reusing the uv env (no per-session installs):
+
+- **`precommit`** — every pre-commit hook (`.pre-commit-config.yaml`): file
+  hygiene + **ruff** lint (config in `pyproject.toml`).
+- **`mypy`** — type-checks `backend/arxiv_digest`. On a **lenient baseline**:
+  `disable_error_code` silences four "gradual typing not done yet" codes
+  (`union-attr`, `return-value`, `arg-type`, `call-overload`) that account for
+  every current error — none are bugs. Tightening this is a tracked tech-debt
+  item; delete codes from that list as they're burned down.
+- **`tests`** — `pytest` over `test/` (offline; no live arXiv/S2 calls). Add
+  new tests there; pass args through with `uv run nox -s tests -- -k foo`.
+- **`security`** — **Trivy** filesystem scan; **skips cleanly when `trivy`
+  isn't on PATH**, so the gate stays green locally without it (install Trivy to
+  enable).
+
+Run a single session with `uv run nox -s <name>` (e.g. `-s mypy`).

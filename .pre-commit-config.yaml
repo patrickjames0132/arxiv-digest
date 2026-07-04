@@ -1,0 +1,23 @@
+# Pre-commit hooks for arXiv Atlas — run via `uv run nox` (the `precommit`
+# session) or directly with `pre-commit run --all-files`.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+        # The frontend's tsconfig files are JSONC (comments + trailing commas),
+        # which a strict JSON parser rejects — exclude them.
+        exclude: ^frontend/tsconfig.*\.json$
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  # Python lint (config lives in pyproject.toml's [tool.ruff]).
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]

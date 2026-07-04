@@ -13,8 +13,7 @@ import urllib.parse
 
 from flask import Blueprint, Response, current_app, jsonify, request
 
-from ..integrations import arxiv_client, figures
-from ..integrations import semantic_scholar
+from ..integrations import arxiv_client, figures, semantic_scholar
 from ..services import graph as graph_service
 
 bp = Blueprint("graph", __name__)
