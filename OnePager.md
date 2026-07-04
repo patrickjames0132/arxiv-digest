@@ -407,6 +407,9 @@ optional, behind a key.
 - [x] **"Powered by Claude"** *(v1.11.0)* — subtle top-bar credit (Anthropic
       sunburst mark + "Powered by Claude", linking to anthropic.com/claude);
       names the model the AI teacher actually runs on, not the build tool.
+- [x] **Filter popover stays open after Explore** *(v1.18.1)* — the seed-search
+      filter popover didn't close when a search fired; `Search`'s form `onSubmit`
+      now collapses it (`setOpen(false)`) before running the search.
 - [x] **Windows PDF upload fix** *(v1.10.1)* — source ingest used a
       `NamedTemporaryFile` whose exclusive lock on Windows made the reopen fail
       with `[Errno 13] Permission denied`; switched to `mkstemp` + manual cleanup.

@@ -142,7 +142,13 @@ export default function Search({
 
   return (
     <div className="search-box">
-      <form className="seed-search" onSubmit={onSubmit}>
+      <form
+        className="seed-search"
+        onSubmit={(e) => {
+          setOpen(false) // collapse the filter popover once a search is fired
+          onSubmit(e)
+        }}
+      >
         <input
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
