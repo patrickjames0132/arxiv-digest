@@ -82,8 +82,8 @@ wheels = [
 
 [[package]]
 name = "arxiv-digest"
-version = "1.21.1"
-source = { virtual = "." }
+version = "1.21.2"
+source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "arxiv" },

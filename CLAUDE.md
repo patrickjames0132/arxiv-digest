@@ -13,7 +13,8 @@ digest app; that era is being retired).
 
 - **Vision, feature stack, and phase roadmap live in [OnePager.md](OnePager.md).**
   Keep it current. Read it to understand where we are and what's next.
-- Backend: Python/Flask + uv (`backend/arxiv_digest/`). Frontend: React + TS +
+- Backend: Python/Flask + uv (`src/arxiv_digest/`, standard src-layout,
+  installed editable). Frontend: React + TS +
   Vite (`frontend/`). Graph rendering via `react-force-graph-2d`.
 
 ## How we work together — the loop
@@ -85,9 +86,11 @@ branch `main`.
   `POST /paper/batch` instead. Recommendations need `from=all-cs` (the default
   "recent" pool returns nothing for older seeds). Graph snapshots are cached in
   `data/digest.db` (`cache` table, 1-day TTL). Encourage setting `S2_API_KEY`.
-- **Run backend:** `uv run python backend/run.py serve` (Python 3.14 in `.venv`).
-- **Quick backend checks:** `uv run python -c "import sys; sys.path.insert(0,'backend'); from arxiv_digest.app import app; ..."`
-  and Flask's `app.test_client()` — avoid hammering the live S2 API in tests.
+- **Run backend:** `uv run arxiv-atlas serve` (Python 3.14 in `.venv`; the
+  console script comes from the editable src-layout install — `cli.py`).
+- **Quick backend checks:** `uv run python -c "from arxiv_digest.app import app; ..."`
+  (no path shims needed — the package is installed) and Flask's
+  `app.test_client()` — avoid hammering the live S2 API in tests.
 - Don't re-hit the live API repeatedly while iterating; it throttles the IP
   (shared with the browser).
 
@@ -98,7 +101,7 @@ in `noxfile.py`, all reusing the uv env (no per-session installs):
 
 - **`precommit`** — every pre-commit hook (`.pre-commit-config.yaml`): file
   hygiene + **ruff** lint (config in `pyproject.toml`).
-- **`mypy`** — type-checks `backend/arxiv_digest`, **strict since v1.21.1**: no
+- **`mypy`** — type-checks `src/arxiv_digest`, **strict since v1.21.1**: no
   `disable_error_code` entries and `check_untyped_defs = true`. Keep it that way —
   new code must type-check clean; don't reintroduce disabled codes. At SDK
   boundaries prefer isinstance narrowing on real types (see `teacher/agentic.py`)

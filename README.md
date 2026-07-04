@@ -102,14 +102,14 @@ more slowly):
 
 ```bash
 cd frontend && npm install && npm run build && cd ..
-uv run python backend/run.py serve            # http://127.0.0.1:5000
+uv run arxiv-atlas serve                      # http://127.0.0.1:5000
 ```
 
 **Development** (two terminals, hot-reloading frontend):
 
 ```bash
 # Terminal 1 — API
-uv run python backend/run.py serve            # http://127.0.0.1:5000
+uv run arxiv-atlas serve                      # http://127.0.0.1:5000
 
 # Terminal 2 — dashboard
 cd frontend && npm run dev                     # http://localhost:5173
@@ -199,9 +199,10 @@ arxiv-digest/                    # (repo name predates the "Atlas" rename)
 ├── pyproject.toml               # uv-managed backend deps
 ├── .env / .env.example          # optional keys (S2, Anthropic) — .env gitignored
 ├── data/digest.db               # thin cache (graph snapshots); gitignored
-├── backend/
-│   ├── run.py                   # click CLI: serve, ingest, sources, …
-│   └── arxiv_digest/
+├── src/
+│   └── arxiv_digest/            # the backend package (src-layout; installed
+│       │                        #   editable — `uv run arxiv-atlas` is its CLI)
+│       ├── cli.py               # click CLI: serve, ingest, sources, …
 │       ├── config.py            # settings from .env (incl. Semantic Scholar)
 │       ├── app.py               # thin Flask factory: wires routes/ + serves frontend
 │       ├── routes/              # the API surface: one Flask blueprint per concern

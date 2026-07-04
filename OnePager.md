@@ -391,9 +391,19 @@ optional, behind a key.
       `library/`, `sessions/` — each owning its components, hooks, and CSS
       (the 1,000-line `atlas.css` split alongside). Everything
       JSDoc/docstring-documented.
-- [ ] **`src/` layout for the backend** — move the backend package under a `src/`
-      root (the standard `src`-layout), the structural follow-on to the package
-      refactor above. *(From the `todos.md` inbox, 2026-07-03.)*
+- [x] **`src/` layout for the backend** *(v1.21.2)* — `backend/arxiv_digest/` →
+      `src/arxiv_digest/` (the standard `src`-layout), with the project now a real
+      **installed package** (hatchling build, uv editable install): `backend/run.py`
+      folded into the package as `cli.py` behind an **`arxiv-atlas` console script**
+      (`uv run arxiv-atlas serve` replaces `uv run python backend/run.py serve`;
+      same subcommands), and every `sys.path` shim deleted — imports just work in
+      tests, nox, and one-liners. mypy/pytest configs retargeted. The move also
+      let mypy see `cli.py` for the first time, catching a **real bug**: CLI
+      `search-sources` still passed the pre-v1.19 `source_id=` kwarg (a runtime
+      TypeError since the multi-select rename) and printed the pre-v1.21
+      `distance` field — both fixed. Paves the way for `test/` to mirror
+      `src/arxiv_digest/` in the coverage push. *(From the `todos.md` inbox,
+      2026-07-03.)*
 - [x] **`noxfile` + CI quality backbone** *(2026-07-03)* — **`uv run nox`** runs
       four sessions from `noxfile.py` (all reusing the uv env): **`precommit`**
       (pre-commit hooks + **ruff** lint), **`mypy`** (types), **`tests`**

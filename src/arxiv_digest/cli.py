@@ -1,20 +1,13 @@
-#!/usr/bin/env python3
-"""CLI entry point for arXiv Atlas.
+"""CLI entry point for arXiv Atlas (the ``arxiv-atlas`` console script).
 
 Usage:
-    uv run python backend/run.py serve      # start the API + Atlas frontend
-    uv run python backend/run.py --help     # see all commands
+    uv run arxiv-atlas serve      # start the API + Atlas frontend
+    uv run arxiv-atlas --help     # see all commands
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import click
-
-# Make the package importable when running this file directly.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 @click.group(help="arXiv Atlas — interactive citation/similarity graph explorer.")
@@ -106,14 +99,14 @@ def search_sources(query: str, source: str | None, k: int | None) -> None:
         None.
     """
     from arxiv_digest.library import sources
-    hits = sources.search(query, k=k, source_id=source)
+    hits = sources.search(query, k=k, source_ids=[source] if source else None)
     if not hits:
         click.echo("No matches (library empty, or embeddings unavailable).")
         return
     for i, h in enumerate(hits, 1):
         loc = f"p.{h['page']}" if h.get("page") else "web"
         snippet = " ".join(h["text"].split())[:280]
-        click.echo(f"\n[{i}] {h['source_title']} · {loc} · dist={h['distance']:.3f}")
+        click.echo(f"\n[{i}] {h['source_title']} · {loc} · score={h['score']:.3f}")
         click.echo(f"    {snippet}…")
 
 

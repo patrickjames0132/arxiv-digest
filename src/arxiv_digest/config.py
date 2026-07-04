@@ -12,7 +12,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load a .env file sitting at the project root (two levels up from this file:
-# backend/arxiv_digest/config.py -> arxiv-digest/).
+# src/arxiv_digest/config.py -> arxiv-digest/).
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
