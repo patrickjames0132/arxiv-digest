@@ -427,14 +427,6 @@ optional, behind a key.
       `assert isinstance` narrowing on the `(kind, data)` event protocol. Verified
       behavior-neutral by driving `answer_agentic` with a stubbed client emitting
       real SDK event objects (discard, split-sentinel hiding, cited parsing).
-- [ ] **Citation sampling across the years (not just recent)** — the papers pulled
-      via S2 citations skew heavily to the **most recent (2026) work**, so a seed's
-      older but influential citers get crowded out. Sample the citation list across
-      its **full time span** (and/or bias toward `isInfluential` / high-citation
-      edges) so the graph shows papers that cited it *throughout the years*, not
-      only the latest. Mirrors the Phase 3e history-backfill's "prefer influential
-      edges" idea, applied forward to citations. *(From the `todos.md` inbox,
-      2026-07-04.)*
 - [x] **Expand test coverage (a lot)** *(v1.21.3)* — the suite went from 7 smoke
       tests to **105 offline tests**, in a `test/` tree that **mirrors
       `src/arxiv_digest/`**. Five layers: the **agentic loop** (driven by a
