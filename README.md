@@ -192,19 +192,16 @@ arxiv-digest/                    # (repo name predates the "Atlas" rename)
 │   ├── run.py                   # click CLI: serve, ingest, sources, …
 │   └── arxiv_digest/
 │       ├── config.py            # settings from .env (incl. Semantic Scholar)
-│       ├── semantic_scholar.py  # S2 Academic Graph + Recommendations client
-│       ├── graph.py             # assemble a paper's neighborhood graph
-│       ├── cache.py             # tiny TTL cache for dynamic artifacts
-│       ├── arxiv_client.py      # arXiv seed search (finds the paper to map)
-│       ├── search.py            # seed search: live arXiv + instant local-cache
-│       ├── teacher/             # AI teacher package: streaming backends, lecture,
-│       │                        #   grounded + agentic Q&A, tools, library chat
-│       ├── fulltext.py          # full paper text from ar5iv for the Q&A agent (cached)
-│       ├── figures.py           # paper figures + captions from ar5iv (cached)
-│       ├── taxonomy.py          # arXiv category taxonomy (dormant; for future use)
+│       ├── app.py               # thin Flask factory: wires routes/ + serves frontend
 │       ├── routes/              # the API surface: one Flask blueprint per concern
 │       │                        #   (graph, search, teacher, sources, sessions)
-│       └── app.py               # thin Flask factory: wires routes/ + serves frontend
+│       ├── teacher/             # AI teacher package: streaming backends, lecture,
+│       │                        #   grounded + agentic Q&A, tools, library chat
+│       ├── integrations/        # external clients: semantic_scholar, arxiv_client,
+│       │                        #   fulltext + figures (ar5iv), taxonomy (dormant)
+│       ├── services/            # domain logic: graph assembly, seed search
+│       ├── storage/             # SQLite: cache (ephemeral), sessions (durable)
+│       └── library/             # bring-your-own sources: ingest + embeddings
 └── frontend/                    # React + TS + Vite
     └── src/
         ├── Atlas.tsx            # the workspace orchestrator (owns graph state)
