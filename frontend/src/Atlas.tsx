@@ -10,7 +10,8 @@
  *   - graph/     GraphCanvas + GraphControls + Legend, theme/model, and the
  *                useTimeline / usePinning / useDiscovery hooks
  *   - detail/    DetailPanel + useSelection (the selected paper)
- *   - teacher/   Teacher (lecture + Q&A) and LibraryChat (graph-free RAG)
+ *   - teacher/   Teacher (the unified assistant: graph lecture + Q&A, or a
+ *                graph-free chat over the uploaded library)
  *   - library/   Sources (the bring-your-own-sources drawer)
  *   - sessions/  Sessions (the saved-workspaces drawer)
  *
@@ -54,7 +55,6 @@ import GraphControls from './graph/GraphControls'
 import Legend from './graph/Legend'
 import DetailPanel from './detail/DetailPanel'
 import Teacher from './teacher/Teacher'
-import LibraryChat from './teacher/LibraryChat'
 import Sources from './library/Sources'
 import Sessions from './sessions/Sessions'
 import './atlas.css'
@@ -82,10 +82,13 @@ export default function Atlas() {
 
   // The Sources drawer (Phase 3d) — the user's local semantic library.
   const [showSources, setShowSources] = useState(false)
-  // Offline library chat (Phase 3d): a graph-free RAG chat over the library. We
-  // track whether a library exists (>0 sources) so the entry point only shows
-  // when there's something to ask; refreshed whenever the Sources drawer closes.
-  const [showLibraryChat, setShowLibraryChat] = useState(false)
+  // The unified assistant panel: one docked side panel toggled from the header.
+  // With a graph it's the AI teacher (lecture + agentic Q&A); with no graph but a
+  // library it's a graph-free chat over the user's sources. It auto-opens when a
+  // graph loads (below) so the teacher appears as before, and can be opened for
+  // library chat before any graph exists. `libraryCount` gates the graph-free
+  // entry point; refreshed whenever the Sources drawer closes.
+  const [assistantOpen, setAssistantOpen] = useState(false)
   const [libraryCount, setLibraryCount] = useState(0)
   // Saved sessions & workspaces (Phase 4).
   const [showSessions, setShowSessions] = useState(false)
@@ -204,6 +207,7 @@ export default function Atlas() {
       restoreLayoutRef.current = null
       setGraph(g)
       setGraphKey((k) => k + 1)
+      setAssistantOpen(true) // surface the teacher for the freshly loaded graph
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -393,6 +397,7 @@ export default function Atlas() {
         counts: countRels(d.nodes),
       })
       setGraphKey((k) => k + 1)
+      setAssistantOpen(true) // surface the teacher for the restored graph
       setShowSessions(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -431,9 +436,10 @@ export default function Atlas() {
         filters={filters}
         onFilters={setFilters}
         seedTitle={graph?.seed.title ?? null}
-        libraryCount={libraryCount}
         onOpenSources={() => setShowSources(true)}
-        onOpenLibraryChat={() => setShowLibraryChat(true)}
+        assistantAvailable={hasGraph || libraryCount > 0}
+        assistantOpen={assistantOpen}
+        onToggleAssistant={() => setAssistantOpen((o) => !o)}
         onOpenSessions={() => setShowSessions(true)}
       />
 
@@ -444,7 +450,6 @@ export default function Atlas() {
           refreshLibraryCount() // they may have added/removed sources
         }}
       />
-      {showLibraryChat && <LibraryChat onClose={() => setShowLibraryChat(false)} />}
 
       <Sessions
         open={showSessions}
@@ -477,7 +482,7 @@ export default function Atlas() {
                   <div className="hint-or">— or —</div>
                   <button
                     className="hint-cta"
-                    onClick={() => setShowLibraryChat(true)}
+                    onClick={() => setAssistantOpen(true)}
                   >
                     💬 Chat with your library
                   </button>
@@ -545,13 +550,19 @@ export default function Atlas() {
           />
         )}
 
-        {hasGraph && graph && (
+        {/* Mounted (not just rendered) whenever there's something to assist with,
+            and merely hidden when collapsed — so toggling the panel preserves the
+            in-progress conversation. Remounts on graph load (keyed) for a fresh
+            per-graph transcript. */}
+        {(hasGraph || libraryCount > 0) && (
           <Teacher
             key={graphKey}
             graph={graph}
+            collapsed={!assistantOpen}
             extraNodes={discoveredNodes}
             onHighlight={setHighlightIds}
             onDiscover={onDiscover}
+            onClose={() => setAssistantOpen(false)}
             onStateChange={handleTeacherState}
             initialChat={teacherInitRef.current.chat}
             initialBeats={teacherInitRef.current.beats}

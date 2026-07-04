@@ -4,7 +4,7 @@
  */
 
 import type { GraphNode, GraphEdge } from './graph'
-import type { Beat, LectureTrace, TraceEvent } from './teacher'
+import type { Beat, LectureTrace, RetrieveEvent, TraceEvent } from './teacher'
 
 /**
  * One chat turn in the teacher transcript. Hoisted here (shared by
@@ -19,6 +19,9 @@ export interface ChatMsg {
   cited?: string[]
   /** The agent steps that produced this answer (assistant turns only). */
   trace?: TraceEvent[]
+  /** Library-retrieval summary — set only on the graph-free library-chat path
+   *  (which retrieves passages instead of running the agent). */
+  retrieve?: RetrieveEvent
 }
 
 /** The seed a session was explored from (enough to re-open without a rebuild). */

@@ -14,7 +14,7 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.17 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.18 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync — and the
 > **"How we got here" lecture time-travels**, walking backward through references
 > to a field's older roots before it narrates, so the story starts at the
@@ -36,10 +36,12 @@ graphs you've already looked at.
 > your own sources** — upload a PDF/book or paste a URL and it's chunked, embedded
 > **locally** (no API key; the text never leaves your machine), and made
 > semantically searchable via sqlite-vec; the **teacher then searches your library
-> in Q&A and cites it by page** ("*per your textbook, p.243…*"). You can also
-> **chat with your library directly** — an "💬 Ask library" mode answers straight
-> from your uploaded sources, no graph or seed search needed, optionally **scoped
-> to one source**. And you can **save a session** — the whole graph (including the
+> in Q&A and cites it by page** ("*per your textbook, p.243…*"). The teacher and
+> the library live in **one 🎓 Assistant panel** that levels up with context: with
+> **no graph open** it's a chat straight over your uploaded sources (no seed search
+> needed); once a **graph is open** it's the full lecture + agentic Q&A — either
+> way **scoped to one source** on demand. And you can **save a session** — the
+> whole graph (including the
 > papers the teacher discovered) plus its chat — and **reopen it later** with no
 > API calls, from a 🗂 Sessions drawer. Concept mindmaps
 > and audio lectures follow — see **[OnePager.md](OnePager.md)** for the full
@@ -214,7 +216,7 @@ arxiv-digest/                    # (repo name predates the "Atlas" rename)
         ├── search/              # Search form + HitList + useSeedSearch
         ├── graph/               # GraphCanvas/Controls/Legend + layout/pin/discovery hooks
         ├── detail/              # DetailPanel + useSelection (figures, hydration)
-        ├── teacher/             # Teacher panel + offline LibraryChat
+        ├── teacher/             # unified Assistant panel (graph lecture/Q&A + library chat)
         ├── library/             # Sources drawer (bring-your-own sources)
         └── sessions/            # Sessions drawer (saved workspaces)
 ```

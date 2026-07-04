@@ -1,6 +1,6 @@
 /* The app shell + shared primitives. Everything concern-specific lives next
    to its component: header/header.css, search/search.css, graph/graph.css,
-   detail/detail.css, teacher/teacher.css + library-chat.css,
+   detail/detail.css, teacher/teacher.css,
    library/sources.css, sessions/sessions.css. */
 
 .atlas {

@@ -1,6 +1,6 @@
-/* The AI teacher panel: lecture modes + beats, the Q&A chat (with agent trace
-   lines), and the ask bar. The ask bar (.teacher-ask) is shared with the
-   offline library chat (library-chat.css layers on top of it). */
+/* The unified assistant panel: lecture modes + beats, the Q&A / library chat
+   (with agent trace lines + retrieval summaries), and the ask bar. Docked beside
+   the graph so answers can light up its nodes; toggled from the header. */
 
 .teacher {
   width: 340px;
@@ -10,6 +10,11 @@
   min-height: 0;
   border-left: 1px solid var(--border);
   background: var(--panel);
+}
+/* Collapsed = hidden but still mounted, so the conversation is preserved and
+   the canvas reclaims the width. */
+.teacher.collapsed {
+  display: none;
 }
 .teacher-head {
   padding: 14px 16px 10px;
@@ -21,14 +26,19 @@
   justify-content: space-between;
   gap: 10px;
 }
+.teacher-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .teacher-title {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
 }
-/* Source-scope dropdown, shared by the teacher header and the library chat
-   header (which layers library-chat.css on top of this base). */
+/* Source-scope dropdown in the assistant header — pins the library search to
+   one source (or all). */
 .scope-select {
   max-width: 200px;
   padding: 5px 8px;

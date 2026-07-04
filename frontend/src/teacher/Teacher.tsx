@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import {
   listSources,
   streamAsk,
+  streamAskSources,
   streamLecture,
   type Beat,
   type ChatMsg,
@@ -12,22 +13,25 @@ import {
   type GraphResponse,
   type LectureMode,
   type LectureTrace,
+  type RetrieveEvent,
   type Source,
   type TeacherNode,
 } from '../api'
 import './teacher.css'
 
-// The AI teacher panel: a streaming lecture over the visible graph plus a
-// grounded, agentic Q&A chat. Both light up graph nodes via `onHighlight` — the
-// lecture per-beat, Q&A on the papers an answer cites. The Q&A agent can also
-// pull in papers not yet on screen via expand_node; discoveries flow back up
-// through `onDiscover` so the parent can merge them into the live graph and
-// keep grounding follow-up questions.
-//
-// The transcript (chat + lecture beats + history trace) is seeded from
-// `initial*` props and reported up through `onStateChange`, so the parent can
-// persist it with a saved session (Phase 4) and rehydrate it on restore. The
-// panel is remounted (keyed on the graph) whenever a new graph loads, so a
+// The unified assistant panel: one docked side panel whose capability levels up
+// with context.
+//   • No graph, has a library → a graph-free RAG chat straight over the user's
+//     uploaded sources (streamAskSources): retrieve passages, answer grounded in
+//     them, cite by page. Works under both teacher backends (no tool loop).
+//   • A graph is open → the streaming lecture + agentic Q&A: the agent reads the
+//     visible papers, expands/searches for off-graph work, and can search the
+//     user's sources too. Both light up graph nodes via `onHighlight`, and
+//     agent discoveries flow up through `onDiscover` to merge into the live graph.
+// A source-scope dropdown (shown when the library has >1 source) pins the library
+// search to one source in either mode. The transcript is seeded from `initial*`
+// and reported up via `onStateChange` so a graph session can be saved/restored.
+// The panel is remounted (keyed on the graph) whenever a new graph loads, so a
 // re-seed starts a fresh conversation unless we're restoring a saved one.
 
 const MODES: { key: LectureMode; label: string }[] = [
@@ -50,18 +54,25 @@ function toTeacherNodes(nodes: GraphNode[]): TeacherNode[] {
 
 export default function Teacher({
   graph,
+  collapsed = false,
   extraNodes,
   onHighlight,
   onDiscover,
+  onClose,
   onStateChange,
   initialChat = [],
   initialBeats = [],
   initialHistTrace = [],
 }: {
-  graph: GraphResponse
+  // The open graph, or null for the graph-free library-chat mode.
+  graph: GraphResponse | null
+  // Hidden (but kept mounted, so the conversation survives) when collapsed.
+  collapsed?: boolean
   extraNodes: GraphNode[] // papers the agent discovered via expand_node, so far
   onHighlight: (ids: Set<string>) => void
   onDiscover: (nodes: GraphNode[], edges: GraphEdge[]) => void
+  // Collapse the panel (the header ✕).
+  onClose?: () => void
   // Reports the live transcript up so the parent can save it (Phase 4).
   onStateChange?: (s: { chat: ChatMsg[]; beats: Beat[]; histTrace: LectureTrace[] }) => void
   // Seed state — populated when restoring a saved session, empty otherwise.
@@ -69,6 +80,7 @@ export default function Teacher({
   initialBeats?: Beat[]
   initialHistTrace?: LectureTrace[]
 }) {
+  const hasGraph = !!graph
   const [beats, setBeats] = useState<Beat[]>(initialBeats)
   // History-mode backward hops (Phase 3e), shown above the beats as the lecture
   // traces a field back to its roots before narrating.
@@ -84,10 +96,9 @@ export default function Teacher({
   const [error, setError] = useState<string | null>(null)
   // The uploaded library, powering the Q&A source-scope selector. Empty until
   // fetched; the selector only appears when there's more than one source to pick
-  // between. Scoping bears only on Q&A (which can search the library) — lectures
-  // are graph-only and ignore it.
+  // between. Scoping bears on the library search in either mode.
   const [libraryItems, setLibraryItems] = useState<Source[]>([])
-  // Scope the teacher's library search to one source's id, or '' for the whole library.
+  // Scope the library search to one source's id, or '' for the whole library.
   const [scope, setScope] = useState('')
 
   useEffect(() => {
@@ -109,12 +120,13 @@ export default function Teacher({
   // Index of the assistant message the in-flight question is streaming into, so
   // onCited can mark it active (its answer just lit up its cited papers).
   const askIdxRef = useRef(0)
-  const seed = useMemo(() => ({ title: graph.seed.title, id: graph.seed.id }), [graph])
   // Grounding scope for the agent: the on-screen graph plus anything it has
   // already discovered this session, so follow-up questions can build on it.
   // Deduped by id — a restored session carries its discovered papers in both
-  // graph.nodes and extraNodes, and we don't want them grounded twice.
+  // graph.nodes and extraNodes, and we don't want them grounded twice. Empty in
+  // the graph-free mode (the library chat needs no node context).
   const teacherNodes = useMemo(() => {
+    if (!graph) return [] as TeacherNode[]
     const seen = new Set<string>()
     const merged: GraphNode[] = []
     for (const n of [...graph.nodes, ...extraNodes]) {
@@ -174,6 +186,7 @@ export default function Teacher({
 
   const runLecture = useCallback(
     async (mode: LectureMode) => {
+      if (!graph) return
       stopActive()
       const ctrl = new AbortController()
       abortRef.current = ctrl
@@ -186,7 +199,7 @@ export default function Teacher({
       onHighlight(new Set())
       try {
         await streamLecture(
-          { seed, nodes: teacherNodes, mode },
+          { seed: { title: graph.seed.title, id: graph.seed.id }, nodes: teacherNodes, mode },
           {
             signal: ctrl.signal,
             onBeat: (beat) =>
@@ -211,77 +224,105 @@ export default function Teacher({
         setTeaching(false)
       }
     },
-    [teacherNodes, seed, onHighlight, onDiscover, highlightBeat, stopActive],
+    [graph, teacherNodes, onHighlight, onDiscover, highlightBeat, stopActive],
   )
+
+  // Append the user turn + an empty assistant turn the answer streams into, and
+  // return the AbortController driving the request.
+  const beginTurn = useCallback((q: string) => {
+    stopActive()
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
+    setInput('')
+    setError(null)
+    setAsking(true)
+    onHighlight(new Set())
+    setActiveBeat(null)
+    setActiveChat(null)
+    setChat((prev) => {
+      // The assistant reply is the second message we append here.
+      askIdxRef.current = prev.length + 1
+      return [...prev, { role: 'user', text: q }, { role: 'assistant', text: '' }]
+    })
+    return ctrl
+  }, [stopActive, onHighlight])
+
+  // Append streamed prose to the in-flight assistant message.
+  const appendToken = useCallback((text: string) => {
+    setChat((prev) => {
+      const next = [...prev]
+      const last = next[next.length - 1]
+      next[next.length - 1] = { ...last, text: last.text + text }
+      return next
+    })
+  }, [])
 
   const onAsk = useCallback(
     async (e: FormEvent) => {
       e.preventDefault()
       const q = input.trim()
       if (!q || asking) return
-      stopActive()
-      const ctrl = new AbortController()
-      abortRef.current = ctrl
-      setInput('')
-      setError(null)
-      setAsking(true)
-      onHighlight(new Set())
-      setActiveBeat(null)
-      setActiveChat(null)
-      setChat((prev) => {
-        // The assistant reply is the second message we append here.
-        askIdxRef.current = prev.length + 1
-        return [...prev, { role: 'user', text: q }, { role: 'assistant', text: '' }]
-      })
+      const ctrl = beginTurn(q)
       try {
-        await streamAsk(
-          {
-            question: q,
-            session_id: sessionId.current,
-            seed,
-            nodes: teacherNodes,
-            source_id: scope || undefined,
-          },
-          {
-            signal: ctrl.signal,
-            onToken: (text) =>
-              setChat((prev) => {
-                const next = [...prev]
-                next[next.length - 1] = {
-                  ...next[next.length - 1],
-                  text: next[next.length - 1].text + text,
-                }
-                return next
-              }),
-            onTrace: (t) =>
-              setChat((prev) => {
-                const next = [...prev]
-                const last = next[next.length - 1]
-                next[next.length - 1] = { ...last, trace: [...(last.trace ?? []), t] }
-                return next
-              }),
-            onDiscard: () =>
-              setChat((prev) => {
-                const next = [...prev]
-                next[next.length - 1] = { ...next[next.length - 1], text: '' }
-                return next
-              }),
-            onNodes: (d: Discovery) => onDiscover(d.nodes, d.edges),
-            onCited: (ids) => {
-              onHighlight(new Set(ids))
-              // Mark this answer active so its section shows the lit state, just
-              // like a beat lights up as it arrives.
-              setActiveBeat(null)
-              setActiveChat(askIdxRef.current)
-              setChat((prev) => {
-                const next = [...prev]
-                next[next.length - 1] = { ...next[next.length - 1], cited: ids }
-                return next
-              })
+        if (graph) {
+          // Graph open: the agentic Q&A — reads/expands/searches via tool use.
+          await streamAsk(
+            {
+              question: q,
+              session_id: sessionId.current,
+              seed: { title: graph.seed.title, id: graph.seed.id },
+              nodes: teacherNodes,
+              source_id: scope || undefined,
             },
-            onError: (m) => setError(m),
-          },
-        )
+            {
+              signal: ctrl.signal,
+              onToken: appendToken,
+              onTrace: (t) =>
+                setChat((prev) => {
+                  const next = [...prev]
+                  const last = next[next.length - 1]
+                  next[next.length - 1] = { ...last, trace: [...(last.trace ?? []), t] }
+                  return next
+                }),
+              onDiscard: () =>
+                setChat((prev) => {
+                  const next = [...prev]
+                  next[next.length - 1] = { ...next[next.length - 1], text: '' }
+                  return next
+                }),
+              onNodes: (d: Discovery) => onDiscover(d.nodes, d.edges),
+              onCited: (ids) => {
+                onHighlight(new Set(ids))
+                // Mark this answer active so its section shows the lit state, just
+                // like a beat lights up as it arrives.
+                setActiveBeat(null)
+                setActiveChat(askIdxRef.current)
+                setChat((prev) => {
+                  const next = [...prev]
+                  next[next.length - 1] = { ...next[next.length - 1], cited: ids }
+                  return next
+                })
+              },
+              onError: (m) => setError(m),
+            },
+          )
+        } else {
+          // No graph: answer straight from the user's uploaded library.
+          await streamAskSources(
+            { question: q, session_id: sessionId.current, source_id: scope || undefined },
+            {
+              signal: ctrl.signal,
+              onRetrieve: (r: RetrieveEvent) =>
+                setChat((prev) => {
+                  const next = [...prev]
+                  next[next.length - 1] = { ...next[next.length - 1], retrieve: r }
+                  return next
+                }),
+              onToken: appendToken,
+              onError: (m) => setError(m),
+            },
+          )
+        }
       } catch (err) {
         if (!ctrl.signal.aborted)
           setError(err instanceof Error ? err.message : String(err))
@@ -290,52 +331,62 @@ export default function Teacher({
         setAsking(false)
       }
     },
-    [input, asking, teacherNodes, seed, scope, onHighlight, onDiscover, stopActive],
+    [input, asking, graph, teacherNodes, scope, beginTurn, appendToken, onHighlight, onDiscover],
   )
 
   return (
-    <section className="teacher">
+    <section className={`teacher ${collapsed ? 'collapsed' : ''}`}>
       <div className="teacher-head">
         <div className="teacher-head-top">
-          <span className="teacher-title">AI teacher</span>
-          {libraryItems.length > 1 && (
-            <select
-              className="scope-select"
-              value={scope}
-              onChange={(e) => setScope(e.target.value)}
-              aria-label="Scope the teacher's library search to a source"
-              title="When you ask a question, let the teacher draw on your whole library, or just one source"
-            >
-              <option value="">All sources</option>
-              {libraryItems.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.title}
-                </option>
+          <span className="teacher-title">{hasGraph ? 'AI teacher' : 'Ask your library'}</span>
+          <div className="teacher-head-right">
+            {libraryItems.length > 1 && (
+              <select
+                className="scope-select"
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+                aria-label="Scope the library search to a source"
+                title="Search your whole library, or just one source"
+              >
+                <option value="">All sources</option>
+                {libraryItems.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.title}
+                  </option>
+                ))}
+              </select>
+            )}
+            {onClose && (
+              <button className="link-btn" onClick={onClose} aria-label="Close the assistant panel">
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+        {(hasGraph || beats.length > 0 || chat.length > 0) && (
+          <div className="teacher-modes">
+            {hasGraph &&
+              MODES.map((m) => (
+                <button
+                  key={m.key}
+                  className="teach-btn"
+                  onClick={() => runLecture(m.key)}
+                  disabled={teaching}
+                >
+                  {teaching ? '…' : m.label}
+                </button>
               ))}
-            </select>
-          )}
-        </div>
-        <div className="teacher-modes">
-          {MODES.map((m) => (
-            <button
-              key={m.key}
-              className="teach-btn"
-              onClick={() => runLecture(m.key)}
-              disabled={teaching}
-            >
-              {teaching ? '…' : m.label}
-            </button>
-          ))}
-          {(beats.length > 0 || chat.length > 0) && (
-            <button
-              className="teach-btn clear-btn"
-              onClick={clearChat}
-              title="Clear the lecture and chat — start a fresh conversation"
-            >
-              Clear
-            </button>
-          )}
-        </div>
+            {(beats.length > 0 || chat.length > 0) && (
+              <button
+                className="teach-btn clear-btn"
+                onClick={clearChat}
+                title="Clear the conversation — start fresh"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="teacher-scroll">
@@ -385,6 +436,22 @@ export default function Teacher({
             }`}
             onClick={clickable ? () => highlightChat(i, m.cited!) : undefined}
           >
+            {/* Library-chat retrieval summary (graph-free mode). */}
+            {m.retrieve && (
+              <div className="chat-trace">
+                <div className={`trace-line ${m.retrieve.found ? '' : 'fail'}`}>
+                  📚 Searched your library
+                  <em>
+                    {m.retrieve.found
+                      ? `${m.retrieve.found} passage${m.retrieve.found > 1 ? 's' : ''}`
+                      : 'nothing'}
+                  </em>
+                  {m.retrieve.sources.length > 0 && (
+                    <span className="trace-srcs"> from {m.retrieve.sources.join(', ')}</span>
+                  )}
+                </div>
+              </div>
+            )}
             {m.trace && m.trace.length > 0 && (
               <div className="chat-trace">
                 {m.trace.map((t, j) =>
@@ -430,7 +497,9 @@ export default function Teacher({
               </div>
             )}
             {m.text ||
-              (m.role === 'assistant' && asking && !m.trace?.length ? '…' : '')}
+              (m.role === 'assistant' && asking && !m.trace?.length && !m.retrieve
+                ? '…'
+                : '')}
             {m.cited && m.cited.length > 0 && (
               <div className="chat-cited">grounded in {m.cited.length} paper(s) ✦</div>
             )}
@@ -440,7 +509,9 @@ export default function Teacher({
 
         {beats.length === 0 && chat.length === 0 && !teaching && (
           <div className="teacher-hint">
-            Play a lecture, or ask a question about the papers on the graph.
+            {hasGraph
+              ? 'Play a lecture, or ask a question about the papers on the graph.'
+              : 'Ask a question and I’ll answer straight from your uploaded sources — books, PDFs, and pages — citing them by page. No graph needed.'}
           </div>
         )}
         {error && <div className="teacher-error">{error}</div>}
@@ -450,8 +521,8 @@ export default function Teacher({
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about the papers on screen…"
-          aria-label="Ask the teacher a question"
+          placeholder={hasGraph ? 'Ask about the papers on screen…' : 'Ask your books and PDFs…'}
+          aria-label="Ask the assistant a question"
         />
         <button type="submit" disabled={asking || !input.trim()}>
           {asking ? '…' : 'Ask'}

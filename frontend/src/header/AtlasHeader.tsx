@@ -1,7 +1,7 @@
 /**
  * The top bar container: brand, the seed-search form (composed from
  * search/Search), the current seed's title, the drawer toggles
- * (Sources / Ask library / Sessions), and the Claude credit.
+ * (Sources / Assistant / Sessions), and the Claude credit.
  *
  * Purely presentational — search state and drawer visibility live in Atlas
  * and pass through as props.
@@ -28,10 +28,13 @@ export interface AtlasHeaderProps {
   onFilters: (f: SearchFilters) => void
   /** The loaded graph's seed title, shown beside the form (null = none). */
   seedTitle: string | null
-  /** How many sources are in the library (>0 shows the Ask-library button). */
-  libraryCount: number
   onOpenSources: () => void
-  onOpenLibraryChat: () => void
+  /** There's something to assist with — a graph is open or a library exists;
+   *  when false the Assistant toggle is hidden. */
+  assistantAvailable: boolean
+  /** The assistant panel is open (drives the toggle's active state). */
+  assistantOpen: boolean
+  onToggleAssistant: () => void
   onOpenSessions: () => void
 }
 
@@ -45,9 +48,10 @@ export default function AtlasHeader({
   filters,
   onFilters,
   seedTitle,
-  libraryCount,
   onOpenSources,
-  onOpenLibraryChat,
+  assistantAvailable,
+  assistantOpen,
+  onToggleAssistant,
   onOpenSessions,
 }: AtlasHeaderProps) {
   return (
@@ -76,13 +80,13 @@ export default function AtlasHeader({
       >
         📚 Sources
       </button>
-      {libraryCount > 0 && (
+      {assistantAvailable && (
         <button
-          className="sources-toggle"
-          onClick={onOpenLibraryChat}
-          title="Ask questions answered straight from your uploaded library — no graph needed"
+          className={`sources-toggle ${assistantOpen ? 'on' : ''}`}
+          onClick={onToggleAssistant}
+          title="The AI assistant — a lecture and Q&A over the graph, or a chat straight over your uploaded library"
         >
-          💬 Ask library
+          🎓 Assistant
         </button>
       )}
       <button

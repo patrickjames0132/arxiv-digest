@@ -40,6 +40,12 @@
   border-color: var(--accent);
   color: var(--text-strong);
 }
+/* Active/pressed state — used by the Assistant toggle when its panel is open. */
+.sources-toggle.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(255, 209, 102, 0.08);
+}
 /* Anchor the whole right-hand cluster (Sources, Ask library, credit) to the
    right: only the FIRST item absorbs the free space. Putting margin-left:auto on
    every button would split the gap and strand them mid-header on wide screens. */

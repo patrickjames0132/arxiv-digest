@@ -1,6 +1,6 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.17 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.18 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -10,7 +10,7 @@
 > chat (v1.12.0), per-source scoping + stronger embed model (v1.13.0), "how we got
 > here" time-travel (v1.14.0), saved sessions & workspaces (v1.15.0), seed-search
 > date/category filters + result dates (v1.16.0), teacher source-scope selection
-> (v1.17.0)
+> (v1.17.0), unified assistant panel (v1.18.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -323,18 +323,21 @@ optional, behind a key.
       drop **multiple files at once** and embed them **in parallel** (with
       per-file progress), so loading a stack of books isn't a serial wait. *(From
       the `todos.md` inbox, 2026-07-03.)*
-- [ ] **Unified assistant panel** *(planned — supersedes the old "toggle to
-      library-agent view" idea)* — collapse the two overlapping chat surfaces
+- [x] **Unified assistant panel** *(v1.18.0 — supersedes the old "toggle to
+      library-agent view" idea)* — collapsed the two overlapping chat surfaces
       (the docked `Teacher` panel and the `LibraryChat` modal) into **one
-      header-toggled side drawer** whose capability levels up with context:
-      **no graph, has library** → offline library chat (the backend-agnostic
-      `answer_from_sources` path — works on both teacher backends); **graph open**
-      → the agentic path lights up `read_paper` / `expand_node` / `search_papers`
-      **and** `search_sources` (+ the lecture buttons, which are graph-only);
-      **neither** → an empty state prompting to search a paper or upload a source.
-      One conversation thread that spans library-only → graph+library, one session
-      store, one ask bar. The v1.17.0 source-scope selector folds straight in.
-      *(From the `todos.md` inbox, 2026-07-03; shaped 2026-07-03.)*
+      header-toggled docked panel** whose capability levels up with context:
+      **no graph, has library** → a graph-free chat over the uploaded library
+      (`streamAskSources` → the backend-agnostic `answer_from_sources` path);
+      **graph open** → the lecture + agentic Q&A (`read_paper` / `expand_node` /
+      `search_papers` **and** `search_sources`). A **🎓 Assistant** header toggle
+      opens/collapses it (active-state styled); it auto-opens on graph load. Docked
+      (not a scrim-drawer) so answers still light up graph nodes; **collapsed =
+      hidden but mounted**, so toggling preserves the in-progress conversation. The
+      v1.17.0 source-scope selector works in both modes. `LibraryChat.tsx` +
+      `library-chat.css` deleted; **backend untouched** (both endpoints already
+      existed — the panel just routes by graph presence).
+      *(From the `todos.md` inbox, 2026-07-03; shaped + shipped 2026-07-03.)*
 - [x] **Source selection for the AI Teacher** *(v1.17.0)* — the Teacher panel
       gained the same source-scope control the library assistant has: an **All
       sources / one source** dropdown (shown when the library has >1 source) that
