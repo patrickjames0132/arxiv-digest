@@ -1,6 +1,6 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.19 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.20 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -11,7 +11,7 @@
 > here" time-travel (v1.14.0), saved sessions & workspaces (v1.15.0), seed-search
 > date/category filters + result dates (v1.16.0), teacher source-scope selection
 > (v1.17.0), unified assistant panel (v1.18.0), parallel upload + multi-select
-> source scope (v1.19.0)
+> source scope (v1.19.0), figures in agent answers (v1.20.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -403,11 +403,20 @@ optional, behind a key.
       selected paper when available (Papers with Code / Hugging Face Papers), so a
       node links out to runnable implementations, not just its abstract. Show in
       the detail panel; maybe flag which graph nodes have code.
-- [ ] **Figures in agent answers** *(teacher/media-adjacent)* — let the Q&A agent
-      pull relevant figures from the papers it reads into its answer, to illustrate
-      an explanation inline. Reuses the existing figure extraction (`figures.py`
-      via ar5iv) already shown in the detail panel; sits near Phase 7's media
-      intent but surfaces *existing* figures rather than generating new visuals.
+- [x] **Figures in agent answers** *(v1.20.0)* — the agentic Q&A can now pull a
+      paper's own figures into its answer. A **full `read_paper` lists that paper's
+      figures** (numbered captions) and a **`show_figure(index, figure)`** tool
+      attaches one — resolved through the existing `figures.py` (ar5iv) extraction +
+      the same-origin `/api/figure_proxy`, streamed as a `figure` SSE event and
+      rendered (image + caption) in the answer bubble with a **click-to-enlarge
+      lightbox** (backdrop / ✕ / Esc to close). Budgeted at `AGENT_MAX_FIGURES`
+      (3/answer); agentic path only. A `🖼 Showed Figure N of …` trace chip marks it.
+- [ ] **Embed answer figures inline (not appended)** — figures currently render as
+      a strip at the **end** of the answer bubble; place each one **at the point in
+      the prose where it's most relevant** instead. Needs the agent to mark figure
+      positions in its text (a sentinel like `<<CITED>>`) and the stream parser to
+      split the message around them and interleave the images. *(From testing
+      2026-07-03.)*
 - [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
       `run.py` with a `click` group (same command names: `serve`, `ingest`,
       `sources`, `search-sources`, `forget`).

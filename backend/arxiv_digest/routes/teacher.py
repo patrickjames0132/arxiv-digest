@@ -146,8 +146,9 @@ def api_ask() -> Response:
 
     Returns:
         An SSE stream: with the agentic backend, ``trace`` events (tool
-        steps) and ``nodes`` events (``{nodes, edges}`` discoveries) as
-        expansion finds papers not yet on the graph; always ``token`` events
+        steps), ``nodes`` events (``{nodes, edges}`` discoveries) as expansion
+        finds papers not yet on the graph, and ``figure`` events (a paper's
+        figure the agent attached to its answer); always ``token`` events
         (prose), a final ``cited`` event (``{node_ids}``), then ``done`` (or
         ``error``). HTTP 400 when the question or nodes are missing.
     """
@@ -185,6 +186,8 @@ def api_ask() -> Response:
                     yield _sse("trace", data)
                 elif kind == "nodes":
                     yield _sse("nodes", data)
+                elif kind == "figure":
+                    yield _sse("figure", data)
                 elif kind == "discard":
                     # Streamed preamble turned out to precede a tool call — drop it.
                     answer_parts.clear()

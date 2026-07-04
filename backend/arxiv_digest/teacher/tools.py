@@ -15,9 +15,11 @@ dict the route streams to the frontend, so the user watches the agent work.
 from __future__ import annotations
 
 import logging
+import urllib.parse
 from typing import Optional
 
 from .. import config
+from ..integrations import figures as figures_mod
 from ..integrations import fulltext
 from ..integrations import semantic_scholar as s2
 from ..library import sources
@@ -42,6 +44,9 @@ _AGENT_SYSTEM = (
     "at all — recent or topical papers that citation and similarity hops can't "
     "reach (e.g. \"the latest approach to X in 2026\"); pass year_from to bias "
     "toward recent work. Its hits also get numbered and added for you to read. "
+    "When a full read lists a paper's figures and one would make your explanation "
+    "clearer, call show_figure(index, figure) to place it in your answer, and "
+    "point to it in your prose (e.g. \"as Figure 2 shows\"). "
     "Read, expand, and search only what you need — each has its own limited "
     "budget. Do NOT narrate that you're about to use a tool; just call it. When "
     "you have enough, write the answer in at most a few short paragraphs, grounded "
@@ -167,6 +172,30 @@ _TOOLS = [
             "required": ["query"],
         },
     },
+    {
+        "name": "show_figure",
+        "description": (
+            "Place one of a paper's own figures (image + caption, from ar5iv) into "
+            "your answer to illustrate a point. Only for a paper you've read in full "
+            "— a full read lists that paper's figures and their numbers. Reference "
+            "the figure in your prose (e.g. \"as Figure 2 shows\"); don't rely on it "
+            "alone to make the point."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "index": {
+                    "type": "integer",
+                    "description": "The [n] index of the paper the figure comes from.",
+                },
+                "figure": {
+                    "type": "integer",
+                    "description": "The figure's number as listed in the paper's full read (1-based).",
+                },
+            },
+            "required": ["index", "figure"],
+        },
+    },
 ]
 
 # Added to the tool set only when the user has a source library (Phase 3d).
@@ -263,7 +292,8 @@ def _paper_text(node: dict, detail: str) -> str:
         if ft.get("available") and ft.get("text"):
             body = ft["text"][: config.FULLTEXT_MAX_CHARS]
             tail = "\n\n[...truncated]" if len(ft["text"]) > config.FULLTEXT_MAX_CHARS else ""
-            return f"{header}\nTL;DR: {tldr or '—'}\n\nFull text:\n{body}{tail}"
+            figs = _figure_list(arxiv_id, node.get("idx"))
+            return f"{header}\nTL;DR: {tldr or '—'}\n\nFull text:\n{body}{tail}{figs}"
 
     parts = [header]
     if tldr:
@@ -272,6 +302,99 @@ def _paper_text(node: dict, detail: str) -> str:
     if detail == "full" and not arxiv_id:
         parts.append("(No arXiv full text for this paper — summary only.)")
     return "\n".join(parts)
+
+
+def _figure_list(arxiv_id: str, idx: object) -> str:
+    """List a read paper's figures so the agent can ``show_figure`` the right one.
+
+    Args:
+        arxiv_id: The paper's arXiv id (its figures come from ar5iv).
+        idx: The paper's ``[n]`` index, echoed into the show_figure hint.
+
+    Returns:
+        A numbered "Figures" block (caption per figure) to append to a full
+        read, or an empty string when the paper has no ar5iv figures (or the
+        fetch fails — never raised, figures are a nicety, not the read).
+    """
+    try:
+        res = figures_mod.get_figures(arxiv_id)
+    except Exception:
+        log.warning("figure list fetch failed for %s", arxiv_id, exc_info=True)
+        return ""
+    figs = res.get("figures") or []
+    if not figs:
+        return ""
+    lines = [f"{i}. {(f.get('caption') or '(no caption)')[:200]}" for i, f in enumerate(figs, 1)]
+    return (
+        f"\n\nFigures (show one with show_figure(index={idx}, figure=N)):\n" + "\n".join(lines)
+    )
+
+
+def _run_show_figure(
+    block, numbered: list[dict], shown: set, budget: dict
+) -> tuple[str, dict, Optional[dict]]:
+    """Execute a ``show_figure`` tool call — attach a paper's figure to the answer.
+
+    Args:
+        block: The tool_use content block (``input`` carries ``index`` and the
+            1-based ``figure`` number).
+        numbered: The numbered node list.
+        shown: Mutable visited set of ``(node id, figure number)`` — a repeat
+            show is a no-op (no budget spent, no duplicate image).
+        budget: Mutable ``{"left": int}`` figure budget (decremented here).
+
+    Returns:
+        ``(tool_result_text, trace, figure)`` — ``figure`` is
+        ``{image, caption, title, index, figure}`` for the frontend to render
+        inline (``image`` is the same-origin proxy URL), or None when nothing
+        was attached (invalid index/number, no arXiv id, no ar5iv figures,
+        budget spent, or a repeat — all reported in the text, never raised).
+    """
+    inp = getattr(block, "input", None) or {}
+    idx = inp.get("index")
+    num = inp.get("figure")
+    node = _node_by_idx(numbered, idx)
+    fail = {"action": "figure", "ok": False, "index": idx, "title": None, "figure": num}
+    if node is None or not isinstance(num, int) or isinstance(num, bool) or num < 1:
+        return (f"Invalid show_figure call (index={idx}, figure={num}).", fail, None)
+
+    title = node.get("title")
+    fail["title"] = title
+    arxiv_id = node.get("arxiv_id")
+    if not arxiv_id:
+        return (f'"{title}" has no arXiv figures to show.', fail, None)
+    if budget["left"] <= 0:
+        return ("Figure budget spent — answer with the figures already shown.", fail, None)
+
+    key = (node.get("id"), num)
+    if key in shown:
+        return (f'Figure {num} of "{title}" is already shown.',
+                {"action": "figure", "ok": True, "index": idx, "title": title, "figure": num}, None)
+
+    try:
+        res = figures_mod.get_figures(arxiv_id)
+    except Exception as exc:
+        log.exception("show_figure fetch failed")
+        return (f"Couldn't fetch figures for \"{title}\": {exc}", fail, None)
+    figs = res.get("figures") or []
+    if not figs:
+        return (f'"{title}" has no figures on ar5iv.', fail, None)
+    if num > len(figs):
+        return (f'"{title}" has only {len(figs)} figure(s); {num} doesn\'t exist.', fail, None)
+
+    shown.add(key)
+    budget["left"] -= 1
+    fig = figs[num - 1]
+    proxy = "/api/figure_proxy?src=" + urllib.parse.quote(fig["image"], safe="")
+    payload = {
+        "image": proxy,
+        "caption": fig.get("caption") or "",
+        "title": title,
+        "index": idx,
+        "figure": num,
+    }
+    trace = {"action": "figure", "ok": True, "index": idx, "title": title, "figure": num}
+    return (f'Attached Figure {num} of "{title}" to your answer.', trace, payload)
 
 
 def _run_read(block, numbered: list[dict], budgets: dict, read_cache: dict) -> tuple[str, dict, Optional[str]]:

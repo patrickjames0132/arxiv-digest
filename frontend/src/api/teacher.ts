@@ -101,7 +101,7 @@ export async function streamLecture(
  * the agent works.
  */
 export interface TraceEvent {
-  action: 'read' | 'expand' | 'search' | 'search_sources'
+  action: 'read' | 'expand' | 'search' | 'search_sources' | 'figure'
   ok: boolean
   title?: string | null
   index?: number
@@ -116,6 +116,24 @@ export interface TraceEvent {
   /** Year filter — search_papers. */
   year_from?: number | null
   year_to?: number | null
+  /** Figure number the agent showed — show_figure. */
+  figure?: number
+}
+
+/**
+ * A figure the agent pulled into its answer (via show_figure): a same-origin
+ * proxied image URL, the paper's own caption, and which paper/figure it is.
+ */
+export interface AnswerFigure {
+  /** Proxied image URL (`/api/figure_proxy?src=…`). */
+  image: string
+  caption: string
+  /** The source paper's title. */
+  title: string | null
+  /** The paper's [n] index on the graph. */
+  index?: number
+  /** The figure's 1-based number in that paper. */
+  figure?: number
 }
 
 /**
@@ -137,6 +155,8 @@ export interface AskHandlers {
   onTrace?: (t: TraceEvent) => void
   /** Papers the agent discovered, to merge into the live graph. */
   onNodes?: (d: Discovery) => void
+  /** A figure the agent attached to its answer, to render inline. */
+  onFigure?: (f: AnswerFigure) => void
   /** Drop streamed preamble that turned out to precede a tool call. */
   onDiscard?: () => void
   onDone?: () => void
@@ -175,6 +195,7 @@ export async function streamAsk(
     if (event === 'token') h.onToken((data as { text: string }).text)
     else if (event === 'trace') h.onTrace?.(data as TraceEvent)
     else if (event === 'nodes') h.onNodes?.(data as Discovery)
+    else if (event === 'figure') h.onFigure?.(data as AnswerFigure)
     else if (event === 'discard') h.onDiscard?.()
     else if (event === 'cited') h.onCited((data as { node_ids: string[] }).node_ids)
     else if (event === 'done') h.onDone?.()

@@ -5,6 +5,7 @@ import {
   streamAsk,
   streamAskSources,
   streamLecture,
+  type AnswerFigure,
   type Beat,
   type ChatMsg,
   type Discovery,
@@ -104,6 +105,18 @@ export default function Teacher({
   const [scopeIds, setScopeIds] = useState<string[]>([])
   const [scopeOpen, setScopeOpen] = useState(false)
   const scopeFiltering = scopeIds.length > 0 && scopeIds.length < libraryItems.length
+  // The answer figure opened full-screen in the lightbox (null = closed).
+  const [lightbox, setLightbox] = useState<AnswerFigure | null>(null)
+
+  // Close the lightbox on Escape while it's open.
+  useEffect(() => {
+    if (!lightbox) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightbox])
 
   /** Add/remove one source id from the checked set. */
   const toggleScope = (id: string) =>
@@ -302,6 +315,13 @@ export default function Teacher({
                   return next
                 }),
               onNodes: (d: Discovery) => onDiscover(d.nodes, d.edges),
+              onFigure: (f) =>
+                setChat((prev) => {
+                  const next = [...prev]
+                  const last = next[next.length - 1]
+                  next[next.length - 1] = { ...last, figures: [...(last.figures ?? []), f] }
+                  return next
+                }),
               onCited: (ids) => {
                 onHighlight(new Set(ids))
                 // Mark this answer active so its section shows the lit state, just
@@ -500,7 +520,17 @@ export default function Teacher({
             {m.trace && m.trace.length > 0 && (
               <div className="chat-trace">
                 {m.trace.map((t, j) =>
-                  t.action === 'search_sources' ? (
+                  t.action === 'figure' ? (
+                    <div key={j} className={`trace-line ${t.ok ? '' : 'fail'}`}>
+                      🖼 {t.ok ? 'Showed' : 'Tried'} <b>Figure {t.figure}</b>
+                      {t.title ? (
+                        <>
+                          {' '}
+                          of <b>{t.title}</b>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : t.action === 'search_sources' ? (
                     <div key={j} className={`trace-line ${t.ok ? '' : 'fail'}`}>
                       📚 {t.ok ? 'Searched your sources' : 'Tried your sources'}
                       {t.query ? (
@@ -545,6 +575,28 @@ export default function Teacher({
               (m.role === 'assistant' && asking && !m.trace?.length && !m.retrieve
                 ? '…'
                 : '')}
+            {m.figures && m.figures.length > 0 && (
+              <div className="chat-figs">
+                {m.figures.map((f, k) => (
+                  <figure key={k} className="chat-fig">
+                    <button
+                      type="button"
+                      className="chat-fig-btn"
+                      onClick={() => setLightbox(f)}
+                      title="Click to enlarge"
+                      aria-label="Enlarge figure"
+                    >
+                      <img src={f.image} alt={f.caption || 'Figure'} loading="lazy" />
+                    </button>
+                    <figcaption className="chat-fig-cap">
+                      <b>Figure {f.figure}</b>
+                      {f.title ? ` · ${f.title}` : ''}
+                      {f.caption ? ` — ${f.caption}` : ''}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            )}
             {m.cited && m.cited.length > 0 && (
               <div className="chat-cited">grounded in {m.cited.length} paper(s) ✦</div>
             )}
@@ -573,6 +625,31 @@ export default function Teacher({
           {asking ? '…' : 'Ask'}
         </button>
       </form>
+
+      {lightbox && (
+        <div
+          className="fig-lightbox"
+          onClick={() => setLightbox(null)}
+          role="dialog"
+          aria-label="Enlarged figure"
+        >
+          <button className="fig-lightbox-close" aria-label="Close">
+            ✕
+          </button>
+          <img
+            src={lightbox.image}
+            alt={lightbox.caption || 'Figure'}
+            onClick={(e) => e.stopPropagation()}
+          />
+          {(lightbox.caption || lightbox.figure) && (
+            <div className="fig-lightbox-cap" onClick={(e) => e.stopPropagation()}>
+              <b>Figure {lightbox.figure}</b>
+              {lightbox.title ? ` · ${lightbox.title}` : ''}
+              {lightbox.caption ? ` — ${lightbox.caption}` : ''}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   )
 }

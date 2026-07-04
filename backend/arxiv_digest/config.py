@@ -134,6 +134,10 @@ AGENT_MAX_SEARCHES = int(os.getenv("AGENT_MAX_SEARCHES", "3"))
 AGENT_SEARCH_LIMIT = int(os.getenv("AGENT_SEARCH_LIMIT", "8"))
 # Max characters of full text loaded per paper read (keeps the context bounded).
 FULLTEXT_MAX_CHARS = int(os.getenv("FULLTEXT_MAX_CHARS", "8000"))
+# Phase 3f — show_figure lets the agent attach a paper's own figure (from ar5iv)
+# to its answer to illustrate a point. Capped per question so an answer stays a
+# few illustrative figures, not a gallery.
+AGENT_MAX_FIGURES = int(os.getenv("AGENT_MAX_FIGURES", "3"))
 
 # Phase 3e — "How we got here" time travel. Before the history lecture narrates,
 # walk BACKWARD through references to surface a field's older roots, so the story

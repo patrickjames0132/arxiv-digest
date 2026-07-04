@@ -30,6 +30,7 @@ from .tools import (
     _run_read,
     _run_search,
     _run_search_sources,
+    _run_show_figure,
     _sources_context,
 )
 
@@ -71,6 +72,7 @@ def answer_agentic(
     Yields:
         ``("trace", {...})`` as it reads/expands/searches, ``("nodes", {...})``
         when expansion discovers papers not previously on the graph,
+        ``("figure", {...})`` when it attaches a paper's figure to the answer,
         ``("token", str)`` for the streamed answer, ``("discard", None)`` when
         streamed preamble must be dropped, and one final
         ``("cited", node_ids)`` — the papers it actually read, plus any it
@@ -116,6 +118,8 @@ def answer_agentic(
     searched: set = set()
     searches = {"left": config.AGENT_MAX_SEARCHES}
     source_searches = {"left": config.AGENT_MAX_SOURCE_SEARCHES}
+    figs_shown: set = set()
+    figures_budget = {"left": config.AGENT_MAX_FIGURES}
     cited: list[str] = []
     start = time.time()
 
@@ -185,6 +189,11 @@ def answer_agentic(
                 elif b.name == "search_sources":
                     content, trace = _run_search_sources(b, source_searches, scope=source_ids)
                     yield ("trace", trace)
+                elif b.name == "show_figure":
+                    content, trace, figure = _run_show_figure(b, numbered, figs_shown, figures_budget)
+                    yield ("trace", trace)
+                    if figure:
+                        yield ("figure", figure)
                 else:
                     content = f"Unknown tool {b.name!r}."
                 results.append({"type": "tool_result", "tool_use_id": b.id, "content": content})
