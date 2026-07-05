@@ -1,13 +1,17 @@
-"""Normalize a paper's Hugging Face Papers record into the detail-panel envelope.
+"""Normalize a paper's Hugging Face ``PaperInfo`` into the detail-panel envelope.
 
-HF's ``/api/papers`` response is sprawling and loosely-typed — ``linkedModels``
-/ ``linkedDatasets`` / ``linkedSpaces`` samples, their ``numTotal*`` counts,
-upvotes, and (when someone linked one) ``githubRepo``. We flatten that into a
-small ``{available, github, models, datasets, spaces, totals, …}`` envelope for
-the "code & artifacts" section of the detail panel and cache it in SQLite (same
-thin cache as graph snapshots and figures). Papers HF has never indexed 404 —
-``client.fetch_paper`` returns None for those, and that miss is cached too, so
-an unindexed paper costs one request a day, not one per panel open.
+``client.fetch_paper`` hands back a typed ``PaperInfo`` (or None for a miss); we
+flatten it into a small ``{available, github, models, datasets, spaces, totals,
+…}`` envelope for the "code & artifacts" section of the detail panel and cache
+it in SQLite (same thin cache as graph snapshots and figures). A miss (None) is
+cached too, so an unindexed paper costs one request a day, not one per panel
+open.
+
+Because ``PaperInfo`` and its ``ModelInfo`` / ``DatasetInfo`` / ``SpaceInfo``
+items are typed, the normalization here is plain attribute access — no
+defensive dict-digging. The only rough edge is ``num_total_spaces``: the
+library normalizes the models/datasets totals but leaves the spaces total under
+the raw ``numTotalSpaces`` key, so we look under both names.
 """
 
 from __future__ import annotations
@@ -47,23 +51,23 @@ def empty_result(available: bool = False) -> dict:
 
 
 def _as_int(value: Any) -> int:
-    """Coerce an HF count field (which may be absent or null) to an int.
+    """Coerce an optional HF count (``likes``/``downloads``/a total) to an int.
 
     Args:
-        value: The raw field value.
+        value: The attribute value — an int, or None when HF didn't report it.
 
     Returns:
-        The value as an int, or 0 when it isn't a number.
+        The value as an int, or 0 when it isn't one.
     """
     return value if isinstance(value, int) else 0
 
 
-def _repo_items(raw: Any, kind: str) -> list[dict]:
-    """Normalize an HF ``linked*`` list into detail-panel items.
+def _repo_items(linked: Any, kind: str) -> list[dict]:
+    """Normalize an HF ``linked_*`` list into detail-panel items.
 
     Args:
-        raw: The raw ``linkedModels`` / ``linkedDatasets`` / ``linkedSpaces``
-            value (defensively: may be missing or malformed).
+        linked: The ``PaperInfo.linked_models`` / ``linked_datasets`` /
+            ``linked_spaces`` value (a list of typed items, or None).
         kind: ``"model"`` | ``"dataset"`` | ``"space"`` — decides the URL
             prefix and which metadata fields matter.
 
@@ -73,24 +77,22 @@ def _repo_items(raw: Any, kind: str) -> list[dict]:
     """
     prefix = {"model": "", "dataset": "datasets/", "space": "spaces/"}[kind]
     items: list[dict] = []
-    for entry in raw if isinstance(raw, list) else []:
-        if not isinstance(entry, dict) or not entry.get("id"):
+    for entry in (linked or [])[:_MAX_ITEMS]:
+        repo_id = getattr(entry, "id", None)
+        if not repo_id:
             continue
-        repo_id = str(entry["id"])
         item: dict = {
             "id": repo_id,
             "url": f"{client.BASE_URL}/{prefix}{repo_id}",
-            "likes": _as_int(entry.get("likes")),
+            "likes": _as_int(getattr(entry, "likes", None)),
         }
         if kind in ("model", "dataset"):
-            item["downloads"] = _as_int(entry.get("downloads"))
+            item["downloads"] = _as_int(getattr(entry, "downloads", None))
         if kind == "model":
-            item["pipeline_tag"] = entry.get("pipeline_tag") or None
+            item["pipeline_tag"] = getattr(entry, "pipeline_tag", None) or None
         if kind == "space":
-            item["emoji"] = entry.get("emoji") or None
+            item["emoji"] = getattr(entry, "emoji", None) or None
         items.append(item)
-        if len(items) >= _MAX_ITEMS:
-            break
     return items
 
 
@@ -107,9 +109,7 @@ def get_code_links(arxiv_id: str, *, refresh: bool = False) -> dict:
         when HF has never indexed the paper; that miss is cached too.
 
     Raises:
-        urllib.error.HTTPError: On non-404 HF HTTP failures.
-        urllib.error.URLError: On network failures.
-        ValueError: When HF returns malformed JSON.
+        HfHubHTTPError: On non-404 HF HTTP failures.
     """
     arxiv_id = (arxiv_id or "").strip().split("v")[0]
     if not arxiv_id:
@@ -121,25 +121,30 @@ def get_code_links(arxiv_id: str, *, refresh: bool = False) -> dict:
         if cached is not None:
             return cached
 
-    raw = client.fetch_paper(arxiv_id)
-    if raw is None:
+    paper = client.fetch_paper(arxiv_id)
+    if paper is None:
         result = empty_result()
         cache.set(key, result)
         return result
 
     result = empty_result(available=True)
     result["paper_url"] = f"{client.BASE_URL}/papers/{urllib.parse.quote(arxiv_id, safe='')}"
-    result["upvotes"] = _as_int(raw.get("upvotes"))
-    github = raw.get("githubRepo")
+    result["upvotes"] = _as_int(paper.upvotes)
+    github = paper.github_repo
     if isinstance(github, str) and github.startswith("https://github.com/"):
-        result["github"] = {"url": github, "stars": _as_int(raw.get("githubStars"))}
-    result["models"] = _repo_items(raw.get("linkedModels"), "model")
-    result["datasets"] = _repo_items(raw.get("linkedDatasets"), "dataset")
-    result["spaces"] = _repo_items(raw.get("linkedSpaces"), "space")
+        result["github"] = {"url": github, "stars": _as_int(paper.github_stars)}
+    result["models"] = _repo_items(paper.linked_models, "model")
+    result["datasets"] = _repo_items(paper.linked_datasets, "dataset")
+    result["spaces"] = _repo_items(paper.linked_spaces, "space")
+    # The library normalizes the models/datasets totals but not spaces, which
+    # only survives under the raw camelCase key — hence the two-name lookup.
+    spaces_total = getattr(paper, "num_total_spaces", None)
+    if spaces_total is None:
+        spaces_total = getattr(paper, "numTotalSpaces", None)
     result["totals"] = {
-        "models": max(_as_int(raw.get("numTotalModels")), len(result["models"])),
-        "datasets": max(_as_int(raw.get("numTotalDatasets")), len(result["datasets"])),
-        "spaces": max(_as_int(raw.get("numTotalSpaces")), len(result["spaces"])),
+        "models": max(_as_int(getattr(paper, "num_total_models", None)), len(result["models"])),
+        "datasets": max(_as_int(getattr(paper, "num_total_datasets", None)), len(result["datasets"])),
+        "spaces": max(_as_int(spaces_total), len(result["spaces"])),
     }
     cache.set(key, result)
     return result
