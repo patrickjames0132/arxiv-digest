@@ -21,24 +21,27 @@ import logging
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Optional
+from typing import Any
 
-from .. import config
+from ..config import config
 from ..storage import cache
 
 log = logging.getLogger(__name__)
 
-HF_HOST = "huggingface.co"
-_HF_BASE = f"https://{HF_HOST}"
-_UA = {"User-Agent": "arxiv-atlas/1.1 (https://github.com/patrickjames0132/arxiv-digest)"}
+_HF_HOST = "huggingface.co"
+_HF_BASE = f"https://{_HF_HOST}"
+_USER_AGENT = {"User-Agent": "arxiv-atlas/1.1 (https://github.com/patrickjames0132/arxiv-digest)"}
 # Fresh papers accrete repos/models quickly, so re-check daily (matches the
 # graph snapshot TTL). Misses (paper not on HF) share the same TTL.
 _CODE_TTL = 60 * 60 * 24
 _MAX_ITEMS = 5
 
 
-def _empty(available: bool = False) -> dict:
+def empty_result(available: bool = False) -> dict:
     """The full response envelope with nothing in it.
+
+    Also the fallback a caller can reach for directly when a lookup fails
+    unexpectedly and still needs a well-shaped "no data" response to return.
 
     Args:
         available: Whether HF knows the paper at all.
@@ -59,7 +62,7 @@ def _empty(available: bool = False) -> dict:
     }
 
 
-def _fetch_paper(arxiv_id: str) -> Optional[dict]:
+def _fetch_paper(arxiv_id: str) -> dict | None:
     """Fetch the raw HF Papers record for an arXiv id.
 
     Args:
@@ -75,13 +78,13 @@ def _fetch_paper(arxiv_id: str) -> Optional[dict]:
         ValueError: When the response isn't valid JSON.
     """
     url = f"{_HF_BASE}/api/papers/{urllib.parse.quote(arxiv_id, safe='')}"
-    req = urllib.request.Request(url, headers=_UA)
+    request = urllib.request.Request(url, headers=_USER_AGENT)
     try:
-        with urllib.request.urlopen(req, timeout=config.S2_TIMEOUT) as resp:
-            data = json.loads(resp.read().decode("utf-8", "replace"))
+        with urllib.request.urlopen(request, timeout=config.s2.timeout) as response:
+            data = json.loads(response.read().decode("utf-8", "replace"))
             return data if isinstance(data, dict) else None
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
             return None
         raise
 
@@ -153,7 +156,7 @@ def get_code_links(arxiv_id: str, *, refresh: bool = False) -> dict:
     """
     arxiv_id = (arxiv_id or "").strip().split("v")[0]
     if not arxiv_id:
-        return _empty()
+        return empty_result()
 
     key = f"hf_code:{arxiv_id}"
     if not refresh:
@@ -163,11 +166,11 @@ def get_code_links(arxiv_id: str, *, refresh: bool = False) -> dict:
 
     raw = _fetch_paper(arxiv_id)
     if raw is None:
-        result = _empty()
+        result = empty_result()
         cache.set(key, result)
         return result
 
-    result = _empty(available=True)
+    result = empty_result(available=True)
     result["paper_url"] = f"{_HF_BASE}/papers/{urllib.parse.quote(arxiv_id, safe='')}"
     result["upvotes"] = _as_int(raw.get("upvotes"))
     github = raw.get("githubRepo")
