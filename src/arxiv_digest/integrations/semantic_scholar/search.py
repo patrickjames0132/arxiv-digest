@@ -34,7 +34,11 @@ def _year_range(year_from: int | None, year_to: int | None) -> str | None:
 
 
 def search_papers(
-    query: str, limit: int, year_from: int | None = None, year_to: int | None = None
+    query: str,
+    limit: int,
+    year_from: int | None = None,
+    year_to: int | None = None,
+    fields_of_study: list[str] | None = None,
 ) -> list[dict]:
     """Relevance-search S2's whole corpus for papers matching a free-text query.
 
@@ -43,6 +47,9 @@ def search_papers(
         limit: Maximum hits to return.
         year_from: Earliest publication year (inclusive), or None.
         year_to: Latest publication year (inclusive), or None.
+        fields_of_study: S2 fields of study to restrict to (a paper matches when
+            it carries any of them), or None/empty for no restriction. Values
+            must be S2's own field names (see ``taxonomy.fields``).
 
     Returns:
         A list of ``{"node": <node dict>}`` entries, in the same shape as the
@@ -55,6 +62,8 @@ def search_papers(
     year = _year_range(year_from, year_to)
     if year:
         params["year"] = year
+    if fields_of_study:
+        params["fieldsOfStudy"] = ",".join(fields_of_study)
     url = f"{config.s2.graph_url}/paper/search?{urllib.parse.urlencode(params)}"
     data = client.request(url)
     papers = (data.get("data") or []) if isinstance(data, dict) else []

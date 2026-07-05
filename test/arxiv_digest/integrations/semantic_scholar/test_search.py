@@ -34,3 +34,23 @@ def test_search_papers_url_carries_year_filter(monkeypatch):
     (hit,) = search.search_papers("state space models", limit=8, year_from=2024)
     assert "year=2024-" in urls[0] and "state+space+models" in urls[0]
     assert hit["node"]["id"] == "h1"
+
+
+def test_search_papers_url_carries_fields_of_study_filter(monkeypatch):
+    urls = []
+
+    def fake_request(url, **kw):
+        urls.append(url)
+        return {"data": []}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    search.search_papers("transformers", limit=5, fields_of_study=["Computer Science", "Mathematics"])
+    # Comma-joined and URL-encoded (space -> +, comma -> %2C).
+    assert "fieldsOfStudy=Computer+Science%2CMathematics" in urls[0]
+
+
+def test_search_papers_omits_fields_filter_when_empty(monkeypatch):
+    urls = []
+    monkeypatch.setattr(client, "request", lambda url, **kw: urls.append(url) or {"data": []})
+    search.search_papers("transformers", limit=5, fields_of_study=[])
+    assert "fieldsOfStudy" not in urls[0]

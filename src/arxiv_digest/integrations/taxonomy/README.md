@@ -1,73 +1,80 @@
 # `integrations.taxonomy`
 
-The full arXiv category taxonomy — arXiv-specific enrichment for arXiv papers.
+The app's controlled subject vocabularies — **two**, at two granularities:
+
+- **arXiv categories** — the ~155 fine-grained arXiv codes (`cs.LG`, `math.PR`,
+  …) grouped into 8 areas, each a `{code, name}` pair. arXiv-specific.
+- **S2 fields of study** — Semantic Scholar's own much coarser ~20 fields
+  (`Computer Science`, `Mathematics`, …).
 
 ## Why it exists
 
-The ~155 arXiv category codes (`cs.LG`, `math.PR`, …) grouped into 8 top-level
-areas, each a `{code, name}` pair (`cs.LG` → "Machine Learning"). Sourced once
-from <https://arxiv.org/category_taxonomy> and bundled as `taxonomy.json`.
+Two different consumers want two different vocabularies:
 
-It's kept deliberately as **arXiv-specific enrichment for arXiv papers** — the
-same call we made for `ar5iv`. Semantic Scholar (our paper backbone) carries
-only its own much coarser `fieldsOfStudy` (~20 fields), so arXiv's fine-grained
-categories are something S2 can't give us. This package describes *what*
-categories exist; a given paper's *own* categories come from arXiv metadata,
-not S2.
+- The **S2 seed-search filter** needs S2's fields of study — S2's
+  `/paper/search` filters on exactly these (`fieldsOfStudy`). This is the live,
+  in-use vocabulary now that search runs on Semantic Scholar.
+- The **detail panel** (planned) will label an arXiv paper's own category tags
+  (`cs.LG` → "Machine Learning") — for arXiv papers only, the same
+  arXiv-specific enrichment spirit as the `arxiv`/ar5iv package. A paper's *own*
+  categories come from arXiv metadata, not S2; this package only describes *what*
+  categories exist.
+
+Keeping both here makes this the one home for "controlled subject vocabularies,"
+rather than scattering them.
 
 ## How it's structured
 
-The odd one out among the integrations — static bundled data, so no HTTP client
-and no cache table. Still split into a package the same transport-vs-domain way
-as its neighbours, so they all read alike:
+The odd one out among the integrations — static/inline data, so no HTTP client
+and no cache table. Split into a package like its neighbours so they read alike:
 
 ```
-loader.py     — loads + memoizes the bundled taxonomy.json (data access)
+loader.py     — loads + memoizes the bundled taxonomy.json (arXiv data access)
      ↓
-categories.py — the query API: groups(), valid_codes()
+categories.py — arXiv query API: groups(), valid_codes()
+fields.py     — S2 fields of study: all_fields(), valid_fields()  (inline list)
 ```
 
 - **`loader.py`** — `data()`, an `@lru_cache`'d parse of the bundled
-  `taxonomy.json` (read once per process). Public within the package because
-  `categories` queries it across the module boundary — the file-load analogue
-  of the HTTP packages' `client.fetch_*`.
-- **`categories.py`** — `groups()` (the areas-with-categories tree, for
-  populating a picker or labelling a paper's tags) and `valid_codes()` (an
-  `@lru_cache`'d `frozenset` of every code, for validating submitted filters).
+  `taxonomy.json` (arXiv). Public within the package because `categories`
+  queries it across the module boundary — the file-load analogue of the HTTP
+  packages' `client.fetch_*`.
+- **`categories.py`** — `groups()` (the arXiv areas-with-categories tree) and
+  `valid_codes()` (an `@lru_cache`'d `frozenset` of every code).
+- **`fields.py`** — `all_fields()` (S2's ~20 fields, alphabetical) and
+  `valid_fields()`. A small fixed vocabulary, inlined as a tuple — no bundled
+  JSON, since each value is already its own human-readable label. (`all_fields`,
+  not `fields`, so it doesn't shadow the `fields` module when re-exported.)
 
-`__init__.py` re-exports `groups` and `valid_codes`.
+`__init__.py` re-exports `groups`, `valid_codes`, `all_fields`, `valid_fields`.
 
 ## Design decisions worth knowing
 
-- **Static bundled data, not a runtime fetch.** The taxonomy changes maybe once
-  a year; shipping it as a file means no network call and no cache TTL to
-  reason about. That's why this package has a `loader` where its neighbours
-  have a `client`.
-- **No `code → name` lookup yet.** The API answers "what areas exist"
-  (`groups`) and "is this code real" (`valid_codes`), but not "what's the label
-  for `cs.LG`". The planned detail-panel use (below) needs that; it'll be added
-  when that feature is built, not speculatively now.
-- **The original module's "DORMANT / no importers" docstring was stale** and
-  was dropped on port — `routes/search.py` imports it (traced below).
+- **arXiv data is a bundled file; S2 data is inline.** The arXiv taxonomy is 155
+  code+name pairs (worth a generated JSON); the S2 fields are ~20 plain strings
+  (a tuple is clearer than a file). Different shapes, different treatment.
+- **No `code → name` lookup for arXiv yet.** The API answers "what areas exist"
+  and "is this code real", but not "what's the label for `cs.LG`". The planned
+  detail-panel use needs that; it'll be added with that feature, not now.
+- **S2 field casing is Title Case** (`"Computer Science"`), matching what S2
+  returns on paper objects and accepts in the `fieldsOfStudy` filter. If it ever
+  differs live, `S2_FIELDS` is the one tuple to edit.
 
-## Who uses it, and how/why (traced, not yet ported)
+## Who uses it, and how/why (traced)
 
-- **`routes/search.py`** — `GET /api/taxonomy` returns `groups()` to the
-  frontend's arXiv category picker; seed search validates submitted codes
-  against `valid_codes()`. **Note:** this consumer is on its way out — the
-  category picker is arXiv-specific, and the search bar is migrating to
-  Semantic Scholar (Phase 3), which doesn't use arXiv codes. So this *current*
-  use retires with the arXiv search path.
-- **Detail panel (planned, not built)** — the going-forward reason to keep this
-  package: labelling an arXiv paper's own category tags (`cs.LG` →
-  "Machine Learning") in the detail window, for arXiv papers only. Needs the
-  `code → name` lookup above, plus the paper's categories from arXiv metadata
-  (S2 doesn't carry them).
+- **`services/search.py`** (ported) — `live_search` forwards an S2 fields filter
+  to `s2.search_papers` (`fieldsOfStudy`); its values come from this package.
+- **`routes/search.py`** (not yet ported) — `GET /api/taxonomy` serves a picker,
+  and seed search validates a submitted filter against `valid_fields()` (S2
+  fields) — the arXiv `valid_codes()` path retires with the arXiv search bar.
+- **Detail panel (planned, not built)** — `groups()` / a future `code → name`
+  lookup to label an arXiv paper's own category tags in the detail window.
 
 ## Testing
 
-`test_loader.py` — `data()` returns the parsed document and is memoized.
-`test_categories.py` — 8 top-level areas, a known code carries its expected
-label (`cs.LG` → "Machine Learning"), `valid_codes()` covers exactly the codes
-in `groups()`, and the `lru_cache` returns the same object. All against the real
-bundled `taxonomy.json` (static data, so no fixture or network).
+`test_loader.py` — `data()` returns the parsed arXiv document and is memoized.
+`test_categories.py` — 8 arXiv areas, a known code's label (`cs.LG` →
+"Machine Learning"), `valid_codes()` covers exactly the codes in `groups()`,
+memoization. `test_fields.py` — the S2 vocabulary is the expected 23 fields in
+alphabetical order, and `valid_fields()` rejects junk (and arXiv codes). All
+offline (static/inline data).
