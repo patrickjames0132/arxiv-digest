@@ -59,6 +59,12 @@ check_untyped_defs = true
 # running pytest outside a synced uv env.
 testpaths = ["test"]
 pythonpath = ["src"]
+# Test dirs have no __init__.py, so as source packages keep splitting into
+# submodules (semantic_scholar/search.py, arxiv_client/search.py, ...), two
+# test files can end up sharing a basename in different directories.
+# importlib import mode resolves each by its full path instead of by
+# basename, so that's a non-issue rather than a collision to avoid by hand.
+addopts = ["--import-mode=importlib"]
 
 [tool.ruff]
 line-length = 100

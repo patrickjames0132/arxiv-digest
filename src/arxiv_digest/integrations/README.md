@@ -6,11 +6,12 @@ the `services` package (Phase 3) composes them into domain logic.
 
 - **`semantic_scholar/`** — the S2 Academic Graph + Recommendations client
   (the paper-data backbone). Its own package; see its own README.
-- **`arxiv_client.py`** — seed search against arXiv itself. See below.
+- **`arxiv_client/`** — seed search against arXiv itself. Its own package
+  too; see below.
 - **`fulltext.py`, `figures.py`, `huggingface.py`, `taxonomy.py`** — not yet
   ported (rest of Phase 2).
 
-## `arxiv_client.py`
+## `arxiv_client/`
 
 ### Why it exists
 
@@ -23,33 +24,49 @@ result, its arXiv id gets handed to `semantic_scholar` (as `ARXIV:<id>`) to
 actually build the graph.
 
 Because these are two different services, they normalize to two different
-shapes: `arxiv_client._to_paper()` produces a lighter dict (no citation
-count, no `tldr` — arXiv doesn't have those) than
+shapes: `arxiv_client.papers.to_paper()` produces a lighter dict (no
+citation count, no `tldr` — arXiv doesn't have those) than
 `semantic_scholar.nodes.node()`. A search hit and a graph node look
 different on purpose.
 
 ### How it's structured
 
-One file, four small pure-logic helpers plus the public `search_arxiv()`:
+A package (not a flat module), split by concern the same way as
+`semantic_scholar/`:
 
-- **`ID_RE`** — detects whether the user's input is a bare arXiv id or a
-  pasted arxiv.org URL (any of new-style `2406.12345`, old-style
-  `hep-th/9901001`, either with a version suffix, optionally wrapped in an
-  `http(s)://arxiv.org/abs/` or `/pdf/` URL). If it matches, `search_arxiv`
-  fetches that exact paper instead of running a keyword search — an
-  explicit id always wins over search filters. **Not underscore-prefixed**
-  even though it's a "detail" — `services/graph.py` and `routes/graph.py`
-  both reach into it directly to detect a pasted id outside of search
-  entirely (e.g. re-seeding the graph), so it's genuinely shared, not
-  single-file-private.
-- **`_short_id()`** — strips the version suffix (`v2`) so the same paper
-  always keys identically regardless of which version arXiv returned.
-- **`_to_paper()`** — normalizes an `arxiv.Result` into the app's paper dict.
-- **`_date_clause()` / `_category_clause()`** — build arXiv's query-syntax
-  fragments for a year range and a category filter, respectively. Both
-  private — only `search_arxiv` calls them.
-- **`search_arxiv()`** — the public entry point. Detects an id vs. a
-  keyword query, and for keyword queries builds a boosted query (see below).
+```
+clauses.py  — id detection (ID_RE) + date-range/category filter clauses
+     ↓
+papers.py   — normalizing an arxiv.Result into the app's paper dict
+     ↓
+search.py   — the shared arxiv.Client + the public entry point, search_arxiv
+```
+
+- **`clauses.py`** — **`ID_RE`** detects whether the user's input is a bare
+  arXiv id or a pasted arxiv.org URL (any of new-style `2406.12345`,
+  old-style `hep-th/9901001`, either with a version suffix, optionally
+  wrapped in an `http(s)://arxiv.org/abs/` or `/pdf/` URL). If it matches,
+  `search_arxiv` fetches that exact paper instead of running a keyword
+  search — an explicit id always wins over search filters. **Not
+  underscore-prefixed** even though it's a "detail" — `services/graph.py`
+  and `routes/graph.py` both reach into it directly to detect a pasted id
+  outside of search entirely (e.g. re-seeding the graph), so it's genuinely
+  shared, not single-file-private. `date_clause()`/`category_clause()`
+  build arXiv's query-syntax fragments for a year range and a category
+  filter. The module is named `clauses`, not `query` — `search_arxiv`'s own
+  parameter is named `query` (the search string), and a module of that name
+  would shadow it right where both are needed.
+- **`papers.py`** — `to_paper()` normalizes an `arxiv.Result` into the app's
+  paper dict; `_short_id()` (private — only `to_paper` calls it) strips the
+  version suffix so the same paper always keys identically.
+- **`search.py`** — the shared `arxiv.Client` (`_client`, private — only
+  this file touches it) and the public entry point, `search_arxiv()`, which
+  detects an id vs. a keyword query and, for keyword queries, builds a
+  boosted query (see below).
+
+`__init__.py` re-exports `search_arxiv` and `ID_RE`, so
+`from ..integrations import arxiv_client` and `arxiv_client.search_arxiv(...)`
+/ `arxiv_client.ID_RE` work exactly as if this were still one file.
 
 ### Design decisions worth knowing
 
@@ -78,8 +95,16 @@ One file, four small pure-logic helpers plus the public `search_arxiv()`:
 
 ### Testing
 
-`test_arxiv_client.py` — 21 tests. `arxiv.Result` objects are built for
+Split to mirror the source layout: `test_papers.py`, `test_clauses.py`,
+`test_search.py` — 21 tests total. `arxiv.Result` objects are built for
 real (the installed package's actual class takes plain keyword args — no
 need for hand-rolled fakes); the shared `_client` is swapped for a stub
 that records every `arxiv.Search` it's given, so query construction can be
 asserted on directly with no network.
+
+(One project-wide fix that came out of this split: two test files across
+different packages ended up sharing the basename `test_search.py`. With no
+`__init__.py` in the test tree, pytest's default import mode collided on
+that. Fixed once, project-wide, by switching pytest to
+`--import-mode=importlib` in `pyproject.toml` — it resolves test modules by
+full path instead of basename, so this can't recur as more packages split.)
