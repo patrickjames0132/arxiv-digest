@@ -1,0 +1,71 @@
+[project]
+name = "arxiv-digest"
+version = "1.23.0"
+description = "arXiv Atlas — an interactive citation/similarity graph explorer with an AI teacher that narrates a field's history over the graph."
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.0",
+    "flask-cors>=4.0",
+    "anthropic>=0.40",
+    "arxiv>=2.1",
+    "pydantic>=2.7",
+    "sentence-transformers>=3.0",
+    "sqlite-vec>=0.1.6",
+    "pymupdf>=1.24",
+    "click>=8.1",
+]
+
+[project.scripts]
+arxiv-atlas = "arxiv_digest.cli:cli"
+
+# Standard src-layout: the package is installed (editable, by uv) from src/, so
+# `import arxiv_digest` works everywhere — tests, nox sessions, the console
+# script — with no sys.path shims.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/arxiv_digest"]
+
+[dependency-groups]
+dev = [
+    "nox>=2024.4",
+    "mypy>=1.11",
+    "pytest>=8.0",
+    "pre-commit>=3.7",
+]
+
+# --- quality tooling (all driven by `uv run nox`) ---
+
+[tool.mypy]
+files = ["src/arxiv_digest"]
+mypy_path = "src"
+# 3.12+: our floor is 3.11, but installed third-party stubs (numpy, pulled in by
+# sentence-transformers) use 3.12 `type` syntax that mypy won't parse under an
+# older target. We run on 3.14, so this is honest.
+python_version = "3.12"
+ignore_missing_imports = true
+namespace_packages = true
+explicit_package_bases = true
+# The 2026-07-04 baseline burndown removed every disabled error code (the four
+# lenient-era codes are gone) and turned on untyped-body checking. Keep it that
+# way: new code should type-check clean, no new disable_error_code entries.
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+# Tests live in test/, mirroring src/arxiv_digest/. The package itself comes
+# from the editable install (src-layout); pythonpath is belt-and-braces for
+# running pytest outside a synced uv env.
+testpaths = ["test"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# pyflakes (F), import sorting (I), and pycodestyle (E) minus line-length (E501,
+# left to the formatter's judgement).
+select = ["E", "F", "I"]
+ignore = ["E501"]

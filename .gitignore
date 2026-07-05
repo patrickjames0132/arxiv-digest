@@ -1,0 +1,31 @@
+# Secrets & credentials — NEVER commit these (config.json holds your API keys)
+config.json
+
+# Data
+data/
+*.db
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.uv/
+
+# Tooling caches (uv run nox)
+.nox/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Personal brainstorm inbox (filed into OnePager, then cleared)
+todos.md
