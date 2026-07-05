@@ -5,6 +5,8 @@
 * ``arxiv_client``     — arXiv seed search (find the paper to map).
 * ``fulltext``         — full paper text from ar5iv for the Q&A agent.
 * ``figures``          — paper figures + captions from ar5iv.
+* ``huggingface``      — code & artifact links (GitHub repo, models/datasets/
+  Spaces) from Hugging Face Papers.
 * ``taxonomy``         — the arXiv category taxonomy (dormant; kept for future
   category-scoped features).
 
