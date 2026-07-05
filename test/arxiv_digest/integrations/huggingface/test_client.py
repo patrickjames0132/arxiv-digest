@@ -1,69 +1,51 @@
-"""client: the single HF Papers HTTP fetch (fetch_paper).
+"""client: the huggingface_hub paper_info wrapper (fetch_paper).
 
-urlopen is faked directly — no network. Covers JSON decode, 404-as-None,
-non-404 reraise, and slash-id path encoding.
+The HfApi handle is faked directly — no network. Covers the happy path and the
+404-as-None / non-404-reraise translation that code_links relies on.
 """
 
 from __future__ import annotations
 
-import io
-import json
-import urllib.error
-
 import pytest
+import requests
+from huggingface_hub.utils import HfHubHTTPError
 
 from arxiv_digest.integrations.huggingface import client
 
 
-class _FakeResponse(io.BytesIO):
-    def __enter__(self):
-        return self
+class _FakeApi:
+    """Stand-in for HfApi: returns a canned PaperInfo or raises."""
 
-    def __exit__(self, *exc):
-        return False
+    def __init__(self, *, result=None, exc=None):
+        self._result = result
+        self._exc = exc
+        self.calls: list[str] = []
+
+    def paper_info(self, arxiv_id):
+        self.calls.append(arxiv_id)
+        if self._exc is not None:
+            raise self._exc
+        return self._result
 
 
-def test_fetch_paper_returns_parsed_json(monkeypatch):
-    body = json.dumps({"id": "1706.03762", "upvotes": 127}).encode()
-    monkeypatch.setattr(
-        "urllib.request.urlopen", lambda request, timeout=None: _FakeResponse(body)
-    )
-    assert client.fetch_paper("1706.03762") == {"id": "1706.03762", "upvotes": 127}
+def _http_error(status: int) -> HfHubHTTPError:
+    response = requests.Response()
+    response.status_code = status
+    return HfHubHTTPError(f"HTTP {status}", response=response)
 
 
-def test_fetch_paper_returns_none_when_body_is_not_an_object(monkeypatch):
-    # HF should return an object; a bare array/string is treated as "no record".
-    monkeypatch.setattr(
-        "urllib.request.urlopen", lambda request, timeout=None: _FakeResponse(b"[1, 2, 3]")
-    )
-    assert client.fetch_paper("1706.03762") is None
+def test_fetch_paper_returns_the_paper_info(monkeypatch):
+    sentinel = object()
+    monkeypatch.setattr(client, "_api", _FakeApi(result=sentinel))
+    assert client.fetch_paper("1706.03762") is sentinel
 
 
 def test_fetch_paper_returns_none_on_404(monkeypatch):
-    def raise_404(request, timeout=None):
-        raise urllib.error.HTTPError("url", 404, "Not Found", {}, None)
-
-    monkeypatch.setattr("urllib.request.urlopen", raise_404)
-    assert client.fetch_paper("2301.00001") is None
+    monkeypatch.setattr(client, "_api", _FakeApi(exc=_http_error(404)))
+    assert client.fetch_paper("0000.00000") is None
 
 
 def test_fetch_paper_reraises_non_404(monkeypatch):
-    def raise_500(request, timeout=None):
-        raise urllib.error.HTTPError("url", 500, "Server Error", {}, None)
-
-    monkeypatch.setattr("urllib.request.urlopen", raise_500)
-    with pytest.raises(urllib.error.HTTPError):
-        client.fetch_paper("2301.00001")
-
-
-def test_fetch_paper_path_encodes_a_slash_id(monkeypatch):
-    urls = []
-
-    def fake_urlopen(request, timeout=None):
-        urls.append(request.full_url)
-        return _FakeResponse(b"{}")
-
-    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
-    client.fetch_paper("math/0211159")
-    # safe="" encodes the slash so it stays inside the {arxiv_id} path segment.
-    assert urls[0] == f"{client.BASE_URL}/api/papers/math%2F0211159"
+    monkeypatch.setattr(client, "_api", _FakeApi(exc=_http_error(500)))
+    with pytest.raises(HfHubHTTPError):
+        client.fetch_paper("1706.03762")
