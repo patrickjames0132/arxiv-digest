@@ -117,6 +117,24 @@ on S2 and we fall back to the lexical search we'd have run anyway — the
 failure mode is "no better than today," never worse. Post-cutoff papers
 degrade to plain expansion the same way.
 
+## `sessions.py` — saved workspaces
+
+| Endpoint | Job |
+| --- | --- |
+| `GET /api/sessions` | list saved sessions (metadata only, newest first) |
+| `POST /api/sessions` | save the workspace (new, or overwrite by `id`) |
+| `GET /api/sessions/<id>` | the full record, to restore |
+| `DELETE /api/sessions/<id>` | delete — `{deleted: bool}`, idempotent |
+
+Thin CRUD over `storage/sessions.py`. The workspace blob (`{name, seed,
+layout, nodes, edges, chat, beats, hist_trace}`) is **frontend-owned and
+deliberately unvalidated** beyond `nodes` being a non-empty list — the store
+treats it as opaque JSON, and validating its shape here would create a
+second place that has to track the frontend's workspace format. Delete
+returns `{deleted: false}` rather than 404 (idempotent); a store failure is
+a canned 500 with details in the log. Phase 6 note: a restored `hist_trace`
+now replays typed `BackfillTrace` shapes.
+
 ## Who uses it, and how/why
 
 The React frontend (Phase 6) is the only caller: the search/seed flow hits
