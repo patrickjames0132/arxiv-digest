@@ -1,8 +1,13 @@
-"""Bring-your-own sources routes (Phase 3d): the user's local semantic library.
+"""Bring-your-own sources routes: the user's local semantic library.
 
 GET  /api/sources       -> list the user's local semantic library
 POST /api/sources       -> ingest a PDF upload or a {url} into the library
 DEL  /api/sources/<id>  -> remove a source from the library
+
+Two tiers of ingestion error, on purpose: ``SourceError`` text is written
+for users by the ingestion layer ("no extractable text — is it scanned?")
+and goes to the client verbatim as a 400; anything unexpected is a canned
+500 with details in the log only.
 """
 
 from __future__ import annotations
@@ -14,7 +19,7 @@ from pathlib import Path
 from flask import Blueprint, Response, current_app, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from ..library import sources as sources_service
+from ..services import sources as sources_service
 
 bp = Blueprint("sources", __name__)
 
@@ -49,7 +54,7 @@ def api_sources_add() -> ResponseReturnValue:
     Returns:
         The created source record as JSON on success; ``{error}`` with HTTP
         400 for user-facing ingestion problems (no file/url, scanned PDF,
-        unreachable URL), or 500 for unexpected failures.
+        unreachable URL), or a canned 500 for unexpected failures.
     """
     title = None
     try:
@@ -63,7 +68,9 @@ def api_sources_add() -> ResponseReturnValue:
             os.close(fd)
             try:
                 upload.save(tmp_path)
-                src = sources_service.ingest_pdf(tmp_path, title=title or Path(upload.filename).stem)
+                src = sources_service.ingest_pdf(
+                    tmp_path, title=title or Path(upload.filename).stem
+                )
             finally:
                 try:
                     os.remove(tmp_path)
@@ -77,10 +84,10 @@ def api_sources_add() -> ResponseReturnValue:
                 return jsonify({"error": "provide a PDF file or a url"}), 400
             src = sources_service.ingest_url(url, title=title)
     except sources_service.SourceError as exc:
-        return jsonify({"error": str(exc)}), 400
-    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400  # user-facing by design
+    except Exception:
         current_app.logger.exception("source ingest failed")
-        return jsonify({"error": str(exc)}), 500
+        return jsonify({"error": "Could not ingest that source."}), 500
     return jsonify(src)
 
 
@@ -92,6 +99,7 @@ def api_sources_delete(source_id: str) -> Response:
         source_id: The source's id.
 
     Returns:
-        JSON ``{deleted: bool}`` — False when no such source existed.
+        JSON ``{deleted: bool}`` — False when no such source existed
+        (delete is idempotent, not a 404).
     """
     return jsonify({"deleted": sources_service.delete_source(source_id)})
