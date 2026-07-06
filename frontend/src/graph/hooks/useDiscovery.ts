@@ -11,8 +11,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import type { GraphEdge, GraphNode } from '../api'
-import type { Base, VNode } from './model'
+import type { GraphEdge, GraphNode } from '../../api'
+import type { Base, VNode } from '../model'
 
 /** Arguments for {@link useDiscovery}. */
 export interface UseDiscoveryArgs {

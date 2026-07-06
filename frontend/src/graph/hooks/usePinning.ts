@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import type { Base, VNode } from './model'
+import type { Base, VNode } from '../model'
 
 /** Arguments for {@link usePinning}. */
 export interface UsePinningArgs {
