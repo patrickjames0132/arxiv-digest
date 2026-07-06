@@ -47,10 +47,8 @@
     },
     "agents": [
       {
-        "id": "teaching_assistant",
-        "model": "anthropic:claude-sonnet-4-6",
-        "system_prompt": "",
-        "tools": [],
+        "id": "query_analyst",
+        "model": "anthropic:claude-haiku-4-5",
         "extras": {}
       }
     ]

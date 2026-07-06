@@ -32,13 +32,16 @@ is how you find one, two complementary ways:
 `s2.search_papers`, and unwraps S2's `{"node": …}` into bare node dicts (so live
 and local search return the same shape).
 
-`_expand_query` is currently a **passthrough with a purpose**: it's the seam for
-Claude-based query expansion, deferred to Phase 4 (it needs the LLM agent
-infrastructure). The problem it will solve: S2 search is *lexical*, so a query
-like "DQN" misses the seminal papers that never spell out the acronym in their
-title/abstract. Expansion ("DQN" → "DQN deep Q-network deep Q-learning") is the
-fix; it'll be wired to a `config.llm.agents` agent then. The seam exists now so
-the call site doesn't move when that lands.
+`_expand_query` delegates to the **query analyst agent**
+(`agents.query_analyst.expand_query`). The problem it solves: S2 search is
+*lexical*, so a query like "DQN" misses the seminal papers that never spell
+out the acronym in their title/abstract; expansion ("DQN" → "DQN deep
+Q-network deep Q-learning") lets the search meet them halfway. The analyst
+**degrades to a passthrough on any failure** (no key, network down, rate
+limit), so search never breaks because the LLM hiccuped — see
+`agents/query_analyst/README.md`. (Historical note: this seam spent Phase 3
+as a documented passthrough precisely so the call site wouldn't move when
+the agent landed — and it didn't.)
 
 ## `local_search`, step by step
 

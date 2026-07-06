@@ -13,6 +13,7 @@ dependencies = [
     "pymupdf>=1.24",
     "click>=8.1",
     "huggingface-hub>=0.28",
+    "pydantic-ai-slim[anthropic]>=2.5.0",
 ]
 
 [project.scripts]

@@ -5,8 +5,9 @@ focused **sub-agents**, every agent defined by Pydantic objects (PydanticAI
 `Agent`s wired from `config.llm.agents` entries) instead of the old repo's
 hand-rolled Anthropic SDK loops.
 
-**Status: shared infrastructure built** (`events.py`, `traversal.py`, the
-`skills/` drafts); the sub-agent packages land next, one at a time.
+**Status: shared infrastructure built** (`events.py`, `traversal.py`,
+`factory.py`, the `skills/` drafts) **plus the first agent,
+`query_analyst`**; the remaining sub-agent packages land one at a time.
 
 ## `events.py` — the typed event stream
 
@@ -96,6 +97,18 @@ Design points worth knowing:
   failed hop means (skip the ancestor, tell the model, spend no budget) is
   the callers' job, not the plumbing's.
 
+## `factory.py` — config entries → live model objects
+
+Each sub-agent's `main.py` calls `factory.build_model(<its AGENT_ID>)` to
+get the model its `config.llm.agents` entry names, and hands it to its
+`pydantic_ai.Agent`. This is the one place credentials meet PydanticAI —
+and it's deliberate that the entry's `"provider:model"` string is only ever
+*parsed* here, never passed to PydanticAI whole: the bare string shorthand
+would pull the API key from environment variables, and this app's config
+rule is no env vars — the key comes from `config.llm.providers`, passed
+explicitly to the provider. `agent_entry(id)` (the lookup half) is also how
+an agent reads its own `extras` knobs.
+
 ## Decisions log (locked before design)
 
 1. **Hybrid orchestration with intent hints.** Routes always call the
@@ -124,6 +137,7 @@ agents/
   README.md          ← this document
   events.py          ← shared: the typed event stream every workflow emits
   traversal.py       ← shared: day-cached S2 hops + free-text search (plumbing)
+  factory.py         ← shared: config.llm entry -> live PydanticAI model
   skills/            ← shared: skills.md files any sub-agent's config may load
     numbered-papers.md      the index-not-id grounding protocol
     teaching-voice.md       the "sharp, friendly teacher" persona rules
@@ -255,20 +269,20 @@ Graph-free RAG over the user's own uploaded sources.
   engaging the model.
 - **Skills:** `teaching-voice`, `citation-discipline`.
 
-### `query_analyst` — seed-search query expansion
+### `query_analyst` — seed-search query expansion *(built)*
 
 A one-shot micro-agent, new in this rewrite (the old repo left a seam for
-it).
+it). See its own README for the full story.
 
 - **Input:** the raw search query from the seed-search box.
-- **Output:** structured `{expanded_query}` — acronyms and jargon expanded
-  ("DQN" → "DQN deep Q-network deep Q-learning") so S2's lexical search can
-  find seminal papers that never spell the acronym out.
+- **Output:** structured `Expansion.expanded_query` — acronyms and jargon
+  expanded ("DQN" → "DQN deep Q-network deep Q-learning") so S2's lexical
+  search can find seminal papers that never spell the acronym out.
 - **Tools:** none. **Skills:** none.
 - **Note:** invoked from `services/search`'s `_expand_query` seam, *not*
   through the orchestrator — it's infrastructure for search, not a teacher
-  workflow. It must degrade to a passthrough on any failure: search can
-  never break because the LLM hiccuped.
+  workflow. It degrades to a passthrough on any failure: search can never
+  break because the LLM hiccuped.
 
 ## Testing
 

@@ -2,12 +2,13 @@
 
 The suite is **fully offline** — no live arXiv / Semantic Scholar / Anthropic
 calls, and no touching the real ``data/`` directory. The autouse ``_isolate``
-fixture enforces that baseline for every test. ``stub_embeddings`` swaps the
-sentence-transformers model for a cheap deterministic hash embedder so the
-sources pipeline can be tested without loading torch.
-
-More shared fixtures (a scripted Anthropic client) arrive here alongside the
-modules they stand in for.
+fixture enforces that baseline for every test, and PydanticAI's
+``ALLOW_MODEL_REQUESTS`` kill switch (flipped off below, process-wide) makes
+any un-overridden agent run raise before it can touch the network — agent
+tests swap in ``TestModel`` / ``FunctionModel`` via ``agent.override(...)``.
+``stub_embeddings`` swaps the sentence-transformers model for a cheap
+deterministic hash embedder so the sources pipeline can be tested without
+loading torch.
 """
 
 from __future__ import annotations
@@ -16,9 +17,14 @@ import hashlib
 import math
 
 import pytest
+from pydantic_ai import models as ai_models
 
 from arxiv_digest.config import config
 from arxiv_digest.services.sources import embeddings
+
+# Hard guard: no live LLM calls, ever. Any agent run that reaches a real model
+# raises RuntimeError instead of making a request.
+ai_models.ALLOW_MODEL_REQUESTS = False
 
 
 @pytest.fixture(autouse=True)
