@@ -1,6 +1,10 @@
 /**
- * The AI teacher: streaming lecture, grounded/agentic Q&A, and offline library
- * chat. Each is a `text/event-stream` POST decoded through the shared readSSE.
+ * The AI teacher: streaming lecture, agentic Q&A, and offline library chat.
+ * Each is a `text/event-stream` POST decoded through the shared readSSE.
+ *
+ * (Named `agents` to match the backend's `routes/agents.py` and the `agents`
+ * package behind it — every stream here is a workflow of the agents
+ * orchestrator.)
  */
 
 import { readSSE } from './sse'
@@ -20,37 +24,34 @@ export interface Beat {
 }
 
 /**
- * A trimmed node the teacher needs — the visible graph is its grounding
- * scope, so only the fields that feed the prompt are sent.
- */
-export interface TeacherNode {
-  id: string
-  title: string
-  year: number | null
-  citation_count?: number | null
-  authors?: string | null
-  tldr?: string | null
-  abstract?: string | null
-  rels: string[]
-}
-
-/**
  * What story the lecture tells: the field's history, the seed paper's
  * intuition, or a conceptual bridge from the seed to a target paper.
  */
 export type LectureMode = 'history' | 'intuition' | 'bridge'
 
 /**
- * A backward-in-time hop the history lecture took before narrating
- * (Phase 3e): how many foundational ancestors it pulled in and the oldest
- * year it reached.
+ * A backward-in-time hop the history lecture took before narrating: how many
+ * foundational ancestors it pulled in and the oldest year it reached.
+ * (`action`/`error` are optional only for sessions saved by the pre-rewrite
+ * app; live frames always carry them.)
  */
-export interface LectureTrace {
+export interface BackfillTrace {
+  action?: 'backfill'
   hop: number
   found: number
   oldest: number | null
-  /** The hop hit an S2 error / rate limit rather than empty results. */
+  /** True when a hop hit an S2 error — "couldn't look" vs "found nothing". */
   error?: boolean
+}
+
+/**
+ * New papers (+ the edges connecting them) a workflow pulled in — the
+ * lecture's backward walk, or the tutor's expand_node / search_papers tools
+ * — to be merged into the live graph.
+ */
+export interface Discovery {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
 }
 
 /** Callbacks for {@link streamLecture}. Optional ones may be omitted. */
@@ -58,9 +59,9 @@ export interface LectureHandlers {
   /** A new beat arrived — append it to the lecture panel. */
   onBeat: (beat: Beat) => void
   /** History-mode backward hop progress (precedes the beats). */
-  onTrace?: (t: LectureTrace) => void
+  onTrace?: (t: BackfillTrace) => void
   /** Ancestors pulled in by the backward walk, to merge into the graph. */
-  onNodes?: (d: Discovery) => void
+  onDiscovery?: (d: Discovery) => void
   onDone?: () => void
   onError?: (message: string) => void
   /** Abort to cancel the stream (e.g. when the user closes the panel). */
@@ -69,15 +70,16 @@ export interface LectureHandlers {
 
 /**
  * Stream a lecture over the visible graph. Beats arrive one at a time. In
- * history mode, trace + nodes events (the backward walk to the field's
+ * history mode, trace + discovery events (the backward walk to the field's
  * roots) precede them.
  *
  * @param body The seed, the visible nodes, the lecture mode, and (bridge
- *             mode only) the target paper.
+ *             mode only) the target paper. Nodes are the FULL graph-node
+ *             shapes — the backend's typed boundary rejects trimmed ones.
  * @param h    Event handlers; see {@link LectureHandlers}.
  */
 export async function streamLecture(
-  body: { seed: { title: string; id?: string }; nodes: TeacherNode[]; mode: LectureMode; target?: { title: string } },
+  body: { seed: GraphNode; nodes: GraphNode[]; mode: LectureMode; target?: GraphNode },
   h: LectureHandlers,
 ): Promise<void> {
   const res = await fetch('/api/lecture', {
@@ -88,15 +90,15 @@ export async function streamLecture(
   })
   await readSSE(res, (event, data) => {
     if (event === 'beat') h.onBeat(data as Beat)
-    else if (event === 'trace') h.onTrace?.(data as LectureTrace)
-    else if (event === 'nodes') h.onNodes?.(data as Discovery)
+    else if (event === 'trace') h.onTrace?.(data as BackfillTrace)
+    else if (event === 'discovery') h.onDiscovery?.(data as Discovery)
     else if (event === 'done') h.onDone?.()
-    else if (event === 'error') h.onError?.((data as { error: string }).error)
+    else if (event === 'error') h.onError?.((data as { message: string }).message)
   })
 }
 
 /**
- * A step the agent took — reading a paper, expanding the graph to one not
+ * A step the tutor took — reading a paper, expanding the graph to one not
  * yet shown, or searching for off-graph papers. Surfaced live in the chat as
  * the agent works.
  */
@@ -104,24 +106,24 @@ export interface TraceEvent {
   action: 'read' | 'expand' | 'search' | 'search_sources' | 'figure'
   ok: boolean
   title?: string | null
-  index?: number
+  index?: number | null
   /** 'summary' | 'full' — read_paper. */
   detail?: string
   /** 'references' | 'citations' | 'similar' — expand_node. */
-  relation?: string
+  relation?: string | null
   /** New papers discovered / passages found. */
-  found?: number
+  found?: number | null
   /** Free-text query — search_papers / search_sources. */
   query?: string
   /** Year filter — search_papers. */
   year_from?: number | null
   year_to?: number | null
   /** Figure number the agent showed — show_figure. */
-  figure?: number
+  figure?: number | null
 }
 
 /**
- * A figure the agent pulled into its answer (via show_figure): a same-origin
+ * A figure the tutor pulled into its answer (via show_figure): a same-origin
  * proxied image URL, the paper's own caption, and which paper/figure it is.
  */
 export interface AnswerFigure {
@@ -143,15 +145,6 @@ export interface AnswerFigure {
   slot?: number
 }
 
-/**
- * New papers (+ the edges connecting them) the agent pulled in via
- * expand_node / search_papers, to be merged into the live graph.
- */
-export interface Discovery {
-  nodes: GraphNode[]
-  edges: GraphEdge[]
-}
-
 /** Callbacks for {@link streamAsk}. Optional ones may be omitted. */
 export interface AskHandlers {
   /** A chunk of answer prose arrived — append it to the streaming bubble. */
@@ -161,11 +154,9 @@ export interface AskHandlers {
   /** An agent step (read/expand/search) to render as a trace chip. */
   onTrace?: (t: TraceEvent) => void
   /** Papers the agent discovered, to merge into the live graph. */
-  onNodes?: (d: Discovery) => void
+  onDiscovery?: (d: Discovery) => void
   /** A figure the agent attached to its answer, to render inline. */
   onFigure?: (f: AnswerFigure) => void
-  /** Drop streamed preamble that turned out to precede a tool call. */
-  onDiscard?: () => void
   onDone?: () => void
   onError?: (message: string) => void
   /** Abort to cancel the stream mid-answer. */
@@ -173,21 +164,23 @@ export interface AskHandlers {
 }
 
 /**
- * Stream a grounded answer: agent trace steps, prose tokens, then the nodes
- * it drew from. (Non-agentic backends just emit tokens + cited.)
+ * Stream a grounded answer: agent trace steps, discoveries, prose tokens,
+ * then the papers it drew from. (The old `discard` frame is gone — the
+ * agent's pre-answer narration is never streamed, so there's nothing to
+ * disavow.)
  *
  * @param body The question, a session id for follow-up context, the seed,
- *             the visible nodes (the grounding scope), and optional source_ids
- *             scoping the agent's library search to a subset of uploaded
- *             sources (agentic backend only).
+ *             the visible nodes (full graph-node shapes — the grounding
+ *             scope), and optional source_ids scoping the tutor's library
+ *             search to a subset of uploaded sources.
  * @param h    Event handlers; see {@link AskHandlers}.
  */
 export async function streamAsk(
   body: {
     question: string
     session_id: string
-    seed: { title: string; id?: string }
-    nodes: TeacherNode[]
+    seed: GraphNode
+    nodes: GraphNode[]
     source_ids?: string[]
   },
   h: AskHandlers,
@@ -201,21 +194,21 @@ export async function streamAsk(
   await readSSE(res, (event, data) => {
     if (event === 'token') h.onToken((data as { text: string }).text)
     else if (event === 'trace') h.onTrace?.(data as TraceEvent)
-    else if (event === 'nodes') h.onNodes?.(data as Discovery)
+    else if (event === 'discovery') h.onDiscovery?.(data as Discovery)
     else if (event === 'figure') h.onFigure?.(data as AnswerFigure)
-    else if (event === 'discard') h.onDiscard?.()
     else if (event === 'cited') h.onCited((data as { node_ids: string[] }).node_ids)
     else if (event === 'done') h.onDone?.()
-    else if (event === 'error') h.onError?.((data as { error: string }).error)
+    else if (event === 'error') h.onError?.((data as { message: string }).message)
   })
 }
 
 /**
- * Offline library chat (Phase 3d): the one trace it emits — which passages
- * the retrieval pulled, and from which sources — shown above the grounded
- * answer.
+ * Offline library chat: the one trace it emits — which passages the
+ * retrieval pulled, and from which sources — shown above the grounded
+ * answer. (`action` is optional only for old saved sessions.)
  */
 export interface RetrieveEvent {
+  action?: 'retrieval'
   found: number
   sources: string[]
 }
@@ -253,6 +246,6 @@ export async function streamAskSources(
     if (event === 'token') h.onToken((data as { text: string }).text)
     else if (event === 'trace') h.onRetrieve?.(data as RetrieveEvent)
     else if (event === 'done') h.onDone?.()
-    else if (event === 'error') h.onError?.((data as { error: string }).error)
+    else if (event === 'error') h.onError?.((data as { message: string }).message)
   })
 }

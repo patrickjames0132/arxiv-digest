@@ -1,27 +1,20 @@
 /**
- * Seed search: find a paper to drop into the graph, either fresh off arXiv or
- * instantly from the local snapshot cache — with optional date / category
- * filters on the live search.
+ * Seed search: find a paper to drop into the graph — live across Semantic
+ * Scholar, or instantly from the local snapshot cache — with optional
+ * date / field-of-study filters on the live search.
  */
 
-/** A seed-search hit from arXiv — pick one to drop into the graph. */
-export interface ArxivHit {
-  arxiv_id: string
-  title: string
-  authors: string
-  abstract?: string
-  /** Space-separated arXiv category codes (e.g. "cs.LG cs.CV"). */
-  categories?: string
-  url?: string
-  /** The paper's submission day (GMT) as "YYYY-MM-DD". */
-  published?: string
-}
+import type { GraphNode } from './graph'
 
-/** The `/api/arxiv_search` response: the echoed query plus its hits. */
-export interface ArxivSearchResponse {
+/**
+ * The `/api/search` response: the echoed query plus its hits. Hits are full
+ * graph-node shapes (the same type a graph neighbor has) — when the query
+ * named a known paper, LLM-recalled + S2-verified matches lead the list.
+ */
+export interface LiveSearchResponse {
   q: string
   count: number
-  papers: ArxivHit[]
+  papers: GraphNode[]
 }
 
 /**
@@ -34,42 +27,44 @@ export interface SearchFilters {
   yearFrom: number | null
   /** Latest publication year (inclusive), or null for no ceiling. */
   yearTo: number | null
-  /** arXiv category codes to restrict to (any-of); empty = all categories. */
-  categories: string[]
+  /** S2 fields of study to restrict to (any-of); empty = all fields. */
+  fields: string[]
 }
 
 /** The no-op filter set (everything passes). */
-export const EMPTY_FILTERS: SearchFilters = { yearFrom: null, yearTo: null, categories: [] }
+export const EMPTY_FILTERS: SearchFilters = { yearFrom: null, yearTo: null, fields: [] }
 
 /** Append a filter set to a query string (omitting inactive filters). */
 function applyFilters(params: URLSearchParams, filters?: SearchFilters): void {
   if (!filters) return
   if (filters.yearFrom != null) params.set('year_from', String(filters.yearFrom))
   if (filters.yearTo != null) params.set('year_to', String(filters.yearTo))
-  if (filters.categories.length) params.set('categories', filters.categories.join(','))
+  if (filters.fields.length) params.set('fields', filters.fields.join(','))
 }
 
 /**
- * Relevance search across arXiv to find a seed paper.
+ * Relevance search across Semantic Scholar to find a seed paper.
  *
  * Accepts keywords, a title, an author, or an arXiv id/URL — the backend
- * detects ids/URLs and resolves them directly (ignoring filters).
+ * resolves ids/URLs directly to that exact paper (ignoring filters), and
+ * expands free-text queries through the query analyst before the lexical
+ * search runs.
  *
  * @param q       The search query.
  * @param limit   Maximum hits to return (default 25).
- * @param filters Optional date/category filters (see {@link SearchFilters}).
+ * @param filters Optional date/field filters (see {@link SearchFilters}).
  * @throws When the request fails — seed search has no graceful fallback; the
  *         caller surfaces the error in the search UI.
  */
-export async function searchArxiv(
+export async function searchLive(
   q: string,
   limit = 25,
   filters?: SearchFilters,
-): Promise<ArxivSearchResponse> {
+): Promise<LiveSearchResponse> {
   const params = new URLSearchParams({ q, limit: String(limit) })
   applyFilters(params, filters)
-  const res = await fetch(`/api/arxiv_search?${params.toString()}`)
-  if (!res.ok) throw new Error(`arXiv search failed (${res.status})`)
+  const res = await fetch(`/api/search?${params.toString()}`)
+  if (!res.ok) throw new Error(`Search failed (${res.status})`)
   return res.json()
 }
 
@@ -94,9 +89,9 @@ export interface LocalHit {
  * Instant search over papers already seen on previous graphs.
  *
  * Failures degrade to "no local hits" (an empty array) rather than throwing —
- * this must never block the live arXiv search running alongside it. The year
- * filter applies; the category filter doesn't (S2 nodes don't carry arXiv
- * categories).
+ * this must never block the live search running alongside it. The year
+ * filter applies; the field filter doesn't (cached nodes are matched purely
+ * on text).
  *
  * @param q       The search query.
  * @param limit   Maximum hits to return (default 10).
@@ -110,7 +105,7 @@ export async function searchLocal(
   try {
     const params = new URLSearchParams({ q, limit: String(limit) })
     applyFilters(params, filters)
-    params.delete('categories') // not supported locally
+    params.delete('fields') // not supported locally
     const res = await fetch(`/api/local_search?${params.toString()}`)
     if (!res.ok) return []
     const data = await res.json()
@@ -120,29 +115,20 @@ export async function searchLocal(
   }
 }
 
-/** One category in the arXiv taxonomy (e.g. cs.LG / "Machine Learning"). */
-export interface TaxonomyCategory {
-  code: string
-  name: string
-}
-
-/** A top-level taxonomy area (e.g. "Computer Science") and its categories. */
-export interface TaxonomyGroup {
-  group: string
-  categories: TaxonomyCategory[]
-}
-
 /**
- * Fetch the arXiv category taxonomy for the search filter's category picker.
+ * Fetch S2's fields of study (`/api/taxonomy/s2`) for the search filter's
+ * field picker — ~20 coarse subjects like "Computer Science".
  *
  * Never throws — failures degrade to an empty list, which simply renders the
- * picker without options.
+ * picker without options. (The backend also serves the ~155 arXiv categories
+ * at `/api/taxonomy/arxiv`; no client function exists yet because nothing
+ * consumes them until the detail-panel category-tags feature lands.)
  */
-export async function getTaxonomy(): Promise<TaxonomyGroup[]> {
+export async function getFields(): Promise<string[]> {
   try {
-    const res = await fetch('/api/taxonomy')
+    const res = await fetch('/api/taxonomy/s2')
     if (!res.ok) return []
-    return ((await res.json()) as { groups: TaxonomyGroup[] }).groups ?? []
+    return ((await res.json()) as { fields: string[] }).fields ?? []
   } catch {
     return []
   }

@@ -4,7 +4,7 @@
  */
 
 import type { GraphNode, GraphEdge } from './graph'
-import type { AnswerFigure, Beat, LectureTrace, RetrieveEvent, TraceEvent } from './teacher'
+import type { AnswerFigure, Beat, BackfillTrace, RetrieveEvent, TraceEvent } from './agents'
 
 /**
  * One chat turn in the teacher transcript. Hoisted here (shared by
@@ -46,7 +46,7 @@ export interface SessionData {
   edges: GraphEdge[]
   chat: ChatMsg[]
   beats: Beat[]
-  hist_trace: LectureTrace[]
+  hist_trace: BackfillTrace[]
 }
 
 /** A lightweight saved-session row for the list view (no graph/chat payload). */
