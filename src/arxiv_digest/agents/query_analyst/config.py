@@ -4,7 +4,6 @@ skills. Model choice and tunables live in its ``config.llm.agents`` entry."""
 from __future__ import annotations
 
 AGENT_ID = "query_analyst"
-"""The ``config.llm.agents`` entry this agent is built from."""
 
 SKILLS: tuple[str, ...] = ()
 """No shared skills — a one-shot micro-agent with a complete prompt of its
@@ -24,5 +23,3 @@ SYSTEM_PROMPT = (
     "the query unchanged. Never answer the query, correct its spelling, or "
     "add commentary — output only the expanded query."
 )
-"""The complete system prompt — the problem (lexical search), the job
-(keep + append), and the restraint (a handful of terms, no commentary)."""

@@ -42,8 +42,6 @@ agent: Agent[None, Expansion] = Agent(
     output_type=Expansion,
     system_prompt=SYSTEM_PROMPT,
 )
-"""The PydanticAI agent. No deps, no tools — one prompt in, one ``Expansion``
-out. Tests swap the model via ``agent.override(model=TestModel(...))``."""
 
 
 def expand_query(query: str) -> str:
