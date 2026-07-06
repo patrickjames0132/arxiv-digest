@@ -17,29 +17,30 @@ from __future__ import annotations
 
 import time
 
+from ...agents import query_analyst
 from ...config import config
 from ...integrations import semantic_scholar as s2
 from ...storage import cache
 
 
 def _expand_query(query: str) -> str:
-    """Query-expansion seam — currently a passthrough.
+    """Query-expansion seam — delegates to the query analyst agent.
 
-    The plan (Phase 4, once the LLM agent infrastructure lands) is to expand
-    acronyms and jargon here before hitting S2 — e.g. "DQN" -> "DQN deep
-    Q-network deep Q-learning". S2 search is lexical, so a seminal paper that
-    never spells out the acronym in its title/abstract is otherwise unfindable.
-    It'll be wired to a ``config.llm.agents`` agent then; for now this returns
-    the query unchanged, so the call site is already in place and nothing has to
-    move when expansion arrives.
+    S2 search is lexical, so a seminal paper that never spells out an acronym
+    in its title/abstract is unfindable from the acronym alone; the analyst
+    expands it ("DQN" -> "DQN deep Q-network deep Q-learning") before the
+    query hits S2. This started life as a documented passthrough so the call
+    site wouldn't move when expansion arrived — and it didn't.
 
     Args:
         query: The raw user query.
 
     Returns:
-        The (for now, unchanged) query to send to S2.
+        The expanded query — or the original unchanged: ``expand_query``
+        degrades to a passthrough on any failure, so search never breaks
+        because the LLM hiccuped.
     """
-    return query
+    return query_analyst.expand_query(query)
 
 
 def live_search(

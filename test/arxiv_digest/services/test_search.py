@@ -53,6 +53,13 @@ def test_live_search_routes_query_through_the_expansion_seam(monkeypatch):
     assert out == [{"id": "EXPANDED"}]     # the expanded query is what reaches S2
 
 
+def test_the_seam_delegates_to_the_query_analyst(monkeypatch):
+    monkeypatch.setattr(
+        discovery.query_analyst, "expand_query", lambda query: query + " deep q-network"
+    )
+    assert discovery._expand_query("dqn") == "dqn deep q-network"
+
+
 # --- local_search (cache-first) --------------------------------------------------
 
 

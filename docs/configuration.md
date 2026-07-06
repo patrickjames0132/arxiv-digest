@@ -67,26 +67,32 @@ from `config.json`.
 
 ### `llm.agents` — the agents this app runs
 
-A **list**, not a single object, because more agents are planned beyond
-today's one entry (the teaching assistant that narrates lectures and
-answers grounded Q&A over the graph) — potentially on different vendors.
-Each entry:
+A **list** with one entry per sub-agent package under
+`src/arxiv_digest/agents/` — they land one at a time (today:
+`query_analyst`, which expands seed-search queries; the librarian,
+lecturer, tutor, and orchestrator follow), potentially on different
+vendors. Each entry:
 
 ```json
-{ "id": "teaching_assistant", "model": "anthropic:claude-sonnet-4-6", "system_prompt": "...", "tools": [...], "extras": {...} }
+{ "id": "query_analyst", "model": "anthropic:claude-haiku-4-5", "extras": {} }
 ```
 
-- **`id`** must be unique across the list — other code looks an agent up by
-  it, so a duplicate would be ambiguous. Validated at load time.
+- **`id`** must be unique across the list — each agent package names the
+  entry it builds from (its `config.py`'s `AGENT_ID`), so a duplicate would
+  be ambiguous. Validated at load time.
 - **`model`** is PydanticAI's own `"<provider>:<model_name>"` shorthand
-  string (e.g. `"anthropic:claude-sonnet-4-6"`), not a bare model name. The
+  string (e.g. `"anthropic:claude-haiku-4-5"`), not a bare model name. The
   prefix must name a vendor configured under `llm.providers` — validated at
   load time, so a typo'd or unconfigured vendor fails immediately instead of
-  on the agent's first request. `AgentConfig.provider` parses that prefix
-  back out for whatever builds the real `pydantic_ai.Agent`.
-- **`system_prompt`** and **`tools`** are placeholders for now (`""` and
-  `[]`) — they'll be filled in as the teacher/agentic code is ported
-  (Phase 4 of the rebuild).
+  on the agent's first request. The string is only ever **parsed** (by
+  `agents/factory.py`, which constructs the provider explicitly with the
+  config key) — never handed to PydanticAI whole, since the bare shorthand
+  would fall back to environment variables for auth, against the rule
+  above.
+- An entry is deliberately **thin**: an agent's words (system prompt,
+  skills) and its tool functions are *code*, defined in its own package's
+  `config.py` and `tools.py` (see `src/arxiv_digest/agents/README.md`).
+  Config carries only what an operator tunes — the model and the knobs.
 - **`extras`** is a deliberate escape hatch: a free-form JSON object for
   settings that don't have a permanent typed home yet. An earlier version
   of this config had a dozen first-class fields here — per-tool-call

@@ -168,16 +168,17 @@ class ProvidersConfig(ConfigModel):
 
 
 class AgentConfig(ConfigModel):
-    """One configured Claude agent, built (eventually) into a real
-    ``pydantic_ai.Agent``.
+    """One configured agent: which model it runs, plus its tunables.
 
-    Today there's a single entry — the teaching assistant — but ``agents``
-    is a list because more are planned (see OnePager.md), potentially on
-    different providers. ``extras`` is a deliberate escape hatch for
-    settings that don't have a permanent home yet (e.g. tool-call budgets,
-    retrieval knobs): stash them there while building, then promote
-    anything that earns its keep to a proper typed field once its shape has
-    settled.
+    One entry per sub-agent package under ``agents/`` (they land one at a
+    time — see ``src/arxiv_digest/agents/README.md``), looked up by ``id``.
+    Deliberately *thin*: an agent's words (system prompt, skills) and its
+    tool functions are code, defined in its own package's ``config.py`` and
+    ``tools.py`` — this entry supplies only what an operator tunes: the
+    model and the knobs. ``extras`` is the escape hatch for knobs that
+    don't have a permanent typed home yet (e.g. tool-call budgets): stash
+    them there while building, then promote anything that earns its keep to
+    a proper typed field once its shape has settled.
     """
 
     id: str = Field(
@@ -187,12 +188,6 @@ class AgentConfig(ConfigModel):
         description="Which model this agent runs, as PydanticAI's own "
         "'<provider>:<model_name>' string (e.g. 'anthropic:claude-sonnet-4-6'). The "
         "prefix must name a vendor configured under `providers`."
-    )
-    system_prompt: str = Field(
-        description="This agent's system prompt. Empty is valid — not written yet."
-    )
-    tools: list[str] = Field(
-        description="Names of tools this agent may call. Empty means no tool use."
     )
     extras: dict[str, Any] = Field(
         description="Free-form bag for agent-specific settings not yet promoted to "
