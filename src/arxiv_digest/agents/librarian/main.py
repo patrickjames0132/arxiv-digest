@@ -25,7 +25,7 @@ from .config import AGENT_ID, NO_HITS_ANSWER, SKILLS, SYSTEM_PROMPT
 
 agent: Agent[None, str] = Agent(
     factory.build_model(AGENT_ID),
-    instructions=prompts.assemble(SYSTEM_PROMPT, SKILLS),
+    instructions=[SYSTEM_PROMPT, *(prompts.skill(name) for name in SKILLS)],
 )
 
 

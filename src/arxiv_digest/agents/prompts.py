@@ -1,6 +1,10 @@
-"""Turns app data into model input, shared by every sub-agent: skill-assembled
-instructions, retrieved passages rendered for a prompt, and route-layer
-conversation turns converted to PydanticAI message history.
+"""Turns app data into model input, shared by every sub-agent: skill loading,
+retrieved passages rendered for a prompt, and route-layer conversation turns
+converted to PydanticAI message history.
+
+Agents combine their prompt parts natively — ``instructions=[SYSTEM_PROMPT,
+*(skill(name) for name in SKILLS)]`` — since PydanticAI accepts a sequence and
+joins it with blank lines itself; this module only supplies the parts.
 
 (Named ``prompts`` rather than ``skills`` — that name belongs to the
 ``skills/`` directory this module reads from.)
@@ -21,7 +25,7 @@ from pydantic_ai.messages import (
 SKILLS_DIR = Path(__file__).parent / "skills"
 
 
-def load_skill(name: str) -> str:
+def skill(name: str) -> str:
     """Read one skill's prompt-ready markdown from ``agents/skills/``.
 
     Args:
@@ -36,20 +40,6 @@ def load_skill(name: str) -> str:
             weakening its prompt.
     """
     return (SKILLS_DIR / f"{name}.md").read_text().strip()
-
-
-def assemble(base: str, skills: tuple[str, ...]) -> str:
-    """Build an agent's full instructions: its own words plus its skills.
-
-    Args:
-        base: The agent-specific prompt (its package config.py's
-            ``SYSTEM_PROMPT``).
-        skills: Names of the skills to append, in the order given.
-
-    Returns:
-        The base prompt with each skill's content appended as its own block.
-    """
-    return "\n\n".join([base, *(load_skill(name) for name in skills)])
 
 
 def format_passages(hits: list[dict]) -> str:

@@ -112,10 +112,11 @@ an agent reads its own `extras` knobs.
 
 ## `prompts.py` — app data → model input
 
-The other half of agent assembly: `assemble(base, skills)` builds an agent's
-full instructions (its package `SYSTEM_PROMPT` + each named skill's markdown,
-loaded from `skills/`; a typo'd skill name fails at import, not by silently
-weakening the prompt), `format_passages(hits)` renders retrieved library
+The other half of agent assembly: `skill(name)` loads one skill's markdown
+from `skills/` (a typo'd skill name fails at import, not by silently
+weakening the prompt) — agents pass their parts straight to PydanticAI,
+`instructions=[SYSTEM_PROMPT, *(skill(n) for n in SKILLS)]`, which joins a
+sequence with blank lines natively. `format_passages(hits)` renders retrieved library
 passages tagged `[Title, p.N]` (shared by the librarian's grounding context
 and, later, the tutor's `search_sources` tool result), and `history(turns)`
 converts the routes layer's `[{role, content}]` turns into PydanticAI

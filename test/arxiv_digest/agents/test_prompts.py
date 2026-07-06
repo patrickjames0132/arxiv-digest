@@ -1,5 +1,7 @@
-"""Model-input assembly: skill loading, prompt assembly, passage rendering,
-and history conversion."""
+"""Model-input parts: skill loading, passage rendering, and history
+conversion. (Joining the parts into one prompt is PydanticAI's job — agents
+pass ``instructions=[SYSTEM_PROMPT, *skills]`` and it joins with blank
+lines.)"""
 
 from __future__ import annotations
 
@@ -9,21 +11,13 @@ from pydantic_ai.messages import ModelRequest, ModelResponse
 from arxiv_digest.agents import prompts
 
 
-def test_assemble_appends_each_skill_after_the_base():
-    combined = prompts.assemble("BASE PROMPT", ("teaching-voice", "citation-discipline"))
-    assert combined.startswith("BASE PROMPT")
-    assert "# Teaching voice" in combined
-    assert "# Citation discipline" in combined
-    assert combined.index("# Teaching voice") < combined.index("# Citation discipline")
-
-
-def test_assemble_with_no_skills_is_just_the_base():
-    assert prompts.assemble("BASE PROMPT", ()) == "BASE PROMPT"
+def test_skill_loads_prompt_ready_markdown():
+    assert prompts.skill("teaching-voice").startswith("# Teaching voice")
 
 
 def test_unknown_skill_fails_loudly():
     with pytest.raises(FileNotFoundError):
-        prompts.load_skill("no-such-skill")
+        prompts.skill("no-such-skill")
 
 
 def test_format_passages_tags_source_and_page():

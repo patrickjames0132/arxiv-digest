@@ -18,8 +18,8 @@ import logging
 from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent
 
-from .. import factory
-from .config import AGENT_ID, SYSTEM_PROMPT
+from .. import factory, prompts
+from .config import AGENT_ID, SKILLS, SYSTEM_PROMPT
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class Expansion(BaseModel):
 agent: Agent[None, Expansion] = Agent(
     factory.build_model(AGENT_ID),
     output_type=Expansion,
-    instructions=SYSTEM_PROMPT,
+    instructions=[SYSTEM_PROMPT, *(prompts.skill(name) for name in SKILLS)],
 )
 
 

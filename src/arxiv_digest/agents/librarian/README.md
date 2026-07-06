@@ -34,8 +34,9 @@ the sources before a single token streams.
 - **`config.py`** — `AGENT_ID`, `SKILLS` (`teaching-voice` +
   `citation-discipline`), the librarian-specific `SYSTEM_PROMPT` (grounding
   scope + the `[Title, p.N]` attribution form), and `NO_HITS_ANSWER`.
-- **`main.py`** — the `Agent` (instructions assembled by
-  `prompts.assemble`) and `answer`.
+- **`main.py`** — the `Agent` (instructions = `SYSTEM_PROMPT` plus each
+  `prompts.skill`-loaded skill; PydanticAI joins the sequence itself) and
+  `answer`.
 - No `tools.py` — retrieve-then-answer needs no tool loop.
 
 ## Design decisions worth knowing
