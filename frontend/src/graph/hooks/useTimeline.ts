@@ -14,9 +14,9 @@ import { useCallback, useEffect } from 'react'
 // forceCollide to space timeline nodes out by their radius.
 // @ts-expect-error - no type declarations
 import { forceCollide } from 'd3-force-3d'
-import { nodeRadius } from './model'
-import type { Base, VNode } from './model'
-import { YEAR_SPACING } from './theme'
+import { nodeRadius } from '../model'
+import type { Base, VNode } from '../model'
+import { YEAR_SPACING } from '../theme'
 
 /** Arguments for {@link useTimeline}. */
 export interface UseTimelineArgs {

@@ -9,14 +9,20 @@ documented below as they land.)
 graph/
   model.ts          — view-model types (VNode/VLink/Base) + pure helpers
   theme.ts          — the relation color scheme + layout geometry constants
-  useDiscovery.ts   — mid-conversation graph growth, merged in place
-  usePinning.ts     — user pins (drag / toggle / release), timeline-aware
-  useTimeline.ts    — the Timeline layout: year pinning, collide, axis painting
+  hooks/
+    useDiscovery.ts — mid-conversation graph growth, merged in place
+    usePinning.ts   — user pins (drag / toggle / release), timeline-aware
+    useTimeline.ts  — the Timeline layout: year pinning, collide, axis painting
   GraphCanvas.tsx   — the ForceGraph2D wrapper: every canvas painter
   GraphControls.tsx — layout toggle, filter chips, year slider, pin/fit
   Legend.tsx        — the color legend (agent entries appear on first use)
   graph.css         — styles (ported light-touch)
 ```
+
+(`model.ts`/`theme.ts` stay at the root: components, hooks, AND outside
+consumers — `search/HitList` uses `formatPubDate`, Atlas uses `ID_RE` —
+all import them. The hooks cluster under `hooks/` purely to keep the
+folder scannable.)
 
 ## The components: purely presentational, by design
 
