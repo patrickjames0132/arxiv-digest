@@ -15,7 +15,8 @@
 > semantic library search (v1.21.0), quality hardening — strict mypy, src-layout,
 > 105-test offline suite (v1.21.1–.3), inline answer figures (v1.22.0), code &
 > artifact links via Hugging Face Papers (v1.23.0), per-seed cache-clear Refresh
-> button (v2.5.0)
+> button (v2.5.0), Semantic Scholar field-of-study tags in the detail panel
+> (v2.6.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -701,6 +702,19 @@ optional, behind a key.
 - [x] **Windows PDF upload fix** *(v1.10.1)* — source ingest used a
       `NamedTemporaryFile` whose exclusive lock on Windows made the reopen fail
       with `[Errno 13] Permission denied`; switched to `mkstemp` + manual cleanup.
+- [x] **S2 categories as detail-panel tags** *(v2.6.0)* — alongside the v2.3.0
+      arXiv category pills, the detail panel now surfaces Semantic Scholar's own
+      field-of-study classification (`s2FieldsOfStudy`, falling back to the
+      coarser `fieldsOfStudy`) as tags. Rendered as **two provider-labeled
+      sections** (styled like "Code & artifacts") — an **arXiv tags** section
+      and a **Semantic Scholar tags** section (accent-tinted) — so it's clear
+      who tagged what; a non-arXiv paper shows the S2 section alone. No new
+      endpoint: S2 already returns these on the paper object, so the fields ride
+      along with the existing detail hydration (`DETAIL_FIELDS`) — light on
+      graph neighbors, filled in on click like the abstract/TL;DR. The normalized
+      node gained a `fields_of_study` list (deduped, order-preserving), defaulted
+      on the `Node` model so snapshots cached before it still validate.
+      *(From the `todos.md` inbox, 2026-07-07.)*
 - [ ] **Agent surfaces figures proactively (no explicit ask)** — today the
       agentic Q&A only calls `show_figure` when the question explicitly asks for
       a picture; you have to request an image every time to get one. It should
@@ -747,11 +761,6 @@ optional, behind a key.
       replacement for it — citation count is what rescued citations from
       S2's recency-biased default order in the first place; this would be a
       second axis (age vs. count) the user tunes, not a reversion.
-      *(From the `todos.md` inbox, 2026-07-07.)*
-- [ ] **S2 categories as detail-panel tags** — alongside the v2.3.0 arXiv-only
-      category pills, also surface Semantic Scholar's own field-of-study
-      categories as a second layer of tags — an arXiv paper would show both
-      layers side by side, a non-arXiv paper would fall back to S2-only.
       *(From the `todos.md` inbox, 2026-07-07.)*
 - [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
       `search` relation from the researcher's `search_papers` tool) are

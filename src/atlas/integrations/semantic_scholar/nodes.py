@@ -9,10 +9,13 @@ the teacher, the frontend) consumes the dict it produces.
 from __future__ import annotations
 
 # Rich fields for a focused node (the seed, or a clicked node). Requested via
-# the un-throttled batch endpoint.
+# the un-throttled batch endpoint. ``s2FieldsOfStudy`` is S2's own
+# field-of-study classification (the detail panel shows it as a second tag
+# layer beside a paper's arXiv categories); ``fieldsOfStudy`` is the coarser
+# legacy list we fall back to when the classifier field is absent.
 DETAIL_FIELDS = (
     "paperId,externalIds,title,abstract,tldr,year,publicationDate,"
-    "citationCount,referenceCount,authors.name"
+    "citationCount,referenceCount,authors.name,s2FieldsOfStudy,fieldsOfStudy"
 )
 # Lighter fields for the many neighbors in a traversal — no abstract/tldr,
 # which we hydrate lazily when a node is opened. publicationDate gives month
@@ -24,6 +27,39 @@ NEIGHBOR_FIELDS = "paperId,externalIds,title,year,publicationDate,citationCount"
 SEARCH_FIELDS = NEIGHBOR_FIELDS + ",authors.name"
 
 
+def fields_of_study(paper: dict) -> list[str]:
+    """Extract S2's field-of-study categories as a deduped name list.
+
+    Prefers ``s2FieldsOfStudy`` (S2's classifier output, a list of
+    ``{"category", "source"}`` — the same category can appear from more than
+    one source, so names are deduped in first-seen order) and falls back to
+    the coarser ``fieldsOfStudy`` (a plain list of strings) when the
+    classifier field is absent or empty.
+
+    Args:
+        paper: A raw S2 paper object.
+
+    Returns:
+        The field-of-study names, deduped and order-preserving (e.g.
+        ``["Computer Science", "Mathematics"]``); empty when S2 lists none or
+        the fields weren't requested.
+    """
+    names: list[str] = []
+    seen: set[str] = set()
+    for entry in paper.get("s2FieldsOfStudy") or []:
+        category = entry.get("category") if isinstance(entry, dict) else None
+        if category and category not in seen:
+            seen.add(category)
+            names.append(category)
+    if names:
+        return names
+    for category in paper.get("fieldsOfStudy") or []:
+        if category and category not in seen:
+            seen.add(category)
+            names.append(category)
+    return names
+
+
 def node(paper: dict | None) -> dict | None:
     """Normalize a raw S2 paper object into the app's graph-node dict.
 
@@ -33,10 +69,12 @@ def node(paper: dict | None) -> dict | None:
 
     Returns:
         A node dict with keys ``id, arxiv_id, title, abstract, tldr, year,
-        month, pub_date, citation_count, authors, url`` — or None when
-        ``paper`` is empty or carries no ``paperId``. ``month`` (1–12) is
-        parsed from S2's ``publicationDate`` so the timeline can place
-        papers between year lines; it is None when only the year is known.
+        month, pub_date, citation_count, authors, url, fields_of_study`` — or
+        None when ``paper`` is empty or carries no ``paperId``. ``month``
+        (1–12) is parsed from S2's ``publicationDate`` so the timeline can
+        place papers between year lines; it is None when only the year is
+        known. ``fields_of_study`` is empty for neighbor/search nodes, which
+        don't request it — it hydrates when the node is opened (DETAIL_FIELDS).
     """
     if not paper or not paper.get("paperId"):
         return None
@@ -71,6 +109,7 @@ def node(paper: dict | None) -> dict | None:
         "citation_count": paper.get("citationCount"),
         "authors": authors or None,
         "url": url,
+        "fields_of_study": fields_of_study(paper),
     }
 
 

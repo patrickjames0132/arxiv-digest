@@ -16,10 +16,13 @@ from pydantic import BaseModel, ConfigDict
 class Node(BaseModel):
     """A paper in the graph: the normalized S2 node plus its graph annotations.
 
-    The first eleven fields mirror ``semantic_scholar.nodes.node()`` exactly
+    The first twelve fields mirror ``semantic_scholar.nodes.node()`` exactly
     (``extra="forbid"`` keeps them in lockstep — if that shape drifts, node
     construction fails loudly rather than silently dropping data). ``rels`` and
     ``is_seed`` are added during assembly.
+
+    ``fields_of_study`` defaults to ``[]`` so snapshots cached before it
+    existed (and light neighbor nodes, which don't request it) still validate.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -35,6 +38,7 @@ class Node(BaseModel):
     citation_count: int | None
     authors: str | None
     url: str
+    fields_of_study: list[str] = []
     rels: list[str]
     is_seed: bool
 

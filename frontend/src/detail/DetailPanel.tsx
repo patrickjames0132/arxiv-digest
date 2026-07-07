@@ -64,15 +64,49 @@ function CodeRow({
   )
 }
 
-/** The paper's own arXiv category tags (e.g. `cs.LG` → "Machine Learning"). */
-function CategoryTags({ categories }: { categories: CategoriesResponse }) {
+/**
+ * A paper's category tags, split into **provider-labeled sections** so it's
+ * clear who tagged what: an **arXiv tags** section (its own `cs.LG` →
+ * "Machine Learning" categories) and a **Semantic Scholar tags** section
+ * (S2's coarser field-of-study classification, e.g. "Computer Science").
+ * Each section renders only when it has tags — a non-arXiv paper shows the
+ * S2 section alone.
+ */
+function CategoryTags({
+  categories,
+  fieldsOfStudy,
+}: {
+  categories?: CategoriesResponse
+  fieldsOfStudy: string[]
+}) {
+  const arxivCats = categories?.available ? categories.categories : []
+  if (arxivCats.length === 0 && fieldsOfStudy.length === 0) return null
   return (
-    <div className="detail-cats">
-      {categories.categories.map((category) => (
-        <span key={category.code} className="detail-cat" title={category.code}>
-          {category.name}
-        </span>
-      ))}
+    <div className="detail-cat-groups">
+      {arxivCats.length > 0 && (
+        <div className="detail-cat-group">
+          <div className="detail-cat-head">arXiv tags</div>
+          <div className="detail-cats">
+            {arxivCats.map((category) => (
+              <span key={category.code} className="detail-cat" title={category.code}>
+                {category.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {fieldsOfStudy.length > 0 && (
+        <div className="detail-cat-group">
+          <div className="detail-cat-head">Semantic Scholar tags</div>
+          <div className="detail-cats">
+            {fieldsOfStudy.map((field) => (
+              <span key={field} className="detail-cat s2">
+                {field}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -151,9 +185,7 @@ export default function DetailPanel({
           {(node.citation_count ?? 0).toLocaleString()} citations
         </div>
       </div>
-      {categories && categories.available && categories.categories.length > 0 && (
-        <CategoryTags categories={categories} />
-      )}
+      <CategoryTags categories={categories} fieldsOfStudy={node.fields_of_study ?? []} />
       {(node.tldr || node.abstract) && (
         <p className="detail-summary">
           {node.tldr ? (

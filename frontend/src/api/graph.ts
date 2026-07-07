@@ -27,6 +27,13 @@ export interface GraphNode {
   citation_count: number | null
   authors?: string | null
   url: string | null
+  /**
+   * Semantic Scholar's own field-of-study categories (e.g. "Computer
+   * Science", "Mathematics"), shown as a tag layer beside the paper's arXiv
+   * categories. Empty for graph neighbors until the detail panel hydrates
+   * them on open; a restored pre-v2.6 session may omit it entirely.
+   */
+  fields_of_study?: string[]
   /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'similar' | 'search'. */
   rels: string[]
   is_seed: boolean

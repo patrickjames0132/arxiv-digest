@@ -118,8 +118,9 @@ The Vite dev server proxies `/api/*` to Flask.
 2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations · 🟣 similar ·
    💗 found-by-search. Node size = citations; thick links = influential
    citations; a dashed ring = discovered by the teacher mid-chat. Click a
-   node for details (TL;DR, abstract/PDF links, figures, code & artifacts);
-   **double-click to re-seed** on it — journal papers included.
+   node for details (TL;DR, abstract/PDF links, arXiv & Semantic Scholar
+   category tags, figures, code & artifacts); **double-click to re-seed** on
+   it — journal papers included.
 3. **Declutter** — Force ↔ Timeline layouts (x = publication date), relation
    filters, a year slider, drag-to-pin, focus-on-hover, and a **Refresh** that
    busts this seed's day-cached snapshot to re-fetch fresh from Semantic

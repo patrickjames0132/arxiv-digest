@@ -32,6 +32,26 @@ def test_node_handles_sparse_paper():
     assert node["title"] == "(untitled)" and node["arxiv_id"] is None
     assert node["month"] is None and node["authors"] is None
     assert node["url"] == "https://www.semanticscholar.org/paper/xyz"
+    assert node["fields_of_study"] == []  # absent → empty, never missing
+
+
+def test_fields_of_study_prefers_s2_deduped_in_order():
+    paper = {
+        "s2FieldsOfStudy": [
+            {"category": "Computer Science", "source": "external"},
+            {"category": "Computer Science", "source": "s2-fos-model"},  # dup source
+            {"category": "Mathematics", "source": "s2-fos-model"},
+            {"source": "s2-fos-model"},  # no category — skipped
+        ],
+        "fieldsOfStudy": ["Physics"],  # ignored when s2FieldsOfStudy has entries
+    }
+    assert nodes.fields_of_study(paper) == ["Computer Science", "Mathematics"]
+
+
+def test_fields_of_study_falls_back_to_coarse_list():
+    assert nodes.fields_of_study({"fieldsOfStudy": ["Computer Science"]}) == ["Computer Science"]
+    assert nodes.fields_of_study({"s2FieldsOfStudy": [], "fieldsOfStudy": None}) == []
+    assert nodes.fields_of_study({}) == []
 
 
 @pytest.mark.parametrize(

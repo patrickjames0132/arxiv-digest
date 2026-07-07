@@ -44,11 +44,25 @@
   line-height: 1.55;
   color: var(--text);
 }
+/* Category tags, split into provider-labeled sections (arXiv / S2) so the
+   user can tell who tagged what — same head style as "Code & artifacts". */
+.detail-cat-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.detail-cat-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
 .detail-cats {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 14px;
 }
 .detail-cat {
   padding: 3px 9px;
@@ -56,6 +70,12 @@
   border: 1px solid var(--border);
   color: var(--muted);
   font-size: 11.5px;
+}
+/* Semantic Scholar's field-of-study tags — accent-tinted so the two
+   providers' sections read distinctly at a glance. */
+.detail-cat.s2 {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .detail-actions {
   display: flex;
