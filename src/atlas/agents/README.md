@@ -72,9 +72,10 @@ citation data changes slowly).
 
 Two consumers, using it differently:
 
-- **The orchestrator's `history_backfill`** loops over
-  `neighbors(..., "references", ...)` raw, hop after hop, walking toward a
-  field's roots before a history lecture.
+- **The orchestrator's backfill walks** loop over `neighbors(...)` raw, hop
+  after hop — `history_backfill` over `"references"` toward a field's roots
+  (history lecture), `forward_backfill` over `"citations"` toward the
+  frontier (evolution lecture).
 - **The researcher's `expand_node` / `search_papers` tools** wrap `neighbors` /
   `search` with everything agentic: budgets, visited-sets, numbering the
   finds, building `Discovery` events.
@@ -244,11 +245,14 @@ prompt. Two kinds live side by side:
 The front door. `run(intent, ...)` takes the UI's intent hint + the request
 payload, dispatches the matching workflow deterministically, and is the one
 place the termination contract is enforced: every stream ends with exactly
-one `Done` or `Error`. Its `backfill.py` holds **`history_backfill`** — the
-deterministic reference-walk ported from the old `lecture.py`: launch from
-the oldest visible papers, hop backward through day-cached references, add
-the most-cited new ancestors per hop, stop at a year floor or the hop
-budget, emit `Trace`/`Discovery` events per productive hop. Not an agent —
+one `Done` or `Error`. Its `backfill.py` holds the deterministic lecture
+walks — one shared `_walk(direction=…)` behind **`history_backfill`**
+(backward, before a history lecture: launch from the oldest visible papers,
+hop day-cached references, add the most-cited new ancestors per hop, stop at
+a year floor or the hop budget) and **`forward_backfill`** (forward, before
+an evolution lecture: launch from the newest visible papers, hop citations,
+march to the frontier with no year ceiling), both emitting `Trace`/
+`Discovery` events per productive hop. Not an agent —
 no LLM ever touches it; its knobs are typed config (`config.graph.backfill`),
 not `llm.agents` extras. **No model lives in the orchestrator yet,
 deliberately:** every current entry point passes a known intent, so the
@@ -259,8 +263,9 @@ query-expansion seam in Phase 3. See its own README.
 ### `lecturer` — the streamed graph lecture *(built)*
 
 - **Input:** seed, visible nodes (numbered), mode
-  (`history` / `intuition` / `bridge`), target paper (bridge only). History
-  mode receives the backfill-enriched node set from the orchestrator.
+  (`history` / `intuition` / `evolution` / `bridge`), target paper (bridge
+  only). History and evolution modes receive the backfill-enriched node set
+  from the orchestrator (ancestors backward / descendants forward).
 - **Tools:** none.
 - **Output:** a streamed sequence of typed `Beat` objects
   (`heading`, `text`, `node_indices` → mapped back to node ids) so the
@@ -268,7 +273,7 @@ query-expansion seam in Phase 3. See its own README.
   Structured output replaces the old NDJSON protocol and its fence-stripping
   parser.
 - **Skills:** `numbered-papers`, `teaching-voice`, `citation-discipline`.
-- **Config:** the three mode-intent paragraphs; beat count bounds (5–9).
+- **Config:** the four mode-intent paragraphs; beat count bounds (5–9).
 
 ### `researcher` — agentic Q&A over the graph *(built)*
 

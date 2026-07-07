@@ -51,7 +51,8 @@ def test_lecture_types_the_payload_and_relays_by_event_type(client, monkeypatch)
     monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
     response = client.post("/api/lecture", json={"seed": SEED, "nodes": NODES, "mode": "intuition"})
     assert frames(response) == [
-        ("trace", {"action": "backfill", "hop": 1, "found": 0, "oldest": None, "error": False}),
+        ("trace", {"action": "backfill", "direction": "back", "hop": 1, "found": 0,
+                   "oldest": None, "newest": None, "error": False}),
         ("beat", {"heading": "Roots", "text": "It began.", "node_ids": ["node02"]}),
         ("done", {}),
     ]

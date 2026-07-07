@@ -85,11 +85,32 @@ def test_history_lecture_backfills_then_narrates_the_enriched_set(monkeypatch):
     assert [node.id for node in seen["nodes"]] == ["seed01", "node02", "anc01"]
 
 
-def test_non_history_modes_skip_the_backfill(monkeypatch):
+def test_evolution_lecture_forward_backfills_then_narrates_the_enriched_set(monkeypatch):
+    def fake_forward(seed, nodes):
+        yield events.BackfillTrace(hop=1, found=1, newest=2025, direction="forward")
+        yield events.Discovery(nodes=[ANCESTOR], edges=[])
+
+    seen: dict = {}
+
+    def fake_lecture(seed, nodes, mode="history", target=None):
+        seen["nodes"], seen["mode"] = nodes, mode
+        yield events.Beat(heading="Frontier", text="And now.", node_ids=["anc01"])
+
+    monkeypatch.setattr(orchestrator_main.backfill, "forward_backfill", fake_forward)
+    monkeypatch.setattr(orchestrator_main.lecturer, "lecture", fake_lecture)
+    out = list(run(Intent.LECTURE, seed=SEED, nodes=NODES, mode=LectureMode.EVOLUTION))
+    assert [event.type for event in out] == ["trace", "discovery", "beat", "done"]
+    assert seen["mode"] is LectureMode.EVOLUTION
+    # The lecturer narrates the forward-enriched node set.
+    assert [node.id for node in seen["nodes"]] == ["seed01", "node02", "anc01"]
+
+
+def test_intuition_mode_skips_both_backfills(monkeypatch):
     def explode(seed, nodes):
-        raise AssertionError("backfill must not run outside history mode")
+        raise AssertionError("backfill must not run in intuition mode")
 
     monkeypatch.setattr(orchestrator_main.backfill, "history_backfill", explode)
+    monkeypatch.setattr(orchestrator_main.backfill, "forward_backfill", explode)
     monkeypatch.setattr(
         orchestrator_main.lecturer, "lecture",
         lambda seed, nodes, mode="history", target=None: iter(

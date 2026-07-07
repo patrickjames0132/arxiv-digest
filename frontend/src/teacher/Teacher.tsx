@@ -28,6 +28,7 @@ import './teacher.css'
 const MODES: { key: LectureMode; label: string }[] = [
   { key: 'history', label: 'How we got here' },
   { key: 'intuition', label: "This paper's intuition" },
+  { key: 'evolution', label: "What's evolved since" },
 ]
 
 export default function Teacher({

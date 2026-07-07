@@ -25,21 +25,28 @@ export interface Beat {
 
 /**
  * What story the lecture tells: the field's history, the seed paper's
- * intuition, or a conceptual bridge from the seed to a target paper.
+ * intuition, how the field evolved forward from the seed, or a conceptual
+ * bridge from the seed to a target paper.
  */
-export type LectureMode = 'history' | 'intuition' | 'bridge'
+export type LectureMode = 'history' | 'intuition' | 'evolution' | 'bridge'
 
 /**
- * A backward-in-time hop the history lecture took before narrating: how many
- * foundational ancestors it pulled in and the oldest year it reached.
- * (`action`/`error` are optional only for sessions saved by the pre-rewrite
- * app; live frames always carry them.)
+ * A hop a lecture's backfill walk took before narrating — backward (history)
+ * or forward (evolution): how many papers it pulled in and the boundary year
+ * it reached (`oldest` for a backward hop, `newest` for a forward one).
+ * (`action`/`direction`/`newest`/`error` are absent on sessions saved by an
+ * older app; live frames carry them, and `direction` defaults to `'back'`.)
  */
 export interface BackfillTrace {
   action?: 'backfill'
+  /** Which way the walk ran; absent (old sessions) reads as `'back'`. */
+  direction?: 'back' | 'forward'
   hop: number
   found: number
-  oldest: number | null
+  /** Oldest year reached — backward hops only. */
+  oldest?: number | null
+  /** Newest year reached — forward hops only. */
+  newest?: number | null
   /** True when a hop hit an S2 error — "couldn't look" vs "found nothing". */
   error?: boolean
 }

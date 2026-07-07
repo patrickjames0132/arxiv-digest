@@ -8,9 +8,9 @@ spoken.
 ## Why it exists
 
 The lecture is the app's showpiece: press the button and the teacher
-narrates the intellectual history (or intuition, or a bridge between two
-areas) over the citation graph you're looking at, highlighting papers as
-the story reaches them. The old repo did this by begging the model for
+narrates the intellectual history (or intuition, or the forward evolution to
+the frontier, or a bridge between two areas) over the citation graph you're
+looking at, highlighting papers as the story reaches them. The old repo did this by begging the model for
 newline-delimited JSON and armoring a parser against disobedience
 (fence-stripping, line buffering, malformed-JSON tolerance). Here the shape
 is *enforced*, not requested: the model's output type IS `list[LectureBeat]`,
@@ -41,10 +41,10 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
 
 ## Design decisions worth knowing
 
-- **Modes are input, not agents.** `history` / `intuition` / `bridge` are
-  one `Literal` parameter selecting an intent paragraph — three stories,
-  one storyteller. A typo'd mode is a `KeyError` at the call boundary, not
-  a silent fall-back to `history` (the old behavior).
+- **Modes are input, not agents.** `history` / `intuition` / `evolution` /
+  `bridge` are one `Literal` parameter selecting an intent paragraph — four
+  stories, one storyteller. A typo'd mode is a `KeyError` at the call
+  boundary, not a silent fall-back to `history` (the old behavior).
 - **Two beat models on purpose.** The model emits `LectureBeat` with
   numbered-list *indices* (it never sees Semantic Scholar ids — see the
   `numbered-papers` skill); the frontend receives `events.Beat` with node
@@ -72,10 +72,11 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
 ## Who uses it, and how/why
 
 - **`agents/orchestrator` (Phase 4d).** The `lecture` intent
-  per `skills/workflows/lecture.md`: in history mode it runs its
-  deterministic `history_backfill` tool first (streaming `Trace`/`Discovery`
-  events), then calls `lecture(...)` with the ancestor-enriched node set and
-  relays the `Beat` stream, appending `Done`/`Error`.
+  per `skills/workflows/lecture.md`: in history/evolution mode it runs its
+  deterministic backfill walk first (`history_backfill` backward /
+  `forward_backfill` forward, streaming `Trace`/`Discovery` events), then
+  calls `lecture(...)` with the enriched node set and relays the `Beat`
+  stream, appending `Done`/`Error`.
 - **Old repo, traced (not yet ported):** `routes/teacher.py`'s lecture SSE
   endpoint calls `teacher.lecture_beats(seed, nodes, mode, target)` directly
   and serializes each beat dict as a `beat` SSE frame. Phase 5 rewrites that

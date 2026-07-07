@@ -16,9 +16,10 @@ while each sub-agent owns a single competence.
 
 ```
 orchestrator.run(intent, **payload)                    main.py
-  lecture   → [history mode: backfill.history_backfill —
+  lecture   → [history mode:   backfill.history_backfill (backward) |
+               evolution mode: backfill.forward_backfill (forward) —
                Trace/Discovery stream out AND the discovered
-               ancestors join the node set]
+               ancestors/descendants join the node set]
               → lecturer.lecture(seed, enriched_nodes, mode, target)
   q&a       → researcher.answer(question, seed, nodes, history, source_ids)
   librarian → librarian.answer(question, history, source_ids)
@@ -106,13 +107,15 @@ option.
   would be speculative plumbing (the same call as Phase 3's query-expansion
   seam, which waited for its agent). When a free-form entry point exists,
   the model half lands in `main.py`.
-- **`history_backfill` is the orchestrator's, not the lecturer's.** Three
-  reasons, settled explicitly: (1) "tools" in this package means
-  *model-callable*, and backfill is the one thing no model may ever invoke;
-  (2) unlike the librarian's retrieval (its grounding, needed on every
-  call), backfill is conditional (history mode only) and *edits the
-  lecturer's input* rather than grounding it — and its `Discovery` events
-  serve the live graph canvas regardless of what the lecture says; (3) the
+- **The backfill walks are the orchestrator's, not the lecturer's.** (One
+  shared `_walk(direction=…)`; `history_backfill` walks backward,
+  `forward_backfill` forward — see `backfill.py`.) Three reasons, settled
+  explicitly: (1) "tools" in this package means *model-callable*, and backfill
+  is the one thing no model may ever invoke; (2) unlike the librarian's
+  retrieval (its grounding, needed on every call), backfill is conditional
+  (history/evolution modes only) and *edits the lecturer's input* rather than
+  grounding it — and its `Discovery` events serve the live graph canvas
+  regardless of what the lecture says; (3) the
   split keeps roles honest — sub-agents own one competence, the
   orchestrator owns workflow scripts (`workflows/lecture.md` literally
   reads "backfill, then delegate").

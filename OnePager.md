@@ -16,7 +16,7 @@
 > 105-test offline suite (v1.21.1–.3), inline answer figures (v1.22.0), code &
 > artifact links via Hugging Face Papers (v1.23.0), per-seed cache-clear Refresh
 > button (v2.5.0), Semantic Scholar field-of-study tags in the detail panel
-> (v2.6.0)
+> (v2.6.0), "What's evolved since" forward lecture mode (v2.7.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -297,17 +297,28 @@ optional, behind a key.
       specific origin paper can still be missed since additions rank by citations
       over a narrow frontier — future tweak: prefer `influential` edges.)*
 
-- [ ] **Phase 3f — "What's Evolved Since" lecture mode** — a **third lecture
-      button** alongside "How We Got Here" (history) and "This Paper's Intuition"
-      (intuition), completing a **past → present → future** triptych. Where the
-      history mode walks *backward* through references to a field's roots, this
-      one walks *forward*: from the seed to the work that **built on it since** —
-      the newer architectures, follow-ups, and current frontier. Naturally
-      forward-looking, so it should lean on the recency-biased reach the Q&A
-      agent already has (`search_papers` with a year filter, `expand_node` over
-      *citations*) rather than the history mode's backward reference-walk.
-      Emits the same node-synced beats as the other two modes. *(From the
-      `todos.md` inbox, 2026-07-07.)*
+- [x] **Phase 3f — "What's Evolved Since" lecture mode** *(v2.7.0)* — a **third
+      lecture button** alongside "How We Got Here" (history) and "This Paper's
+      Intuition" (intuition), completing the **past → present → future**
+      triptych. It's the exact **mirror of the history backfill**: the shared
+      walk was refactored into one `_walk(direction=…)`, and evolution runs it
+      *forward* — launching from the **newest visible descendants** (launching
+      from the seed itself just re-finds its already-shown citations and
+      stalls), hopping **citations** (each hop reaches strictly newer work),
+      keeping the most-cited new papers, and marching toward the present with no
+      year ceiling (nothing can be cited by the future). The orchestrator runs
+      `forward_backfill` before narrating (same enrich-then-lecture path as
+      history); discoveries merge as descendants (dashed rings, far-**right** in
+      Timeline). `BackfillTrace` gained `direction`/`newest` (a forward hop
+      reports the newest year reached), rendered as **"⏩ Traced forward to
+      \<year\>"**; a new EVOLUTION mode-intent tells the lecturer to start at the
+      seed and move forward to the current frontier. Kept deterministic and
+      LLM-free like the history walk — the roadmap's optional `search_papers`
+      frontier-grab was deferred. *(From the `todos.md` inbox, 2026-07-07.)*
+      **Next (tight dependency):** **Recency preference for citations** (below) —
+      the forward walk's runway depends on the visible citations skewing *older*
+      (closer to the seed); when they're all near-present, the newest-visible
+      descendants are already at the frontier with little to expand into.
 
 **Beyond the teacher**
 
@@ -761,7 +772,11 @@ optional, behind a key.
       replacement for it — citation count is what rescued citations from
       S2's recency-biased default order in the first place; this would be a
       second axis (age vs. count) the user tunes, not a reversion.
-      *(From the `todos.md` inbox, 2026-07-07.)*
+      **Now doubly motivated (v2.7.0):** it feeds the Phase 3f "What's Evolved
+      Since" forward walk — skewing the visible citations *older* gives the
+      forward citation-walk room to march toward the present, where an
+      all-near-present neighborhood leaves it no runway. *(From the `todos.md`
+      inbox, 2026-07-07.)*
 - [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
       `search` relation from the researcher's `search_papers` tool) are
       currently **always shown** with no filter chip of their own (see the

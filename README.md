@@ -127,8 +127,10 @@ The Vite dev server proxies `/api/*` to Flask.
    Scholar. Click the **Atlas** brand anytime to go home.
 4. **Learn** (the 🎓 Assistant panel):
    - **Lectures** — "How we got here" (walks back to the field's roots
-     first, then narrates chronologically, lighting up papers beat by beat)
-     and "This paper's intuition".
+     first, then narrates chronologically, lighting up papers beat by beat),
+     "This paper's intuition", and "What's evolved since" (walks *forward*
+     through citations to the current frontier — the past → present → future
+     triptych).
    - **Ask** — the research agent answers grounded in what it actually
      reads, streaming its tool steps live (read / expand / search / search
      your sources / show a figure). Answers cite their papers — click one to

@@ -6,9 +6,10 @@ is the one place that contract is enforced, so the frontend never hangs on
 a dead stream. Known intents dispatch deterministically per the playbooks
 in ``skills/workflows/``:
 
-* ``lecture``   — history mode runs the ``backfill`` walk first (its
-  discoveries stream out AND enrich the node set the lecturer narrates),
-  then delegates to ``lecturer.lecture``.
+* ``lecture``   — history and evolution modes run a ``backfill`` walk first
+  (backward to the roots / forward to the frontier; its discoveries stream
+  out AND enrich the node set the lecturer narrates), then delegate to
+  ``lecturer.lecture``.
 * ``research``  — pure delegation to ``researcher.answer``.
 * ``librarian`` — pure delegation to ``librarian.answer``.
 
@@ -67,10 +68,16 @@ def run(
                 yield events.Error(message="lecture needs a seed and the visible nodes")
                 return
             work_nodes = list(nodes)
-            if mode is LectureMode.HISTORY:
-                # Backfill discoveries stream to the frontend AND join the
-                # node set, so the lecturer can narrate the found ancestors.
-                for event in backfill.history_backfill(seed, work_nodes):
+            # History and evolution both enrich the graph before narrating —
+            # history walks backward to the roots, evolution forward to the
+            # frontier. The discoveries stream to the frontend AND join the
+            # node set, so the lecturer can narrate the papers each walk found.
+            walk = {
+                LectureMode.HISTORY: backfill.history_backfill,
+                LectureMode.EVOLUTION: backfill.forward_backfill,
+            }.get(mode)
+            if walk is not None:
+                for event in walk(seed, work_nodes):
                     if isinstance(event, events.Discovery):
                         work_nodes.extend(event.nodes)
                     yield event

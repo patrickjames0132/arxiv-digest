@@ -210,21 +210,30 @@ class FigureTrace(BaseModel):
 
 
 class BackfillTrace(BaseModel):
-    """One hop of the history backfill's backward reference-walk.
+    """One hop of a lecture backfill walk — backward (history) or forward
+    (evolution).
 
-    ``oldest`` is the oldest publication year among this hop's additions.
-    ``error`` is set on the final empty trace when nothing older was found
-    *and* at least one hop failed — "we found nothing" and "we couldn't look"
-    read differently.
+    ``direction`` says which way the walk ran: ``"back"`` (the history mode's
+    reference-walk to the field's roots) or ``"forward"`` (the evolution
+    mode's citation-walk to the current frontier). The boundary year this hop
+    reached is reported in the field matching the direction — ``oldest`` for a
+    backward hop, ``newest`` for a forward one; the other stays None. ``error``
+    is set on the final empty trace when nothing was found *and* at least one
+    hop failed — "we found nothing" and "we couldn't look" read differently.
+
+    (``direction``/``newest`` default to the backward shape so frames from
+    before evolution mode existed — and saved sessions — still validate.)
     """
 
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["trace"] = "trace"
     action: Literal["backfill"] = "backfill"
+    direction: Literal["back", "forward"] = "back"
     hop: int
     found: int
-    oldest: int | None
+    oldest: int | None = None
+    newest: int | None = None
     error: bool = False
 
 

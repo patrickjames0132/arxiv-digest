@@ -128,3 +128,77 @@ def test_clean_empty_walk_has_no_error_flag(monkeypatch):
     )
     out = list(backfill.history_backfill(SEED, NODES))
     assert out == [events.BackfillTrace(hop=1, found=0, oldest=None, error=False)]
+
+
+# --- The forward (evolution) walk: the mirror image of the history walk ------
+
+
+def test_forward_launches_from_newest_visible_and_hops_citations(monkeypatch):
+    asked: list[tuple[str, str]] = []
+
+    def fake_neighbors(paper_id, relation, limit):
+        asked.append((paper_id, relation))
+        return []
+
+    monkeypatch.setattr(backfill.traversal, "neighbors", fake_neighbors)
+    list(backfill.forward_backfill(SEED, NODES))
+    # frontier=2: the two NEWEST non-seed papers, newest first — never the
+    # seed — and it hops CITATIONS (not references).
+    assert asked == [("recent", "citations"), ("mid00s", "citations")]
+
+
+def test_forward_edge_points_citing_descendant_to_cited_frontier(monkeypatch):
+    monkeypatch.setattr(config.graph.backfill, "per_hop", 2)
+    monkeypatch.setattr(config.graph.backfill, "hops", 1)
+    hits = [
+        hit("desc-big", 2022, citations=8000, influential=True),
+        hit("desc-new", 2024, citations=30),
+    ]
+    monkeypatch.setattr(
+        backfill.traversal,
+        "neighbors",
+        lambda paper_id, relation, limit: hits if paper_id == "recent" else [],
+    )
+    out = list(backfill.forward_backfill(SEED, NODES))
+    trace, discovery = out
+    # A forward hop reports the NEWEST year reached, tagged direction=forward.
+    assert trace == events.BackfillTrace(hop=1, found=2, newest=2024, direction="forward")
+    assert [node.id for node in discovery.nodes] == ["desc-big", "desc-new"]  # citation order
+    assert all(node.rels == ["citation"] for node in discovery.nodes)
+    # Citation edge points citing (the newer descendant) -> cited (the frontier).
+    assert {(edge.source, edge.target, edge.type) for edge in discovery.edges} == {
+        ("desc-big", "recent", "citation"),
+        ("desc-new", "recent", "citation"),
+    }
+
+
+def test_forward_marches_toward_the_present_with_no_year_ceiling(monkeypatch):
+    monkeypatch.setattr(config.graph.backfill, "frontier", 1)
+    calls: list[str] = []
+
+    def fake_neighbors(paper_id, relation, limit):
+        calls.append(paper_id)
+        by_frontier = {
+            "recent": [hit("desc-2022", 2022, 100)],
+            "desc-2022": [hit("desc-2025", 2025, 100)],
+            "desc-2025": [hit("desc-2026", 2026, 100)],
+        }
+        return by_frontier.get(paper_id, [])
+
+    monkeypatch.setattr(backfill.traversal, "neighbors", fake_neighbors)
+    out = list(backfill.forward_backfill(SEED, NODES))
+    # No year ceiling: it marches forward until the hop budget (3) runs out.
+    assert calls == ["recent", "desc-2022", "desc-2025"]
+    traces = [event for event in out if isinstance(event, events.BackfillTrace)]
+    assert [trace.newest for trace in traces] == [2022, 2025, 2026]
+
+
+def test_forward_nothing_found_reports_forward_with_error_flag(monkeypatch):
+    def explode(paper_id, relation, limit):
+        raise s2.S2Error("rate limited")
+
+    monkeypatch.setattr(backfill.traversal, "neighbors", explode)
+    out = list(backfill.forward_backfill(SEED, NODES))
+    assert out == [
+        events.BackfillTrace(hop=1, found=0, newest=None, direction="forward", error=True)
+    ]
