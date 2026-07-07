@@ -1,61 +1,53 @@
-# arXiv Atlas
+# Atlas
 
-**Explore how research papers connect — and have an AI teacher narrate the story
-of how a field got here.**
+**Explore how research papers connect — and have an AI teacher narrate the
+story of how a field got here.**
 
-Drop in a paper and Atlas renders a **Connected-Papers-style interactive graph**
-of how it links to the literature — the papers it cites (its intellectual
-ancestors), the papers that cite it (its descendants), and its nearest neighbors
-by meaning. Then wander: double-click any node to re-center the graph on it and
-keep exploring.
+Drop in a paper and Atlas renders a **Connected-Papers-style interactive
+graph** of how it links to the literature — the papers it cites (its
+intellectual ancestors), the papers that cite it (its descendants), and its
+nearest neighbors by meaning. Then wander: double-click any node to re-center
+the graph on it and keep exploring.
 
 It connects to the academic-graph ecosystem **dynamically** — there's no local
-corpus of papers to store (millions of papers are many TB; we leave that to the
-people who already host it). The only thing kept on disk is a tiny cache of the
-graphs you've already looked at.
+corpus of papers to store. The only things kept on disk are a small cache of
+the graphs you've looked at, your saved sessions, and the library of sources
+you upload (embedded locally; nothing leaves your machine).
 
-> **Status:** v1.23 — the graph explorer **and a streaming AI teacher** are live:
-> Claude narrates a lecture over the graph and lights up nodes in sync — and the
-> **"How we got here" lecture time-travels**, walking backward through references
-> to a field's older roots before it narrates, so the story starts at the
-> beginning. It also answers follow-up questions grounded in the papers on screen.
-> The Q&A agent
-> **reads the papers' actual full text** (via ar5iv), can **traverse to papers
-> not yet on the graph** (`expand_node` — one hop of references / citations /
-> similar work), and can **search all of Semantic Scholar** for off-graph work
-> (`search_papers`, with a year filter, for recent/topical papers citation hops
-> can't reach) before answering — a tool-use loop with live trace UI, read/hop/
-> search budgets, and wall-clock guardrails. Discovered papers merge into the
-> graph (a dashed "discovered" ring; search hits get their own pink "found by
-> search" color). Each answer is a **clickable section** that re-lights the
-> papers it drew on, just like a lecture beat. A **Timeline layout** arranges
-> papers left→right by year (so the lecture sweeps through time), and the detail
-> panel shows a paper's own **figures + captions**, links to both the abstract
-> and the PDF, and the paper's **code & artifacts** — the linked GitHub repo and
-> the models/datasets/Spaces built on it, via Hugging Face Papers. Seed search is **cache-first**: papers you've already seen appear
-> instantly (and still work when the APIs are rate-limiting). You can also **bring
-> your own sources** — drop in several PDFs/books at once (embedded in parallel)
-> or paste a URL and it's chunked, embedded
-> **locally** (no API key; the text never leaves your machine), and made
-> searchable by **both meaning and exact keyword** — a hybrid of semantic
-> (sqlite-vec) and lexical (FTS5) retrieval fused with RRF, so an exact term or
-> proper noun the embedder blurs still surfaces; the **teacher then searches your
-> library in Q&A and cites it by page** ("*per your textbook, p.243…*"). The teacher and
-> the library live in **one 🎓 Assistant panel** that levels up with context: with
-> **no graph open** it's a chat straight over your uploaded sources (no seed search
-> needed); once a **graph is open** it's the full lecture + agentic Q&A — either
-> way **scoped to any subset of sources** on demand (a checkbox picker). And you
-> can **save a session** — the
-> whole graph (including the
-> papers the teacher discovered) plus its chat — and **reopen it later** with no
-> API calls, from a 🗂 Sessions drawer. Concept mindmaps
-> and audio lectures follow — see **[OnePager.md](OnePager.md)** for the full
-> vision and phase plan.
+> **Status: v2.0.0 — the readability rewrite.** The entire app was rebuilt
+> file-by-file for a codebase a human can read: every package carries its own
+> README (what/why → structure → design decisions → who uses it → how it's
+> verified), the backend is strictly typed (mypy strict, Pydantic models on
+> every boundary), and the frontend runs strict TypeScript with a
+> three-slice Redux store. Along the way the app itself leveled up:
+>
+> - **Search covers all of Semantic Scholar** (200M+ papers across venues,
+>   not just arXiv) — with an LLM **query analyst** that expands acronyms
+>   ("DQN" → "deep Q-network") and **recalls famous papers by exact title**,
+>   verified against S2's title-match endpoint so the seminal paper leads
+>   the hits. Pasted arXiv ids/URLs still jump straight in; repeated
+>   queries answer instantly from a whole-result cache.
+> - **The AI teacher is a crew of [PydanticAI](https://ai.pydantic.dev)
+>   agents** behind one orchestrator: a **lecturer** (streamed lectures in
+>   typed beats — "How we got here" time-travels to a field's roots first),
+>   a **researcher** (agentic Q&A that reads full text via ar5iv, expands
+>   the graph, searches S2, searches *your* library, and attaches real
+>   figures inline), a **librarian** (single-shot RAG over your uploads,
+>   cited by page), and the **query analyst**. Everything streams for real
+>   — beats, prose, tool traces, discoveries.
+> - **Bring-your-own sources** with hybrid retrieval (sqlite-vec semantic +
+>   FTS5 lexical, fused with RRF), parallel PDF uploads with **live
+>   embedding progress bars**, and a per-source scope picker for the agents.
+> - **Sessions** save the whole workspace — graph, discovered papers, chat —
+>   and restore with zero API calls.
+>
+> See **[OnePager.md](OnePager.md)** for the vision, the full feature stack,
+> and the roadmap.
 
 ```
 ┌──────────┐  find seed   ┌─────────┐  graph/refs/cites/recs  ┌──────────────────┐
-│  arXiv   │ ───────────▶ │ backend │ ──────────────────────▶ │ Semantic Scholar │
-│  search  │  (title/id)  │ (Flask) │      (dynamic API)      │  Academic Graph  │
+│  search  │ ───────────▶ │ backend │ ──────────────────────▶ │ Semantic Scholar │
+│  (S2+LLM)│  (title/id)  │ (Flask) │      (dynamic API)      │  Academic Graph  │
 └──────────┘              └────┬────┘                         └──────────────────┘
                                │ /api/graph  (thin cache only)
                                ▼
@@ -64,42 +56,41 @@ graphs you've already looked at.
                      └───────────────────────┘
 ```
 
-**Stack:** Python/Flask + uv · React + TypeScript + Vite ·
+**Stack:** Python/Flask + uv · [PydanticAI](https://ai.pydantic.dev) agents on
+Claude · React + TypeScript (strict) + Vite + Redux Toolkit ·
 [`react-force-graph-2d`](https://github.com/vasturiano/react-force-graph) ·
-[Semantic Scholar Academic Graph API](https://api.semanticscholar.org/api-docs/)
-(the same data backbone Connected Papers uses) · the
-[`arxiv`](https://pypi.org/project/arxiv/) package for seed search · Claude (via
-the `claude` CLI **or** the Anthropic API) for the AI-teacher lecture + Q&A.
-Runs locally on your Mac.
+[Semantic Scholar Academic Graph API](https://api.semanticscholar.org/api-docs/) ·
+[ar5iv](https://ar5iv.org) for figures/full text ·
+[Hugging Face Papers](https://huggingface.co/papers) for code & artifacts ·
+sentence-transformers + sqlite-vec for the local library. Runs locally.
 
 ---
 
 ## Setup
 
-`uv`, `Node.js`, and `Python 3.11+` are already installed on this machine.
+`uv` and `Node.js` are assumed installed.
 
 ### 1. Configure
 
 ```bash
-cd ~/arxiv-digest
-cp .env.example .env
+cp config.example.json config.json
 ```
 
-Edit `.env` (everything here is **optional** — Atlas works with no keys, just
-more slowly):
+All configuration lives in `config.json` (gitignored — it holds your keys; no
+environment variables, ever). Every field is required and validated at startup
+by Pydantic; the value-by-value rationale lives in
+[docs/configuration.md](docs/configuration.md). The two keys that matter:
 
-- **`S2_API_KEY`** — a free [Semantic Scholar API key](https://www.semanticscholar.org/product/api).
-  Strongly recommended: the unauthenticated pool is tight and graph builds will
-  occasionally hit rate limits without it (the client backs off and retries, and
-  snapshots are cached, so it still works — just less snappily).
-- **`ANTHROPIC_API_KEY`** / **`TEACHER_BACKEND`** — power the AI teacher
-  (lecture + Q&A). It runs through the Anthropic API (**`TEACHER_BACKEND=api`**,
-  needs the key) or the `claude` CLI under a Claude Pro/Max subscription
-  (**`TEACHER_BACKEND=claude_cli`**, no API billing).
+- **`s2.api_key`** — a free
+  [Semantic Scholar API key](https://www.semanticscholar.org/product/api).
+  Optional but strongly recommended; the unauthenticated pool is tight.
+- **`llm.providers.anthropic.api_key`** — powers the whole agent crew
+  (lecture, research Q&A, library chat, query analysis). The per-agent model
+  choices live under `llm.agents`.
 
 ### 2. Build the frontend & run
 
-**Single-server** (serves the built dashboard + API together):
+**Single-server** (serves the built frontend + API together):
 
 ```bash
 cd frontend && npm install && npm run build && cd ..
@@ -109,11 +100,8 @@ uv run arxiv-atlas serve                      # http://127.0.0.1:5000
 **Development** (two terminals, hot-reloading frontend):
 
 ```bash
-# Terminal 1 — API
-uv run arxiv-atlas serve                      # http://127.0.0.1:5000
-
-# Terminal 2 — dashboard
-cd frontend && npm run dev                     # http://localhost:5173
+uv run arxiv-atlas serve                      # Terminal 1 — API
+cd frontend && npm run dev                    # Terminal 2 — http://localhost:5173
 ```
 
 The Vite dev server proxies `/api/*` to Flask.
@@ -122,128 +110,42 @@ The Vite dev server proxies `/api/*` to Flask.
 
 ## Using it
 
-1. **Search a paper** — type a title (e.g. *Attention Is All You Need*) and pick
-   from the hits (each shows its **publication date**), or paste an **arXiv id /
-   URL** to jump straight in. Papers you've seen on previous graphs appear
-   **instantly from the local cache** (above the live arXiv results); an
-   **instant** badge marks papers whose whole neighborhood is cached — those
-   explore without touching the API at all, rate limits be damned. Optional
-   **Filters** narrow the search by a **publication-year range** (a dual-handle
-   slider) and by **arXiv category** — a pasted id/URL ignores them.
-2. **Read the map** — 🟡 gold = the seed · 🔵 blue = **references** (papers it
-   cites) · 🟢 green = **citations** (papers citing it) · 🟣 purple = **similar**
-   (SPECTER2 neighbors). Node size = citation count; arrows show citation
-   direction; thicker links mark "influential" citations. **Click a node** for a
-   detail panel — TL;DR, links to the **abstract** and the **PDF**, the paper's
-   **code & artifacts** (from [Hugging Face Papers](https://huggingface.co/papers),
-   Papers with Code's successor: the community-linked **GitHub repo** with stars,
-   plus the top **models / datasets / Spaces** built on the paper), and the
-   paper's own **figures + captions** (pulled from [ar5iv](https://ar5iv.org)
-   when available).
-3. **Declutter** (top-left panel):
-   - **Layout** — toggle **Force** (organic force-directed) ↔ **Timeline** (x =
-     publication date — year + month, so papers sit between the yearly gridlines;
-     oldest left; papers spread into citation threads through time). In Timeline,
-     narrowing the year slider zooms into that span.
-   - **Relation filters** — toggle references / citations / similar on and off.
-   - **Year range** — a dual-thumb slider to focus on an era (the seed always stays).
-   - **Drag-to-pin** — drag a node to fix it in place; *Release* unpins all.
-   - **Focus-on-hover** — hover a node to fade everything not connected to it.
-4. **Traverse** — **double-click** any node (or use *Explore from here*) to
-   re-seed the whole graph on that paper. Re-seeding works by Semantic Scholar
-   id, so you can hop onto cited **journal** papers with no arXiv id and keep
-   going. Every hop is cached, so backtracking is instant.
-5. **Learn from the AI teacher** (right panel):
-   - **"How we got here"** — a chronological lecture across the neighborhood,
-     from the oldest references through the seed to the work it spawned. Beats
-     stream in one at a time, and the papers each beat is about **light up** on
-     the graph in sync.
-   - **"This paper's intuition"** — a deep-dive on the seed paper itself (what it
-     solved, the core idea, why it works), using the neighbors for contrast.
-   - **Ask** — type a question and get a streamed answer **grounded in the papers
-     on screen**; the papers it draws from light up. Follow-ups keep context. The
-     agent can pull a paper's **own figures into its answer** (click to enlarge).
-     If you've uploaded a library, it can also **search your own sources** — and a
-     header checkbox picker lets you **scope it to any subset of sources**.
-
-   The teacher uses Claude through the same dual backend as summaries — the
-   `claude` CLI (Pro/Max subscription, no API billing) or the Anthropic API. Set
-   `TEACHER_BACKEND=claude_cli` to prefer the subscription path.
+1. **Search a paper** — type a title, a topic, or an acronym (the analyst
+   expands it and title-resolves famous papers), or paste an **arXiv id /
+   URL** to jump straight in. Cached papers appear instantly; an **instant**
+   badge marks papers whose whole neighborhood is cached. Optional filters:
+   a publication-year window (1800 → now) and S2 **fields of study**.
+2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations · 🟣 similar ·
+   💗 found-by-search. Node size = citations; thick links = influential
+   citations; a dashed ring = discovered by the teacher mid-chat. Click a
+   node for details (TL;DR, abstract/PDF links, figures, code & artifacts);
+   **double-click to re-seed** on it — journal papers included.
+3. **Declutter** — Force ↔ Timeline layouts (x = publication date), relation
+   filters, a year slider, drag-to-pin, focus-on-hover. Click the **Atlas**
+   brand anytime to go home.
+4. **Learn** (the 🎓 Assistant panel):
+   - **Lectures** — "How we got here" (walks back to the field's roots
+     first, then narrates chronologically, lighting up papers beat by beat)
+     and "This paper's intuition".
+   - **Ask** — the research agent answers grounded in what it actually
+     reads, streaming its tool steps live (read / expand / search / search
+     your sources / show a figure). Answers cite their papers — click one to
+     re-light them.
+   - **No graph open?** The same panel is a chat straight over your uploaded
+     library, cited by page.
+5. **Your sources** (📚) — drop in PDFs (parallel, with live embedding
+   progress) or paste URLs; scope any conversation to a subset of them.
+6. **Sessions** (🗂) — save the workspace, reopen it later free of charge.
 
 ---
 
-## How the graph is built
+## The codebase
 
-`graph.build_graph(seed)` assembles a neighborhood from the
-[Semantic Scholar Academic Graph + Recommendations APIs](https://api.semanticscholar.org/api-docs/):
+The rewrite's first principle: **every package documents itself**. Start at
+any folder's `README.md` — e.g. `src/arxiv_digest/agents/` (the crew, the
+event protocol, the streaming bridge), `services/sources/` (hybrid retrieval:
+FTS5 + vectors + RRF), `frontend/src/README.md` (the render-tree map), or
+`frontend/src/store/` (what earns a Redux slice and what stays local).
 
-- **Seed details** are hydrated through `POST /paper/batch` — deliberately, not
-  the single-paper GET, which is throttled hardest for unauthenticated callers.
-  A spike against the live API confirmed batch returns everything we need
-  (title, abstract, `tldr`, `externalIds.ArXiv`, SPECTER2 embedding) and isn't
-  rate-limited the same way.
-- **References** (`/paper/{id}/references`) and **citations**
-  (`/paper/{id}/citations`) become the directed edges.
-- **Similar papers** come from the **recommendations** endpoint
-  (`forpaper?from=all-cs`) — embedding-based neighbors.
-- Nodes are deduped by S2 paperId; edges are tagged `reference | citation |
-  similar`. The whole snapshot is cached in `data/digest.db` (a small key→JSON
-  `cache` table) with a 1-day TTL, so repeat exploration stays fast and polite.
-
-Seed lookup accepts either an **arXiv id** (`ARXIV:1706.03762`) or a raw **S2
-paperId** (how re-seeding on any node works).
-
----
-
-## Project layout
-
-```
-arxiv-digest/                    # (repo name predates the "Atlas" rename)
-├── OnePager.md                  # product vision, feature stack & phase roadmap
-├── pyproject.toml               # uv-managed backend deps
-├── .env / .env.example          # optional keys (S2, Anthropic) — .env gitignored
-├── data/digest.db               # thin cache (graph snapshots); gitignored
-├── src/
-│   └── arxiv_digest/            # the backend package (src-layout; installed
-│       │                        #   editable — `uv run arxiv-atlas` is its CLI)
-│       ├── cli.py               # click CLI: serve, ingest, sources, …
-│       ├── config.py            # settings from .env (incl. Semantic Scholar)
-│       ├── app.py               # thin Flask factory: wires routes/ + serves frontend
-│       ├── routes/              # the API surface: one Flask blueprint per concern
-│       │                        #   (graph, search, teacher, sources, sessions)
-│       ├── teacher/             # AI teacher package: streaming backends, lecture,
-│       │                        #   grounded + agentic Q&A, tools, library chat
-│       ├── integrations/        # external clients: semantic_scholar, arxiv_client,
-│       │                        #   fulltext + figures (ar5iv), huggingface (code
-│       │                        #   links), taxonomy (dormant)
-│       ├── services/            # domain logic: graph assembly, seed search
-│       ├── storage/             # SQLite: cache (ephemeral), sessions (durable)
-│       └── library/             # bring-your-own sources: ingest + embeddings
-└── frontend/                    # React + TS + Vite
-    └── src/
-        ├── Atlas.tsx            # the workspace orchestrator (owns graph state)
-        ├── api/                 # typed backend client (search, graph, teacher, …)
-        ├── header/              # AtlasHeader (brand, search form, drawer toggles)
-        ├── search/              # Search form + HitList + useSeedSearch
-        ├── graph/               # GraphCanvas/Controls/Legend + layout/pin/discovery hooks
-        ├── detail/              # DetailPanel + useSelection (figures, code links, hydration)
-        ├── teacher/             # unified Assistant panel (graph lecture/Q&A + library chat)
-        ├── library/             # Sources drawer (bring-your-own sources)
-        └── sessions/            # Sessions drawer (saved workspaces)
-```
-
-*Legacy note:* the earlier "daily digest" era (local paper store, hybrid FTS5 +
-`sqlite-vec` search, category pulls, NotebookLM export) was **retired in v1.4.0** —
-its modules, routes, and settings are gone. `taxonomy.py` is kept **dormant** for
-near-term features (graph filtering, topic-bridging); see **OnePager.md**.
-
-## Notes & next steps
-
-- **The AI teacher** (lecture + Q&A) is **live** — Claude narrates the history
-  and intuition of a field, synced to the graph, and Q&A answers are grounded
-  in the papers' **actual full text** (read via a tool-use loop). Next up:
-  **agentic graph traversal + topic search** (Phase 3c) so the agent can pull
-  in papers beyond the visible neighborhood, plus concept mindmaps and
-  Podcastfy audio lectures. See **[OnePager.md](OnePager.md)**.
-- **Secrets:** `.env` is gitignored — never commit it. Keys are optional; Atlas
-  runs keyless (just rate-limited on Semantic Scholar).
+Quality gates: `uv run nox` (ruff, strict mypy, pytest — all offline) and
+`cd frontend && npm run build && npm run lint` (strict tsc, Vite, oxlint).

@@ -1,4 +1,4 @@
-# arXiv Atlas — One-Pager
+# Atlas — One-Pager
 
 > **Status:** v1.23 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
@@ -321,6 +321,42 @@ optional, behind a key.
       ElevenLabs optional, `/api/lecture/audio`.
 - [ ] **Phase 7 — Polished media (optional)** — `autocontent.py` behind
       `AUTOCONTENT_API_KEY`; "Generate visuals" button.
+
+**The v2 rewrite** *(shipped)*
+
+- [x] **v2.0.0 — the readability rewrite** *(2026-07-06)* — the whole app
+      rebuilt file-by-file in a walkthrough (explain → refactor → test → sync),
+      with a README in every package. Backend: `config.json` + Pydantic config
+      (no env vars), strict mypy, typed `Graph` models, the teacher reborn as a
+      **PydanticAI agent crew** (query_analyst / librarian / lecturer /
+      researcher behind a deterministic orchestrator; typed event stream;
+      everything streams for real — required Anthropic's eager tool-input
+      streaming). Search moved **arXiv → all of Semantic Scholar** with LLM
+      query expansion + title resolution and whole-result caching; the `arxiv`
+      package and the claude-CLI backend retired. Frontend: strict TS, Redux
+      Toolkit (3 slices: workspace/transcript/highlight), the 743-line
+      Teacher.tsx and 577-line Atlas.tsx decomposed along the hybrid structure
+      rule, ingest progress bars, a Home button, and the **"Atlas"** rebrand
+      (in-app copy; repo name unchanged).
+
+- [ ] **Graph-less research mode** — let the researcher run with no graph
+      open: agentic research from scratch (search S2 + the local library, no
+      seed required). Would retire the librarian in its favor — today's
+      no-graph chat is deliberately single-shot RAG (retrieval-before-model:
+      half the cost/latency, grounding guaranteed by construction), which is
+      the right trade until real usage demands agency there.
+- [ ] **Orchestrator model fan-out** — the hybrid design's model half, on the
+      documented seam in `agents/orchestrator/main.py`: for ambiguous or
+      multi-step asks, let an orchestrator model route or fan out across
+      sub-agents and synthesize. Same trigger as above: build when usage
+      shows the researcher's own tool loop isn't enough.
+- [ ] **Detail-panel arXiv category tags** — show an arXiv paper's own
+      categories (`cs.LG` → "Machine Learning") via `integrations.arxiv.vocab`
+      (+ `/api/taxonomy/arxiv`, already served); needs a thin arXiv metadata
+      fetch for per-paper categories (S2 doesn't carry them).
+- [ ] **General non-arXiv full text** — S2's `openAccessPdf` + the existing
+      pymupdf pipeline as a fallback reader for `read_paper` on journal
+      papers (text only; figures stay ar5iv-quality-or-nothing).
 
 **Enhancements & tech debt** *(unscheduled; from the `todos.md` inbox)*
 
