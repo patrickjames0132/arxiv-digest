@@ -1,0 +1,90 @@
+{
+  "storage": {
+    "data_dir": "data"
+  },
+  "s2": {
+    "api_key": "",
+    "graph_url": "https://api.semanticscholar.org/graph/v1",
+    "recs_url": "https://api.semanticscholar.org/recommendations/v1",
+    "timeout": 30,
+    "min_interval": 1.1
+  },
+  "graph": {
+    "backfill": {
+      "hops": 3,
+      "per_hop": 6,
+      "frontier": 2,
+      "lookback_years": 40,
+      "fetch_limit": 8
+    },
+    "ref_limit": 25,
+    "cite_limit": 25,
+    "similar_limit": 15,
+    "recs_pool": "all-cs",
+    "cache_ttl": 86400
+  },
+  "sources": {
+    "semantic_enabled": true,
+    "embedding": {
+      "model": "sentence-transformers/all-MiniLM-L6-v2",
+      "dim": 384,
+      "query_prefix": ""
+    },
+    "chunking": {
+      "chars": 900,
+      "overlap": 150
+    },
+    "retrieval": {
+      "search_k": 6,
+      "hybrid": true,
+      "rrf_k": 60,
+      "chat_k": 8
+    }
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 5000,
+    "debug": false,
+    "history_turns": 8
+  },
+  "llm": {
+    "providers": {
+      "anthropic": {
+        "api_key": "sk-ant-..."
+      }
+    },
+    "agents": [
+      {
+        "id": "query_analyst",
+        "model": "anthropic:claude-haiku-4-5",
+        "extras": {}
+      },
+      {
+        "id": "librarian",
+        "model": "anthropic:claude-sonnet-4-6",
+        "extras": {}
+      },
+      {
+        "id": "lecturer",
+        "model": "anthropic:claude-sonnet-4-6",
+        "extras": {}
+      },
+      {
+        "id": "researcher",
+        "model": "anthropic:claude-sonnet-4-6",
+        "extras": {
+          "max_steps": 12,
+          "full_reads": 4,
+          "summary_reads": 12,
+          "hops": 5,
+          "expand_limit": 8,
+          "searches": 3,
+          "search_limit": 8,
+          "source_searches": 5,
+          "figures": 3,
+          "fulltext_max_chars": 8000
+        }
+      }
+    ]
+  }
+}

@@ -7,9 +7,10 @@
 export type EdgeType = 'reference' | 'citation' | 'similar'
 
 /**
- * One paper on the graph. Shape mirrors the backend's normalized Semantic
- * Scholar node (`semantic_scholar.py`), plus the graph-role flags the
- * explorer and teacher add (`rels`, `is_seed`, `discovered`).
+ * One paper on the graph. Shape mirrors the backend's `services.graph.Node`
+ * (the normalized Semantic Scholar node plus the graph-role flags), and is
+ * also the shape of a live-search hit and a discovered paper — one paper
+ * type everywhere.
  */
 export interface GraphNode {
   /** Semantic Scholar paperId (stable graph key). */
@@ -29,8 +30,13 @@ export interface GraphNode {
   /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'similar' | 'search'. */
   rels: string[]
   is_seed: boolean
-  /** Added mid-conversation by the agent's expand_node / search_papers tools. */
+  /** Added mid-conversation by the researcher's expand_node / search_papers tools. */
   discovered?: boolean
+  /**
+   * The [n] index the researcher knows the paper by (discovered papers only;
+   * null when the lecture backfill found it, before numbering exists).
+   */
+  idx?: number | null
 }
 
 /** A directed edge between two papers (source/target are node ids). */
@@ -38,13 +44,17 @@ export interface GraphEdge {
   source: string
   target: string
   type: EdgeType
-  /** S2 flagged this as an influential citation (drawn heavier). */
-  influential?: boolean
+  /**
+   * S2 flagged this as an influential citation (drawn heavier). Explicitly
+   * null on 'similar' edges — they aren't citations, so the flag doesn't
+   * apply.
+   */
+  influential?: boolean | null
 }
 
 /** The `/api/graph` response: the resolved seed, its neighborhood, and counts. */
 export interface GraphResponse {
-  seed: { arxiv_id: string; id: string; title: string }
+  seed: { arxiv_id: string | null; id: string; title: string }
   nodes: GraphNode[]
   edges: GraphEdge[]
   counts: {
@@ -58,7 +68,8 @@ export interface GraphResponse {
 /**
  * The neighborhood graph for a seed paper (references + citations + similar).
  *
- * @param seed    An arXiv id or a pasted abs/pdf URL.
+ * @param seed    An arXiv id, a pasted abs/pdf URL, or a raw S2 paperId
+ *                (re-seeding works from any node, arXiv or not).
  * @param refresh Bypass the server's day-cached snapshot and rebuild from S2.
  * @throws With the server's error message (e.g. "No paper found…", S2
  *         unavailable) when the graph can't be built.
@@ -81,11 +92,13 @@ export async function fetchGraph(
  * Full details (abstract, tldr, authors) for one paper — used to hydrate a
  * node's detail panel on click, since graph nodes arrive summary-light.
  *
- * @param arxivId The paper's arXiv id (or a pasted abs/pdf URL).
+ * @param paperRef The paper's arXiv id, a pasted abs/pdf URL, or a raw S2
+ *                 paperId (papers that exist on S2 but not arXiv hydrate by
+ *                 paperId).
  * @throws With the server's error message when the paper can't be fetched.
  */
-export async function fetchPaperDetail(arxivId: string): Promise<GraphNode> {
-  const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}`)
+export async function fetchPaperDetail(paperRef: string): Promise<GraphNode> {
+  const res = await fetch(`/api/paper/${encodeURIComponent(paperRef)}`)
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
     throw new Error(data.error || `Failed to load paper (${res.status})`)

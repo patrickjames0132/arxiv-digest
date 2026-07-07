@@ -1,29 +1,26 @@
-"""Saved sessions & workspaces (Phase 4).
+"""Saved sessions & workspaces.
 
-Persistence, deliberately dropped at the v1.0 Atlas pivot, reintroduced here as
-an opt-in: save the current **graph** (seed + every node/edge on screen, including
-the ones the agent discovered / expanded / searched in) together with the
-**teacher transcript** (chat + lecture beats), then reopen it later without
-rebuilding the graph from Semantic Scholar (so a restore costs no rate-limited
-API calls and keeps the exact papers you had explored).
+Save the current **graph** (seed + every node/edge on screen, including ones
+the agent discovered/expanded/searched) together with the **teacher
+transcript** (chat + lecture beats), then reopen it later without rebuilding
+the graph from Semantic Scholar — a restore costs no rate-limited API calls
+and keeps the exact papers you had explored.
 
-This is a small key/blob store, separate from the ephemeral 1-day graph cache in
-digest.db — saved sessions are durable user data with their own lifecycle, so
-they live in their own `sessions.db` (like the bring-your-own sources library).
-The heavy state is JSON in the `data` column; a few metadata columns are lifted
-out so the list view renders without parsing every blob.
+This is a small key/blob store, separate from the ephemeral 1-day graph
+cache in digest.db — saved sessions are durable user data with their own
+lifecycle, so they live in their own ``sessions.db`` (like the bring-your-
+own sources). The heavy state is JSON in the ``data`` column; a few metadata
+columns are lifted out so the list view renders without parsing every blob.
 """
 
 from __future__ import annotations
 
 import json
-import sqlite3
 import time
-from contextlib import contextmanager
-from typing import Iterator, Optional
 from uuid import uuid4
 
-from .. import config
+from ..config import config
+from . import utils
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS saved_sessions (
@@ -39,27 +36,9 @@ CREATE TABLE IF NOT EXISTS saved_sessions (
 """
 
 
-@contextmanager
-def _connect() -> Iterator[sqlite3.Connection]:
-    """Open a connection to the sessions store, committing on clean exit.
-
-    Ensures the data directory and schema exist first.
-
-    Yields:
-        An open ``sqlite3.Connection`` with ``Row`` as its row factory.
-
-    Raises:
-        sqlite3.Error: On database failures.
-    """
-    config.ensure_dirs()
-    conn = sqlite3.connect(config.SESSIONS_DB_PATH, timeout=10)
-    conn.row_factory = sqlite3.Row
-    try:
-        conn.execute(_SCHEMA)
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+def _connect() -> utils.ConnectionContext:
+    """Open a connection to the sessions store (data dir + schema ensured)."""
+    return utils.connect(config.storage.sessions_db, _SCHEMA)
 
 
 def list_sessions() -> list[dict]:
@@ -83,7 +62,7 @@ def list_sessions() -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_session(session_id: str) -> Optional[dict]:
+def get_session(session_id: str) -> dict | None:
     """Fetch one full saved session.
 
     Args:
@@ -121,7 +100,7 @@ def get_session(session_id: str) -> Optional[dict]:
     }
 
 
-def save_session(payload: dict, session_id: Optional[str] = None) -> dict:
+def save_session(payload: dict, session_id: str | None = None) -> dict:
     """Create a saved session, or overwrite an existing one in place.
 
     Args:

@@ -1,22 +1,27 @@
-"""A thin TTL cache for dynamically-fetched artifacts (graph snapshots now;
-lecture scripts and mindmaps later).
+"""A thin TTL cache for dynamically-fetched artifacts (graph snapshots, ar5iv
+full text and figures, Hugging Face code links).
 
-arXiv Atlas deliberately does NOT store a paper corpus — millions of papers are
-many TB and the ecosystem (Semantic Scholar / arXiv) already hosts them. This is
-just a small key -> JSON-blob table so we can respect Semantic Scholar's tight
-rate limit and avoid re-fetching the same neighborhood on every view. It lives in
-the same SQLite file as the (legacy) digest tables but is otherwise independent.
+arXiv Atlas deliberately does NOT store a paper corpus — millions of papers
+are many TB and the ecosystem (Semantic Scholar / arXiv) already hosts them.
+This is just a small key -> JSON-blob table so the app can respect Semantic
+Scholar's tight rate limit and avoid re-fetching the same neighborhood on
+every view.
+
+Freshness is entirely the caller's decision: every value here is stamped
+with when it was written, but nothing in this module decides what counts as
+stale. Each caller passes its own ``max_age`` to ``get()`` — a graph
+snapshot and an ar5iv figure have very different TTLs, and both share this
+one table.
 """
 
 from __future__ import annotations
 
 import json
-import sqlite3
 import time
-from contextlib import contextmanager
-from typing import Any, Iterator, Optional
+from typing import Any
 
-from .. import config
+from ..config import config
+from . import utils
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS cache (
@@ -27,30 +32,12 @@ CREATE TABLE IF NOT EXISTS cache (
 """
 
 
-@contextmanager
-def _connect() -> Iterator[sqlite3.Connection]:
-    """Open a connection to the cache table, committing on clean exit.
-
-    Ensures the data directory and schema exist first.
-
-    Yields:
-        An open ``sqlite3.Connection`` with ``Row`` as its row factory.
-
-    Raises:
-        sqlite3.Error: On database failures (locked file, corrupt db, …).
-    """
-    config.ensure_dirs()
-    conn = sqlite3.connect(config.DB_PATH, timeout=10)
-    conn.row_factory = sqlite3.Row
-    try:
-        conn.execute(_SCHEMA)
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+def _connect() -> utils.ConnectionContext:
+    """Open a connection to the cache table (data dir + schema ensured)."""
+    return utils.connect(config.storage.digest_db, _SCHEMA)
 
 
-def get(key: str, max_age: Optional[float] = None) -> Optional[Any]:
+def get(key: str, max_age: float | None = None) -> Any | None:
     """Look up a cached JSON value.
 
     Args:

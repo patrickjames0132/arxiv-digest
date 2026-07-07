@@ -1,4 +1,4 @@
-"""Saved-session routes (Phase 4): save the current workspace (graph + teacher
+"""Saved-session routes: save the current workspace (graph + teacher
 transcript) and reopen it later without rebuilding the graph.
 
 GET  /api/sessions       -> list saved sessions (metadata only)
@@ -36,7 +36,8 @@ def api_sessions_save() -> ResponseReturnValue:
         The frontend's session blob — ``{name, seed, layout, nodes, edges,
         chat, beats, hist_trace}``, plus an optional ``id``. A body with an
         ``id`` overwrites that saved session; without one, a new session is
-        created.
+        created. Beyond ``nodes``, the blob is deliberately unvalidated —
+        it's frontend-owned, and the store treats it as opaque.
 
     Returns:
         The stored metadata row as JSON on success; ``{error}`` with HTTP 400
@@ -49,9 +50,9 @@ def api_sessions_save() -> ResponseReturnValue:
     session_id = payload.get("id") or None
     try:
         record = sessions_service.save_session(payload, session_id=session_id)
-    except Exception as exc:
+    except Exception:
         current_app.logger.exception("session save failed")
-        return jsonify({"error": str(exc)}), 500
+        return jsonify({"error": "Could not save the session."}), 500
     return jsonify(record)
 
 
@@ -80,6 +81,7 @@ def api_sessions_delete(session_id: str) -> Response:
         session_id: The saved session's id.
 
     Returns:
-        JSON ``{deleted: bool}`` — False when no such session existed.
+        JSON ``{deleted: bool}`` — False when no such session existed
+        (delete is idempotent, not a 404).
     """
     return jsonify({"deleted": sessions_service.delete_session(session_id)})

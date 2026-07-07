@@ -107,8 +107,11 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
       lastClick.current = { id: node.id, t: now }
       setSelectedId(node.id)
       // Neighbor nodes arrive summary-light — hydrate the panel on first open.
-      if (node.arxiv_id && !node.tldr && !node.abstract && !details[node.id]) {
-        fetchPaperDetail(node.arxiv_id)
+      // By arXiv id when there is one, else the raw S2 paperId: journal papers
+      // hydrate too (the old code's arxiv_id gate left them abstract-less,
+      // the client half of the hydration bug fixed server-side in Phase 5).
+      if (!node.tldr && !node.abstract && !details[node.id]) {
+        fetchPaperDetail(node.arxiv_id ?? node.id)
           .then((full) => setDetails((d) => ({ ...d, [node.id]: full })))
           .catch(() => {})
       }
