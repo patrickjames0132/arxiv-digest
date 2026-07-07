@@ -712,6 +712,29 @@ optional, behind a key.
       S2's recency-biased default order in the first place; this would be a
       second axis (age vs. count) the user tunes, not a reversion.
       *(From the `todos.md` inbox, 2026-07-07.)*
+- [ ] **S2 categories as detail-panel tags** — alongside the v2.3.0 arXiv-only
+      category pills, also surface Semantic Scholar's own field-of-study
+      categories as a second layer of tags — an arXiv paper would show both
+      layers side by side, a non-arXiv paper would fall back to S2-only.
+      *(From the `todos.md` inbox, 2026-07-07.)*
+- [ ] **Optional per-seed cache clear** — let the user bust the cached graph
+      snapshot (`data/digest.db`'s `cache` table) for one specific seeded
+      paper on demand, rather than only living with the 1-day TTL — useful
+      when S2's data for a paper visibly changes mid-session.
+      *(From the `todos.md` inbox, 2026-07-07.)*
+- [ ] **Frontend pre-commit (format + lint)** — the backend has a full
+      pre-commit hook set (`.pre-commit-config.yaml` → ruff, via
+      `uv run nox -s precommit`); the frontend has none. `oxlint` exists today
+      only as a standalone `npm run lint` script, not wired into pre-commit,
+      and there's no formatter. Add both to the pre-commit gate so frontend
+      hygiene is enforced the same way backend hygiene is.
+      *(From the `todos.md` inbox, 2026-07-07.)*
+- [ ] **Frontend tests** — the backend has a 277-test offline suite
+      (`uv run nox -s tests`); the frontend has none. Stand up a runner
+      (Vitest + React Testing Library is the natural fit for this Vite/React
+      app) and start covering components/hooks, mirroring the backend's
+      offline-only, no-live-API discipline.
+      *(From the `todos.md` inbox, 2026-07-07.)*
 - [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
       `run.py` with a `click` group (same command names: `serve`, `ingest`,
       `sources`, `search-sources`, `forget`).
