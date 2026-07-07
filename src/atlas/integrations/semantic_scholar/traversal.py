@@ -11,6 +11,16 @@ from . import client, nodes
 
 _BATCH_MAX = 500  # S2 caps /paper/batch at 500 ids per call.
 
+# S2's /citations and /references endpoints take no `sort` param — they come
+# back in whatever order S2's index has them, which in practice skews toward
+# the most recently ingested (i.e. most recently published) neighbor, not the
+# most cited one. For a heavily-cited seed, that means a small `limit` fills
+# up entirely with this year's obscure citing papers before a single famous,
+# decades-old citing paper is ever seen. So we over-fetch up to this many
+# candidates in one call (S2 accepts it; still one request) and rank locally
+# by citation count before trimming to the caller's `limit`.
+_RANK_POOL = 1000
+
 
 def get_papers(paper_ids: list[str], fields: str = nodes.DETAIL_FIELDS) -> dict[str, dict]:
     """Hydrate paper details for many ids via ``POST /paper/batch``.
@@ -66,30 +76,41 @@ def get_paper(paper_id: str) -> dict | None:
 def _neighbors(path: str, key: str, limit: int) -> list[dict]:
     """Shared traversal for the references/citations endpoints.
 
+    Fetches a larger pool than ``limit`` (see ``_RANK_POOL``) and ranks it by
+    citation count before trimming, since S2 doesn't offer server-side sorting
+    here and its default order skews toward the most recently published
+    neighbor rather than the most cited one.
+
     Args:
         path: The endpoint path under ``/paper/`` (quoted id + relation).
         key: The nested paper key in each result item — ``"citedPaper"`` for
             references, ``"citingPaper"`` for citations.
-        limit: Maximum neighbors to request.
+        limit: Maximum neighbors to return.
 
     Returns:
         A list of ``{"node": <node dict>, "influential": bool}`` entries,
-        skipping papers S2 couldn't resolve.
+        skipping papers S2 couldn't resolve, most-cited first.
 
     Raises:
         client.S2Error: When the request fails after retries.
     """
+    fetch_limit = max(limit, _RANK_POOL)
     url = (
         f"{config.s2.graph_url}/paper/{path}"
-        f"?fields={urllib.parse.quote(nodes.NEIGHBOR_FIELDS)}&limit={limit}"
+        f"?fields={urllib.parse.quote(nodes.NEIGHBOR_FIELDS)}&limit={fetch_limit}"
     )
     data = client.request(url)
-    out = []
+    # (citation_count, entry) pairs so the sort key doesn't need to dig back
+    # into entry["node"] — its value type is erased to `object` once "node"
+    # and "influential" (a dict and a bool) share one dict literal.
+    hits: list[tuple[int, dict]] = []
     for item in (data.get("data") or []) if isinstance(data, dict) else []:
         node = nodes.node(item.get(key))
         if node:
-            out.append({"node": node, "influential": bool(item.get("isInfluential"))})
-    return out
+            entry = {"node": node, "influential": bool(item.get("isInfluential"))}
+            hits.append((node.get("citation_count") or 0, entry))
+    hits.sort(key=lambda hit: hit[0], reverse=True)
+    return [entry for _, entry in hits[:limit]]
 
 
 def references(paper_id: str, limit: int) -> list[dict]:

@@ -57,6 +57,26 @@ def test_citations_uses_citing_paper_key(monkeypatch):
     assert hit["node"]["id"] == "c1" and hit["influential"] is False
 
 
+def test_citations_ranked_by_citation_count_not_s2_order(monkeypatch):
+    """S2's default order skews toward the most recently published citing
+    paper, not the most cited — so a small `limit` must keep the
+    highest-citation-count hits, not whatever S2 lists first."""
+
+    def fake_request(url, **kw):
+        assert "limit=1000" in url  # over-fetches the ranking pool regardless of `limit`
+        return {
+            "data": [
+                {"citingPaper": {"paperId": "recent", "citationCount": 0}},
+                {"citingPaper": {"paperId": "famous", "citationCount": 5000}},
+                {"citingPaper": {"paperId": "mid", "citationCount": 40}},
+            ]
+        }
+
+    monkeypatch.setattr(client, "request", fake_request)
+    out = traversal.citations("p1", limit=2)
+    assert [hit["node"]["id"] for hit in out] == ["famous", "mid"]  # top 2 by citation count
+
+
 def test_recommendations_pool_in_url(monkeypatch):
     urls = []
 

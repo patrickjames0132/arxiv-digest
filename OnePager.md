@@ -573,6 +573,26 @@ optional, behind a key.
       *(From the `todos.md` inbox, 2026-07-06.)*
       **Next:** sweep other silent-failure spots (other agent tools, route
       error paths) that should log before returning a user-facing message.
+- [x] **Rank citations/references by citation count, not S2's default order**
+      *(v2.1.1)* — a heavily-cited old seed (e.g. Hawking's "Black hole
+      explosions?", 5,143 citations) was showing an almost entirely 2026,
+      near-zero-citation "citations" neighborhood. Root cause: S2's
+      `/paper/{id}/citations` and `/references` endpoints take no `sort` param
+      and default to a genuinely chronological, newest-first order (confirmed
+      by sampling `offset` across the full range) — so a small `cite_limit`
+      filled up entirely with this year's obscure citing papers before a
+      single famous one was ever seen. Fixed in `_neighbors()` (shared by
+      `references()`/`citations()`): over-fetch up to S2's hard per-call cap
+      (1000 — 1001+ returns HTTP 400) and rank the pool by `citation_count`
+      locally before trimming to the configured limit. Verified against the
+      Hawking paper: citing papers went from 0–1 citations each to 40–268.
+      *Known limit (discussed and accepted):* a single call still only
+      reaches ~1000 of the newest citations, so an extremely well-cited old
+      paper's neighborhood still skews toward the last few years rather than
+      spanning its full multi-decade citation history — truly reaching decades
+      back would need a few extra stratified-`offset` calls per seed/expand,
+      trading latency/API load for it. Shipping the single-call fix for now;
+      revisit if the recency skew is still too tight in practice.
 - [ ] **No single-letter identifiers** — sweep the codebase (backend +
       frontend) for single-letter variable/parameter names and rename them to
       say what they hold; add this as a standing convention, not just a
