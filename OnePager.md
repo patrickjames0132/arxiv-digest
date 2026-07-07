@@ -526,7 +526,7 @@ optional, behind a key.
       box characters) — `show_figure` is the only path to visuals. *(Known limit:
       tool-call compliance is still somewhat inconsistent; see the agent-
       reliability item below.)*
-- [ ] **Agent reliability: stronger model or sub-agent decomposition** — even
+- [X] **Agent reliability: stronger model or sub-agent decomposition** — even
       with the hardened prompt, the agent sometimes skips `show_figure` (or
       tools generally) and answers from context. Two levers to explore: point
       `AGENT_MODEL` at a stronger model than the default (`TEACHER_MODEL`,
@@ -548,13 +548,13 @@ optional, behind a key.
       a retrieved passage, and a `show_source_figure`-style tool + `figure` event
       reusing the existing answer-figure rendering. *(From the `todos.md` inbox,
       2026-07-03.)*
-- [ ] **Loading indicator for a new graph render** — building a fresh graph
-      (seed search → force layout) has no in-progress feedback; add a spinner
-      or skeleton state so it doesn't read as hung on a slow S2 fetch. *(From
-      the `todos.md` inbox, 2026-07-06.)*
-- [ ] **Loading indicator for search** — same gap on the seed-search box
-      itself: no spinner while a query is in flight. *(From the `todos.md`
-      inbox, 2026-07-06.)*
+- [x] **Loading spinners for graph render + search** *(v2.2.0)* — neither the
+      "Building graph…" overlay nor the "Searching Semantic Scholar…" hit-list
+      note had any animated feedback, so a slow S2 fetch could read as hung.
+      Added a shared `.spin` primitive (centralized in `atlas.css` — it existed
+      once already, duplicated in the library upload flow; de-duped it there
+      too) and wired it into both spots. *(From the `todos.md` inbox,
+      2026-07-06.)*
 - [x] **File logging + honest search-failure traces** *(v2.1.0)* — `create_app()`
       now logs to a rotating file (`data/atlas.log`, 5MB × 3 backups) as well as
       the console, so agent runs survive after the terminal scrolls away.

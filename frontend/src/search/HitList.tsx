@@ -91,7 +91,11 @@ export default function HitList({
       {localHits && (searching || hits || liveFailed) && (
         <div className="hit-sub">From Semantic Scholar</div>
       )}
-      {searching && <div className="hit-note">Searching Semantic Scholar…</div>}
+      {searching && (
+        <div className="hit-note">
+          <span className="spin" /> Searching Semantic Scholar…
+        </div>
+      )}
       {liveFailed && (
         <div className="hit-note">
           Live search unavailable — showing cached papers only.

@@ -148,7 +148,13 @@ export default function Atlas() {
             onClose={clearHits}
           />
 
-          {loading && <div className="overlay">Building graph…</div>}
+          {loading && (
+            <div className="overlay">
+              <div className="overlay-loading">
+                <span className="spin" /> Building graph…
+              </div>
+            </div>
+          )}
           {error && !hits && <div className="overlay error">{error}</div>}
           {!hasGraph && !loading && !hits && !error && (
             <div className="overlay hint">

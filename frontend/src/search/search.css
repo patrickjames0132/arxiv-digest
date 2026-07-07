@@ -108,6 +108,9 @@
   color: var(--muted);
   padding: 6px;
   font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .hit-badge {
   display: inline-block;
