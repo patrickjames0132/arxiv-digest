@@ -41,7 +41,7 @@ const initialState: WorkspaceState = {
   graph: null,
   discoveredNodes: [],
   discoveredEdges: [],
-  layout: 'force',
+  layout: 'timeline',
   epoch: 0,
   loading: false,
   error: null,
@@ -74,7 +74,7 @@ export const restoreSession = createAsyncThunk(
     }
     return {
       graph,
-      layout: data.layout ?? ('force' as const),
+      layout: data.layout ?? ('timeline' as const),
       transcript: {
         chat: data.chat ?? [],
         beats: data.beats ?? [],
@@ -150,7 +150,7 @@ const workspaceSlice = createSlice({
       state.graph = null
       state.discoveredNodes = []
       state.discoveredEdges = []
-      state.layout = 'force'
+      state.layout = 'timeline'
       state.error = null
       state.epoch += 1
     },

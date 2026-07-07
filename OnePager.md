@@ -157,7 +157,8 @@ optional, behind a key.
       can't re-scramble the layout. A faint **year axis** is drawn behind the
       graph (labels thinned when zoomed out); narrowing the year slider **zooms
       into that span**. So the chronological lecture sweeps left→right as nodes
-      light up. Force stays the default; switching layout releases all pins. (A
+      light up. Force was the default at launch (**Timeline became the
+      default in v2.4.1**); switching layout releases all pins. (A
       relation-band variant remains a possible later sub-toggle.)
 - [x] **Phase 2.3 — Legacy teardown** *(v1.4.0)* — retired the digest-era backend
       now that Atlas stands on its own: deleted `store.py`, `pipeline.py`,
@@ -571,6 +572,14 @@ optional, behind a key.
       "Figure " for the detail panel's un-numbered ones — now the label only
       shows when a number actually exists. *(From the `todos.md` inbox,
       2026-07-04.)*
+- [x] **Default to Timeline, not Force** *(v2.4.1)* — a fresh page load, going
+      Home, and restoring an old saved session that predates the `layout`
+      field all used to fall back to Force; all three now default to
+      Timeline instead (`store/workspace.ts`'s `initialState`,
+      `workspaceCleared`, and `restoreSession`'s missing-field fallback).
+      Sessions that explicitly saved a layout — Force or Timeline — are
+      unaffected; this only changes what happens when there's no stored
+      preference at all.
 - [ ] **Figures from uploaded PDFs in answers** — extend the v1.20.0 figures
       feature to the user's **own library**: pull images out of an ingested PDF
       (via `pymupdf`, which we already use for text) and let the agent surface a
