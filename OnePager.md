@@ -730,6 +730,21 @@ optional, behind a key.
       *right* cache key — a double-click re-seed keys by S2 paperId, a search by
       arXiv id — rather than a stale duplicate. *(From the `todos.md` inbox,
       2026-07-07.)*
+- [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
+      `search` relation from the researcher's `search_papers` tool) are
+      currently **always shown** with no filter chip of their own (see the
+      `enabled` set in `GraphExplorer.tsx`, seeded with `[...REL_TYPES,
+      'search']`, and `GraphControls` renders chips only for `REL_TYPES`).
+      Give them their own toggle alongside references / citations / similar so
+      the user can hide/show them like any other relation. *(From the
+      `todos.md` inbox, 2026-07-07.)*
+- [ ] **Clickable reference numbers in agent answers** — an answer's inline
+      reference markers (the `[n]` the researcher cites papers by) render as
+      bare numbers today, which tell the user nothing. Make each `[n]`
+      **clickable**, highlighting the specific graph node it refers to (reusing
+      the same `highlightIds` glow the click-to-re-light answer sections already
+      use) so a citation points at the paper on the map instead of just naming
+      an index. *(From the `todos.md` inbox, 2026-07-07.)*
 - [ ] **Frontend pre-commit (format + lint)** — the backend has a full
       pre-commit hook set (`.pre-commit-config.yaml` → ruff, via
       `uv run nox -s precommit`); the frontend has none. `oxlint` exists today
