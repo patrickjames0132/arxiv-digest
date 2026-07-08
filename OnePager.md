@@ -432,7 +432,11 @@ optional, behind a key.
       era instead of just the recent tip. No toggle shipped — even-by-year is
       simply how graphs build now (references keep the most-cited ranking; a
       reference list is naturally year-spread already). This is what gives
-      "What's evolved since" a real timeline to narrate.
+      "What's evolved since" a real timeline to narrate. **Known limit:** on
+      truly mega-cited papers (≳10-20k citations, e.g. "Attention Is All You
+      Need") the ~10k offset ceiling traps every stratum in the newest few
+      months — see "Mega-paper citation coverage" in the unfinished items
+      below.
 - [x] **Lectures never expand the graph — backfill walks removed** *(v3.0.0)* —
       a doctrine change: a lecture narrates the graph **as the user built
       it**; only the researcher (explicit Q&A) may pull new papers onto the
@@ -842,6 +846,33 @@ optional, behind a key.
       app) and start covering components/hooks, mirroring the backend's
       offline-only, no-live-API discipline.
       *(From the `todos.md` inbox, 2026-07-07.)*
+- [ ] **Mega-paper citation coverage — beat the ~10k offset ceiling** — the
+      v3.0.0 even-by-year citation spread has a known blind spot on truly
+      mega-cited papers. S2's `/citations` endpoint returns citing papers
+      **newest-first**, offers **no server-side sort**, and **rejects any
+      request past `offset + limit` ≈ 10k** (hence `_MAX_OFFSET = 9000` in
+      `_stratified_pool`). The stratified fetch can therefore only sample
+      inside the newest ~9.2k citations — for **"Attention Is All You Need"
+      (~150k citations, tens of thousands per year)** that's the top ~6% of
+      the list, i.e. the last few months, so every stratum lands in 2026 and
+      the even-by-year selection has exactly one year-bucket to spread over.
+      Even a landmark 2019 citer (BERT-class famous) sits ~100k entries deep
+      — S2 will simply never return it through this endpoint. (DQN at ~15k
+      citations is fine: offset 9000 reaches ~60% of its list, back to the
+      mid-2010s — the ceiling only bites somewhere beyond ~10-20k total
+      citations.) Candidate routes, roughly in order of appeal:
+      **(a) the heuristic** — recover famous *early* descendants indirectly:
+      landmark follow-ups are themselves heavily re-cited, so they surface
+      fast via the references of the reachable recent citers
+      (references-of-recent-citers), and/or via the `recommendations`
+      endpoint; approximate but no new infrastructure and it targets exactly
+      the papers a story cares about (the seminal descendants, not the long
+      tail). **(b) year-filtered citation queries** — trivial fix (one
+      request per target year) *if* S2 ever adds a `year` filter to the
+      citations endpoint (it has none today). **(c) the S2 Datasets bulk
+      API** — the only sanctioned full enumeration, but it means downloading
+      and indexing a citations dump, against the "no local corpus"
+      philosophy. *(From a live v3.0.0 session on 1706.03762, 2026-07-07.)*
 
 Each phase is independently shippable and gets its own version bump
 (test-in-browser → bump `pyproject.toml` + `uv.lock` → annotated tag → push).
