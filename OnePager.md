@@ -818,6 +818,40 @@ optional, behind a key.
       larger pool per seed (see the citation-ranking fix, v2.1.1, which
       already over-fetches up to S2's 1000-per-call cap) or support paging
       further into it on demand. *(From the `todos.md` inbox, 2026-07-06.)*
+  - **⏸ IN PROGRESS — stashed** as `stash@{0}` ("WIP: live per-relation count
+    sliders + agent grounding fix + citation clutter retune (v3.3.0
+    candidate)"), 16 files, all gates green at stash time. **Resume:**
+    `git stash pop`, then flip gitignored `config.json`'s `graph` block from
+    the 3 limits back to `"pool_limit": 250` (the pop restores `config.py`'s
+    new schema but not the ignored config), then clear `graph:*` cache.
+    **Built:**
+    - Backend over-fetches & caches the whole ranked pool per relation (config
+      `graph.pool_limit`, replacing `ref_limit`/`cite_limit`/`similar_limit`);
+      each `Edge` carries a `rank` (its index in the selection order). Default
+      slider positions moved to frontend constants (`theme.ts REL_DEFAULT_LIMIT`
+      25/25/15). Chosen: chip toggle **+** slider per relation; pool cap 250.
+    - **Agent grounding fix** (regression the bigger pool exposed): agents were
+      grounding on the *whole* cached pool, not the visible view.
+      `GraphExplorer` now publishes visible node ids (`visibleNodesSet`);
+      `selectGroundingNodes` returns **visible ∪ discoveries**. ✅ verified in
+      browser.
+    - **Citation clutter retune** (built, NOT yet browser-verified): the same-
+      `(year,month)` stacks were stratified offset windows (200 *consecutive*
+      citations → one month → one x). Fix: `_select_even_by_month` buckets by
+      `(year, month)`, round-robins, most-cited within, capped `_MONTH_CAP=6`;
+      mining raised (`_MINE_SOURCES` 18, `_MINE_CANDIDATES` 400); Timeline
+      layout now uses **day-of-year** (`withinYearFraction` from `pub_date`) so
+      same-month papers spread by day instead of stacking.
+    - **Open thread — combined-score reveal ordering (NOT built):** current
+      reveal order is oldest-month-first, so the default slider shows the oldest
+      citers, not the important/recent ones. Patrick's idea: a **citation-
+      velocity** score `citation_count / (years_since_pub + 1)` (citations +
+      recency in one heuristic) driving the rank/reveal order *and* mining
+      priority. Key insight captured: time-spread (buckets) and importance
+      (score) are separate axes; they only converge at a wide slider, so at a
+      low slider it's "even spread" **vs** "most-important-first" — velocity
+      score picks the latter. Would change `_select_even_by_month`'s return
+      order + a few tests (which currently assert oldest-first round-robin).
 - [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
       `search` relation from the researcher's `search_papers` tool) are
       currently **always shown** with no filter chip of their own (see the
