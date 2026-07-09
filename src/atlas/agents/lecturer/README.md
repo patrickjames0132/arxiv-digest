@@ -28,7 +28,9 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
      emitted the moment the model starts the next one — narration begins
      before the lecture ends
   4  each LectureBeat -> events.Beat, indices mapped to node ids
-     (prompts.idx_to_id); blank-text beats dropped
+     (prompts.idx_to_id); the beat's inline [n] markers resolved to a
+     refs map (prompts.refs_from_text) for clickable citations;
+     blank-text beats dropped
 ```
 
 - **`config.py`** — `AGENT_ID`, `SKILLS` (`numbered-papers`,

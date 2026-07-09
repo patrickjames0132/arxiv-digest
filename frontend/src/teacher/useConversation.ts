@@ -20,6 +20,7 @@ import {
   cleared,
   figureAdded,
   lectureStarted,
+  refsSet,
   retrieveSet,
   tokenAppended,
   traceAdded,
@@ -29,6 +30,25 @@ import { discoveryMerged, selectGroundingNodes, selectSeedNode } from '../store/
 
 const newSessionId = () =>
   (crypto.randomUUID?.() as string) || String(Math.random()).slice(2)
+
+/** An inline citation marker in answer prose, e.g. `[7]`. */
+const REF_MARKER = /\[(\d+)\]/g
+
+/**
+ * Resolve the `[n]` markers an answer actually used into a compact
+ * `index → node-id` map, given the numbered grounding list `[n]` indexes into
+ * (1-based, matching the backend's `node_lines`). Only referenced indices that
+ * land on a real node are kept, so the map stays small and reload-safe.
+ */
+function resolveRefs(text: string, numberedIds: string[]): Record<string, string> {
+  const refs: Record<string, string> = {}
+  for (const match of text.matchAll(REF_MARKER)) {
+    const index = Number(match[1])
+    const nodeId = numberedIds[index - 1]
+    if (nodeId) refs[String(index)] = nodeId
+  }
+  return refs
+}
 
 export function useConversation() {
   const dispatch = useAppDispatch()
@@ -44,6 +64,9 @@ export function useConversation() {
   // global. At most one of the two is non-null.
   const [activeBeat, setActiveBeat] = useState<number | null>(null)
   const [activeChat, setActiveChat] = useState<number | null>(null)
+  // The node currently spotlit by a clicked inline `[n]` — click the same one
+  // again to clear it (like re-clicking an active beat).
+  const [activeRef, setActiveRef] = useState<string | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
   // Keys the backend's per-chat history; a Clear mints a new one so the
@@ -69,6 +92,7 @@ export function useConversation() {
       const off = activeBeat === index
       setActiveBeat(off ? null : index)
       setActiveChat(null)
+      setActiveRef(null)
       highlight(off ? [] : beat.node_ids)
     },
     [activeBeat, highlight],
@@ -80,9 +104,24 @@ export function useConversation() {
       const off = activeChat === index
       setActiveChat(off ? null : index)
       setActiveBeat(null)
+      setActiveRef(null)
       highlight(off ? [] : cited)
     },
     [activeChat, highlight],
+  )
+
+  /** Click an inline `[n]` reference: spotlight just that one paper on the
+   * graph (a targeted glow, distinct from the whole-answer re-light). Click the
+   * same marker again to clear the highlight and restore the plain graph. */
+  const onRefClick = useCallback(
+    (nodeId: string) => {
+      const off = activeRef === nodeId
+      setActiveBeat(null)
+      setActiveChat(null)
+      setActiveRef(off ? null : nodeId)
+      highlight(off ? [] : [nodeId])
+    },
+    [activeRef, highlight],
   )
 
   /** Wipe the conversation — a fresh start without re-seeding the graph. */
@@ -91,6 +130,7 @@ export function useConversation() {
     dispatch(cleared())
     setActiveBeat(null)
     setActiveChat(null)
+    setActiveRef(null)
     setError(null)
     setTeaching(false)
     setAsking(false)
@@ -107,6 +147,7 @@ export function useConversation() {
       dispatch(lectureStarted())
       setActiveBeat(null)
       setActiveChat(null)
+      setActiveRef(null)
       setError(null)
       setTeaching(true)
       highlight([])
@@ -117,6 +158,9 @@ export function useConversation() {
           {
             signal: ctrl.signal,
             onBeat: (beat) => {
+              // `beat.refs` (the [n] → node-id map) is resolved server-side —
+              // a lecture numbers the mode-filtered story nodes, which the
+              // frontend never sees, so it can't resolve them itself.
               dispatch(beatAdded(beat))
               // Light up each beat as it arrives.
               setActiveBeat(beatCount)
@@ -146,11 +190,18 @@ export function useConversation() {
       highlight([])
       setActiveBeat(null)
       setActiveChat(null)
+      setActiveRef(null)
       askIdxRef.current = chatLength + 1 // the assistant turn we're about to add
       dispatch(turnStarted(question))
       try {
         if (seedNode) {
           // Graph open: the researcher — reads/expands/searches via tool use.
+          // The numbered list `[n]` markers index into (1-based), matching the
+          // backend's node_lines ordering; discovered papers slot in at their
+          // server-assigned idx as they stream. Plus the raw answer text, so we
+          // can resolve which `[n]`s were actually used once it's done.
+          const numberedIds = groundingNodes.map((node) => node.id)
+          let answerText = ''
           await streamAsk(
             {
               question,
@@ -161,9 +212,19 @@ export function useConversation() {
             },
             {
               signal: ctrl.signal,
-              onToken: (token) => dispatch(tokenAppended(token)),
+              onToken: (token) => {
+                answerText += token
+                dispatch(tokenAppended(token))
+              },
               onTrace: (trace) => dispatch(traceAdded(trace)),
-              onDiscovery: (discovery) => dispatch(discoveryMerged(discovery)),
+              onDiscovery: (discovery) => {
+                dispatch(discoveryMerged(discovery))
+                for (const node of discovery.nodes) {
+                  if (typeof node.idx === 'number' && node.idx >= 1) {
+                    numberedIds[node.idx - 1] = node.id
+                  }
+                }
+              },
               onFigure: (figure) => dispatch(figureAdded(figure)),
               onCited: (ids) => {
                 highlight(ids)
@@ -175,6 +236,8 @@ export function useConversation() {
               onError: (message) => setError(message),
             },
           )
+          // Answer complete: freeze the `[n]` → node-id map onto the turn.
+          dispatch(refsSet(resolveRefs(answerText, numberedIds)))
         } else {
           // No graph: the librarian — answer straight from the library.
           await streamAskSources(
@@ -207,6 +270,7 @@ export function useConversation() {
     activeChat,
     onBeatClick,
     onChatClick,
+    onRefClick,
     runLecture,
     ask,
     clear,

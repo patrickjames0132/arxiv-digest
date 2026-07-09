@@ -51,6 +51,7 @@ export default function Teacher({
     activeChat,
     onBeatClick,
     onChatClick,
+    onRefClick,
     runLecture,
     ask,
     clear,
@@ -152,6 +153,7 @@ export default function Teacher({
           beats={beats}
           activeBeat={activeBeat}
           onBeatClick={onBeatClick}
+          onRefClick={onRefClick}
           onEnlarge={setLightbox}
         />
 
@@ -165,6 +167,7 @@ export default function Teacher({
               active={activeChat === index}
               streaming={asking}
               onActivate={clickable ? () => onChatClick(index, message.cited!) : undefined}
+              onRefClick={onRefClick}
               onEnlarge={setLightbox}
             />
           )

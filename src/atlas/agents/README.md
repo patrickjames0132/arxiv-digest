@@ -135,7 +135,16 @@ sequence with blank lines natively. `node_lines(nodes)` renders graph nodes
 as the numbered list of the `numbered-papers` protocol (a paper's number is
 its list position + 1) and `idx_to_id` maps the model's indices back to node
 ids, ignoring hallucinated ones (shared by the lecturer and, later, the
-researcher). `format_passages(hits)` renders retrieved library
+researcher). `refs_from_text(nodes, text)` is the clickable-citation
+counterpart: it scans finished prose for the `[n]` markers actually *used* and
+resolves each against the same numbered list, returning a `{"n": node_id}` map
+the frontend turns into clickable chips. The **lecturer** resolves this
+server-side and ships it on each beat's `refs` field — a lecture numbers the
+mode-filtered `_story_nodes`, which the frontend never sees, so it *can't*
+resolve them itself. The **researcher** is the mirror case: it gets the full,
+unfiltered node list, so the frontend resolves its answer's `[n]` markers
+directly (grounding order + idx-tagged discoveries) and no backend `refs` is
+emitted. `format_passages(hits)` renders retrieved library
 passages tagged `[Title, p.N]` (shared by the librarian's grounding context
 and, later, the researcher's `search_sources` tool result), and `history(turns)`
 converts the routes layer's `[{role, content}]` turns into PydanticAI

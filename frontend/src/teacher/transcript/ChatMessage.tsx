@@ -9,6 +9,7 @@ import type { AnswerFigure, ChatMsg, TraceEvent } from '../../api'
 import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
 import { splitAnswer } from '../figures/split'
+import AnswerMarkdown from './AnswerMarkdown'
 
 /**
  * Why a failed search never turned anything up, in plain words — "the budget
@@ -95,6 +96,7 @@ export default function ChatMessage({
   active,
   streaming,
   onActivate,
+  onRefClick,
   onEnlarge,
 }: {
   message: ChatMsg
@@ -104,6 +106,8 @@ export default function ChatMessage({
   streaming: boolean
   /** Re-light this answer's cited papers (undefined = not clickable). */
   onActivate?: () => void
+  /** Spotlight one paper from a clicked inline `[n]` marker. */
+  onRefClick?: (nodeId: string) => void
   onEnlarge: (figure: AnswerFigure) => void
 }) {
   const clickable = !!onActivate
@@ -151,9 +155,20 @@ export default function ChatMessage({
           <>
             {parts.map((part, index) =>
               typeof part === 'string' ? (
-                <span key={index}>
-                  <MathText>{part}</MathText>
-                </span>
+                message.role === 'assistant' ? (
+                  // Agent prose: full Markdown + math + clickable [n] citations.
+                  <AnswerMarkdown
+                    key={index}
+                    text={part}
+                    refs={message.refs}
+                    onRefClick={onRefClick}
+                  />
+                ) : (
+                  // The user's own question — plain text, math typeset, no Markdown.
+                  <span key={index}>
+                    <MathText>{part}</MathText>
+                  </span>
+                )
               ) : (
                 <div key={index} className="chat-figs chat-figs-inline">
                   <FigCard figure={part} onEnlarge={onEnlarge} />

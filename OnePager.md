@@ -985,27 +985,28 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
-- [ ] **Clickable reference numbers in agent answers** — an answer's inline
-      reference markers (the `[n]` the researcher cites papers by) render as
-      bare numbers today, which tell the user nothing. Make each `[n]`
-      **clickable**, highlighting the specific graph node it refers to (reusing
-      the same `highlightIds` glow the click-to-re-light answer sections already
-      use) so a citation points at the paper on the map instead of just naming
-      an index. *(From the `todos.md` inbox, 2026-07-07.)*
+- [x] **Clickable reference numbers in agent answers** *(v3.8.0)* — inline `[n]`
+      markers are now clickable chips that spotlight the paper they cite (the
+      `highlightIds` glow); click the same marker again to clear it. Works on
+      **both** surfaces: researcher answers (resolved frontend-side against the
+      grounding list + idx-tagged discoveries) and **lecture beats** (resolved
+      server-side by `prompts.refs_from_text`, emitted on the beat's new `refs`
+      field — a lecture numbers the mode-filtered `_story_nodes` the frontend
+      never sees). The resolved `[n]`→node-id map persists per message/beat, so
+      it survives a saved-session reload. *(From the `todos.md` inbox, 2026-07-07.)*
 - [x] **Adjustable side panels** *(v3.7.0)* — both docked panels (detail +
       assistant) are now user-resizable: a drag handle on each panel's inner
       edge (`ui/useResizablePanel.ts`), width clamped 280–680px and remembered
       across sessions in localStorage (`atlas.detailWidth` / `atlas.teacherWidth`).
       *(From the `todos.md` inbox, 2026-07-08.)*
-- [ ] **Q&A answers need full Markdown + LaTeX rendering** — the research
-      agent's answers come back as **Markdown**, but `ChatMessage.tsx` renders
-      the prose as plain text wrapped in `<MathText>` (v3.2.0): LaTeX math now
-      renders, but Markdown structure (headers, **bold**, lists) still shows as
-      raw `#`/`**`. The lecturer's beats read cleaner by comparison. Render
-      answers as Markdown *and* math — likely a Markdown renderer whose text
-      nodes pass through `<MathText>` (or a combined markdown-it + KaTeX plugin),
-      reused wherever agent prose is shown. *(From the `todos.md` inbox,
-      2026-07-08.)*
+- [x] **Q&A answers need full Markdown + LaTeX rendering** *(v3.8.0)* — agent
+      prose now renders through **react-markdown** (`AnswerMarkdown.tsx`):
+      remark-gfm (headers, **bold**, lists, tables) + remark-math + rehype-katex
+      (the KaTeX the app already uses), with a small `remarkCite` plugin for the
+      clickable `[n]` markers above. Reused for **both** researcher answers and
+      lecture beats; `MathText` stays for the detail panel, search hits, and beat
+      headings. The user's own question bubble stays plain (no Markdown
+      surprises). *(From the `todos.md` inbox, 2026-07-08.)*
 - [ ] **Tidy the lecture-mode buttons** — the three lecture buttons ("How we
       got here" / "This paper's intuition" / "What's evolved since", defined in
       `frontend/src/teacher/Teacher.tsx`, styled in `teacher/teacher.css`) look
@@ -1045,6 +1046,18 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Enhancements & tech debt
 
+- [ ] **Tune the agents' citation-count weighting via a skill** — today a strong
+      preference for highly-cited papers is *implicit*: the graph hands both
+      agents a pool already ranked by citations (references/citations most-cited
+      first in `build.py`; `expand_node` pulls landmark/most-cited neighbors; the
+      lecturer's figure pool is `sorted(by citation_count)[:4]`), while the
+      prompts only *show* the count (`node_lines`) and `teaching-voice` pushes
+      "why it matters" over popularity — no explicit rule either way. Add an
+      optional skill that makes the weighting **explicit and adjustable** (favor
+      or deliberately de-emphasize citation count in what the agents select and
+      narrate), so we can experiment with surfacing under-cited but important
+      work. Low-effort: a skill-file addition wired into the researcher/lecturer
+      `SKILLS` tuples. *(From a session side-question, 2026-07-08.)*
 - [ ] **Remove the "Powered by Claude Code" attribution** from the UI. *(From the
       `todos.md` inbox, 2026-07-08.)*
 - [ ] **Cached papers don't match the query agent's expanded query** — papers

@@ -17,6 +17,14 @@ export interface ChatMsg {
   text: string
   /** Ids of the papers this answer cited (assistant turns only). */
   cited?: string[]
+  /**
+   * Map from an inline `[n]` reference marker (the key, stringified) to the
+   * node id it points at — the position `n` had in the numbered grounding list
+   * for THIS answer. Lets the renderer make each `[n]` clickable (glowing that
+   * one paper). Only referenced-and-resolvable indices are kept, so it stays
+   * small and survives a saved-session reload. Assistant/researcher turns only.
+   */
+  refs?: Record<string, string>
   /** The agent steps that produced this answer (assistant turns only). */
   trace?: TraceEvent[]
   /** Figures the agent pulled into this answer (assistant turns only). */

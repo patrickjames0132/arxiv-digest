@@ -147,8 +147,11 @@ The Vite dev server proxies `/api/*` to Flask.
      and carry the papers' **real figures** inline — click to enlarge.
    - **Ask** — the research agent answers grounded in what it actually
      reads, streaming its tool steps live (read / expand / search / search
-     your sources / show a figure). Answers cite their papers — click one to
-     re-light them.
+     your sources / show a figure). Answers render in full **Markdown + math**,
+     and their inline `[n]` citations are **clickable** — click one to spotlight
+     that paper on the graph, click it again to clear. (Lecture beats cite the
+     same way.) Answers also cite their whole grounding set — click the bubble
+     to re-light them all.
    - **No graph open?** The same panel is a chat straight over your uploaded
      library, cited by page.
 5. **Your sources** (📚) — drop in PDFs (parallel, with live embedding

@@ -62,6 +62,15 @@ def test_idx_to_id_maps_and_ignores_out_of_range():
     assert prompts.idx_to_id(nodes, [2, 1, 99, 0, -3]) == ["b", "a"]
 
 
+def test_refs_from_text_maps_used_markers_and_ignores_out_of_range():
+    nodes = [make_node("a"), make_node("b"), make_node("c")]
+    text = "As [1] showed, and later [3] refined it (see also [9], unrelated to [2])."
+    # Only referenced, in-range markers; keyed by the number as a string.
+    assert prompts.refs_from_text(nodes, text) == {"1": "a", "3": "c", "2": "b"}
+    # No markers -> empty map (a lecture beat that names no papers inline).
+    assert prompts.refs_from_text(nodes, "Plain prose, no citations.") == {}
+
+
 def test_format_passages_tags_source_and_page():
     hits = [
         {"source_title": "Deep Learning", "page": 243, "text": "Momentum   helps\nconverge."},

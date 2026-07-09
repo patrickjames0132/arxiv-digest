@@ -6,6 +6,7 @@
 import type { AnswerFigure, Beat } from '../../api'
 import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
+import AnswerMarkdown from './AnswerMarkdown'
 
 /** Adapt a beat's figure to the shape FigCard/Lightbox render. */
 const asAnswerFigure = (figure: NonNullable<Beat['figure']>): AnswerFigure => ({
@@ -19,11 +20,14 @@ export default function BeatList({
   beats,
   activeBeat,
   onBeatClick,
+  onRefClick,
   onEnlarge,
 }: {
   beats: Beat[]
   activeBeat: number | null
   onBeatClick: (index: number, beat: Beat) => void
+  /** Spotlight one paper from a clicked inline `[n]` marker in a beat. */
+  onRefClick?: (nodeId: string) => void
   onEnlarge: (figure: AnswerFigure) => void
 }) {
   if (beats.length === 0) return null
@@ -40,9 +44,7 @@ export default function BeatList({
               <MathText>{beat.heading}</MathText>
             </div>
           )}
-          <p>
-            <MathText>{beat.text}</MathText>
-          </p>
+          <AnswerMarkdown text={beat.text} refs={beat.refs} onRefClick={onRefClick} />
           {beat.figure && (
             // Enlarging the figure must not toggle the beat's highlight.
             <div onClick={(event) => event.stopPropagation()}>

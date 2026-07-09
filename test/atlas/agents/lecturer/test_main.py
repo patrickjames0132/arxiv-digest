@@ -66,6 +66,19 @@ def test_beats_map_indices_to_node_ids():
     ]
 
 
+def test_beats_resolve_inline_ref_markers_for_clickable_citations():
+    # A beat's prose cites papers by [n]; those markers resolve to node ids
+    # (against the same numbered list) so the frontend can make them clickable —
+    # independent of the structured `nodes` highlight set.
+    model = beats_model(
+        [{"heading": "Roots", "text": "Building on [3], later [2] followed.", "nodes": [3]}]
+    )
+    with lecturer.agent.override(model=model):
+        out = list(lecturer.lecture(SEED, NODES))
+    assert out[0].node_ids == ["node03"]  # the structured highlight set
+    assert out[0].refs == {"3": "node03", "2": "node02"}  # every inline [n] used
+
+
 def test_blank_text_beats_are_dropped():
     model = beats_model(
         [

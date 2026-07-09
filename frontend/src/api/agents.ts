@@ -22,6 +22,14 @@ export interface Beat {
   /** Ids of the graph nodes to highlight while this beat is on screen. */
   node_ids: string[]
   /**
+   * Map from an inline `[n]` marker in `text` (key, stringified) to the node
+   * id it points at — resolved frontend-side against the lecture's fixed
+   * numbered grounding list (lectures never discover, so the numbering can't
+   * shift). Not sent by the backend; attached before the beat is stored so the
+   * renderer can make each `[n]` clickable. Absent on older saved sessions.
+   */
+  refs?: Record<string, string>
+  /**
    * A real paper figure attached to this beat (proxied image + the paper's
    * caption + the figure's number in the lecture's pool). `title` names the
    * source paper when the lecture drew from several (history/evolution);

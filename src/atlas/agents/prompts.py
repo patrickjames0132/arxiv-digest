@@ -12,6 +12,7 @@ joins it with blank lines itself; this module only supplies the parts.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
@@ -88,6 +89,33 @@ def idx_to_id(nodes: Sequence[Node], indices: Iterable[int]) -> list[str]:
         The node ids for the valid indices, in the model's order.
     """
     return [nodes[index - 1].id for index in indices if 1 <= index <= len(nodes)]
+
+
+#: An inline citation marker in model prose, e.g. ``[7]``.
+_REF_MARKER = re.compile(r"\[(\d+)\]")
+
+
+def refs_from_text(nodes: Sequence[Node], text: str) -> dict[str, str]:
+    """Map the ``[n]`` markers a passage of prose *used* back to node ids.
+
+    The clickable-citation counterpart to ``idx_to_id``: where that resolves an
+    explicit index list, this scans prose for the markers actually written and
+    resolves each against the same numbered list. Only referenced, in-range
+    indices are kept, so the map stays small and reload-safe.
+
+    Args:
+        nodes: The same node sequence ``node_lines`` numbered.
+        text: The prose to scan (a lecture beat, an answer).
+
+    Returns:
+        ``{"7": "<node id>", ...}`` — keyed by the marker's number as a string.
+    """
+    refs: dict[str, str] = {}
+    for match in _REF_MARKER.finditer(text):
+        index = int(match.group(1))
+        if 1 <= index <= len(nodes):
+            refs[match.group(1)] = nodes[index - 1].id
+    return refs
 
 
 def format_passages(hits: list[dict]) -> str:

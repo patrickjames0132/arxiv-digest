@@ -67,6 +67,13 @@ const transcriptSlice = createSlice({
       const msg = lastMsg(state)
       if (msg) msg.cited = action.payload
     },
+    /** Attach the resolved `[n]` → node-id map once the answer finishes
+     * streaming (see `useConversation.ask`). Written to the last turn, like the
+     * other per-answer fields. */
+    refsSet(state, action: PayloadAction<Record<string, string>>) {
+      const msg = lastMsg(state)
+      if (msg) msg.refs = action.payload
+    },
     /** Wipe the conversation (the panel's Clear button). */
     cleared() {
       return initialState
@@ -91,6 +98,7 @@ export const {
   figureAdded,
   retrieveSet,
   citedSet,
+  refsSet,
   cleared,
 } = transcriptSlice.actions
 export default transcriptSlice.reducer
