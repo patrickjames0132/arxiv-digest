@@ -24,6 +24,7 @@ citation points) and easy to get subtly wrong.
 from __future__ import annotations
 
 import logging
+from typing import Callable
 
 from ...config import config
 from ...integrations import arxiv
@@ -33,8 +34,24 @@ from .model import Counts, Edge, Graph, Node, Seed
 
 log = logging.getLogger(__name__)
 
+#: Progress callback: ``(steps_done, steps_total, label)``. The streaming
+#: ``/api/graph/stream`` route bridges these into SSE ``progress`` frames so
+#: the "Building graph…" overlay can show a real bar instead of a bare spinner.
+#: Reported only on a cache miss — a cache hit returns before the first step.
+ProgressFn = Callable[[int, int, str], None]
 
-def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
+#: Coarse build stages, in order. The seed resolve + three traversals + the
+#: final assemble — enough for a determinate bar without threading sub-progress
+#: through each S2 traversal.
+_BUILD_STEPS = 5
+
+
+def build_graph(
+    seed_ref: str,
+    *,
+    refresh: bool = False,
+    on_progress: ProgressFn | None = None,
+) -> Graph | None:
     """Build (or load from cache) the neighborhood graph for a seed paper.
 
     Args:
@@ -44,6 +61,9 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
             journal paper with no arXiv id — so visual traversal never
             dead-ends.
         refresh: When True, bypass the cached snapshot and rebuild from S2.
+        on_progress: Optional coarse-stage progress callback (see
+            :data:`ProgressFn`). Fired only along the S2 rebuild path — a cache
+            hit returns before any step, so the caller sees no frames.
 
     Returns:
         A ``Graph`` — the seed summary, deduped nodes (each carrying its
@@ -54,6 +74,14 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
         s2.S2Error: When a Semantic Scholar request fails after retries
             (surfaced by the route as a 502).
     """
+
+    def report(step: int, label: str) -> None:
+        # ``step`` is 1-indexed (the stage being entered), so the final stage
+        # reports ``_BUILD_STEPS / _BUILD_STEPS`` = a full bar before the graph
+        # replaces the overlay, rather than stalling short of 100%.
+        if on_progress:
+            on_progress(step, _BUILD_STEPS, label)
+
     seed_ref = (seed_ref or "").strip()
     if not seed_ref:
         return None
@@ -70,6 +98,7 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
 
     # --- Resolve the seed. An arXiv id has to be handed to S2 as ``ARXIV:<id>``
     # (its external-id syntax); a raw paperId is passed through untouched.
+    report(1, "Resolving seed paper…")
     lookup = f"ARXIV:{seed_ref}" if arxiv.looks_arxiv(seed_ref) else seed_ref
     seed_paper = s2.get_paper(lookup)
     if not seed_paper:  # S2 knows no paper for this reference — a dead link.
@@ -79,12 +108,14 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
     # --- One detail call (above) + three traversals. The neighbors come back
     # already hydrated with light display fields, so there's no extra batch
     # call to flesh them out — what a traversal returns is ready to render.
+    report(2, "Fetching references…")
     refs = s2.references(seed_id, config.graph.ref_limit)
     # Citations split into two relations from ONE newest-page fetch: landmark
     # citers (the most-cited historic papers, up to last year — mined for a
     # mega seed whose big citers sit past S2's offset ceiling) and the latest
     # frontier (citers from the last ~12 months). total_count decides whether
     # mining runs; year bounds the mining candidate window.
+    report(3, "Fetching citations…")
     landmark_cites, latest_cites = s2.citation_relations(
         seed_id,
         landmark_limit=config.graph.cite_limit,
@@ -92,7 +123,10 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
         total_count=seed_paper.get("citation_count"),
         year=seed_paper.get("year"),
     )
+    report(4, "Finding similar work…")
     similar = s2.recommendations(seed_id, config.graph.similar_limit)
+
+    report(5, "Assembling graph…")
 
     # --- Dedupe neighbors into a single node table keyed by paperId. The same
     # paper can surface through more than one relation (e.g. it's both a

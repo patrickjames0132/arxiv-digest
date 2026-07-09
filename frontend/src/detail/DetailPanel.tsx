@@ -11,6 +11,7 @@ import type { VNode } from '../graph/model'
 import { formatPubDate } from '../graph/model'
 import { REL_COLOR } from '../graph/theme'
 import MathText from '../notation/MathText'
+import { useResizablePanel } from '../ui/useResizablePanel'
 import './detail.css'
 
 /** Props for {@link DetailPanel}. */
@@ -166,8 +167,16 @@ export default function DetailPanel({
   onClose,
   onExplore,
 }: DetailPanelProps) {
+  const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.detailWidth', 340)
   return (
-    <aside className="detail">
+    <aside className="detail" style={{ width }}>
+      <div
+        className={`panel-resize-handle${dragging ? ' dragging' : ''}`}
+        onPointerDown={onHandlePointerDown}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize panel"
+      />
       <button className="link-btn close" onClick={onClose}>
         ✕
       </button>

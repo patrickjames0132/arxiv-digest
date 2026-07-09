@@ -12,9 +12,10 @@
 import { createAsyncThunk, createSelector, createSlice } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
 import {
-  fetchGraph,
+  fetchGraphStream,
   getSession,
   saveSession,
+  type BuildProgress,
   type GraphEdge,
   type GraphNode,
   type GraphResponse,
@@ -48,6 +49,13 @@ export interface WorkspaceState {
   /** Bumps on every load/restore — the teacher panel remounts per epoch. */
   epoch: number
   loading: boolean
+  /**
+   * The current graph-build stage while `loading`, streamed from the SSE build
+   * endpoint — drives the determinate "Building graph…" bar. Null before the
+   * first frame (and on a cache hit, which streams none), so the overlay falls
+   * back to a bare spinner until/unless a stage arrives.
+   */
+  buildProgress: BuildProgress | null
   /** The shared error surface (graph loads + seed search). */
   error: string | null
 }
@@ -61,6 +69,7 @@ const initialState: WorkspaceState = {
   layout: 'timeline',
   epoch: 0,
   loading: false,
+  buildProgress: null,
   error: null,
 }
 
@@ -74,8 +83,8 @@ const initialState: WorkspaceState = {
  */
 export const loadGraph = createAsyncThunk(
   'workspace/loadGraph',
-  ({ seed, refresh = false }: { seed: string; refresh?: boolean }) =>
-    fetchGraph(seed, refresh),
+  ({ seed, refresh = false }: { seed: string; refresh?: boolean }, { dispatch }) =>
+    fetchGraphStream(seed, refresh, (progress) => dispatch(buildProgressSet(progress))),
 )
 
 /**
@@ -171,6 +180,10 @@ const workspaceSlice = createSlice({
     layoutSet(state, action: PayloadAction<'force' | 'timeline'>) {
       state.layout = action.payload
     },
+    /** A build-stage frame from the SSE build stream (see `loadGraph`). */
+    buildProgressSet(state, action: PayloadAction<BuildProgress>) {
+      state.buildProgress = action.payload
+    },
     /** GraphExplorer publishes the on-screen node ids here whenever its view
      * filter changes, so agent grounding tracks what's actually visible. */
     visibleNodesSet(state, action: PayloadAction<string[]>) {
@@ -198,10 +211,12 @@ const workspaceSlice = createSlice({
     builder
       .addCase(loadGraph.pending, (state) => {
         state.loading = true
+        state.buildProgress = null
         state.error = null
       })
       .addCase(loadGraph.fulfilled, (state, action) => {
         state.graph = action.payload
+        state.buildProgress = null
         // The reference actually requested — refresh must re-fetch with this
         // same string to bust the exact snapshot the server keyed.
         state.seedRef = action.meta.arg.seed
@@ -215,6 +230,7 @@ const workspaceSlice = createSlice({
       })
       .addCase(loadGraph.rejected, (state, action) => {
         state.loading = false
+        state.buildProgress = null
         state.error = action.error.message ?? 'Failed to load graph'
       })
       .addCase(restoreSession.pending, (state) => {
@@ -241,8 +257,14 @@ const workspaceSlice = createSlice({
   },
 })
 
-export const { discoveryMerged, layoutSet, visibleNodesSet, errorSet, workspaceCleared } =
-  workspaceSlice.actions
+export const {
+  discoveryMerged,
+  layoutSet,
+  buildProgressSet,
+  visibleNodesSet,
+  errorSet,
+  workspaceCleared,
+} = workspaceSlice.actions
 export default workspaceSlice.reducer
 
 // --- Selectors ---------------------------------------------------------------

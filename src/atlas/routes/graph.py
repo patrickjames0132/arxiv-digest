@@ -2,6 +2,7 @@
 detail hydration, and a paper's figures (proxied from ar5iv).
 
 GET /api/graph?seed=&refresh=      -> neighborhood graph for a seed paper
+GET /api/graph/stream?seed=&refresh= -> same, as SSE with coarse build progress
 GET /api/paper/<arxiv_id>          -> full details for one paper (panel hydrate)
 GET /api/paper/<arxiv_id>/figures  -> the paper's figures + captions (ar5iv)
 GET /api/paper/<arxiv_id>/code     -> code & artifact links (Hugging Face Papers)
@@ -16,15 +17,25 @@ figure strip must never 500 the whole detail panel.
 
 from __future__ import annotations
 
+import logging
+import queue
+import threading
 import urllib.parse
+from typing import Iterator
 
 from flask import Blueprint, Response, current_app, jsonify, request
 from flask.typing import ResponseReturnValue
 
 from ..integrations import arxiv, huggingface, semantic_scholar
 from ..services import graph as graph_service
+from .sse import sse, sse_response
 
 bp = Blueprint("graph", __name__)
+
+# The stream generator runs after the request/app context is gone, so it (and
+# its worker thread) must use a module logger, never ``current_app`` — see
+# routes/sse.py.
+log = logging.getLogger(__name__)
 
 
 def normalize_arxiv_id(raw: str) -> str:
@@ -66,6 +77,84 @@ def api_graph() -> ResponseReturnValue:
     if not result:
         return jsonify({"error": f"No paper found on Semantic Scholar for {seed}."}), 404
     return jsonify(result.model_dump())
+
+
+def _build_stream(seed: str, refresh: bool) -> Iterator[str]:
+    """Build a seed's graph in a worker thread, streaming progress as SSE.
+
+    ``build_graph`` is synchronous and reports coarse stages through a
+    callback; a queue bridges those callbacks into this generator (the same
+    shape as source ingestion in ``routes/sources.py``). The worker owns all
+    error mapping so a failure always ends the stream with an ``error`` frame
+    rather than a dropped connection.
+
+    A cache hit fires no ``progress`` frames — ``build_graph`` returns before
+    the first stage — so the stream jumps straight to ``done`` and the overlay
+    barely flickers.
+
+    Args:
+        seed: The normalized seed reference (arXiv id / S2 paperId).
+        refresh: Bypass the cached snapshot and rebuild from S2.
+
+    Yields:
+        ``progress`` frames (``{done, total, label}``), then exactly one
+        ``done`` (the serialized graph) or ``error`` (``{message}``) frame.
+    """
+    frames: queue.Queue[tuple[str, object]] = queue.Queue()
+
+    def worker() -> None:
+        try:
+            result = graph_service.build_graph(
+                seed,
+                refresh=refresh,
+                on_progress=lambda done, total, label: frames.put(
+                    ("progress", {"done": done, "total": total, "label": label})
+                ),
+            )
+            if not result:
+                frames.put(
+                    ("error", {"message": f"No paper found on Semantic Scholar for {seed}."})
+                )
+            else:
+                frames.put(("done", result.model_dump()))
+        except semantic_scholar.S2Error as exc:
+            log.warning("graph build failed for %s: %s", seed, exc)
+            frames.put(("error", {"message": "Semantic Scholar is unavailable — try again."}))
+        except Exception:
+            log.exception("graph build failed for %s", seed)
+            frames.put(("error", {"message": "Could not build that graph."}))
+
+    threading.Thread(target=worker, daemon=True).start()
+    while True:
+        kind, data = frames.get()
+        yield sse(kind, data)
+        if kind in ("done", "error"):
+            return
+
+
+@bp.get("/api/graph/stream")
+def api_graph_stream() -> ResponseReturnValue:
+    """Build a seed's neighborhood graph, streaming coarse build progress.
+
+    The determinate-progress twin of ``/api/graph``: identical result, but
+    delivered as an SSE stream so the frontend's "Building graph…" overlay can
+    show a real percent bar (stage / total) instead of a bare spinner.
+
+    Query args:
+        seed: An arXiv id, a pasted abs/pdf URL, or a raw S2 paperId.
+        refresh: Truthy (``1``/``true``/``yes``) bypasses the cached snapshot.
+
+    Returns:
+        HTTP 400 (JSON) for a missing seed; otherwise an SSE stream of
+        ``progress`` frames then ``done`` (the graph) or ``error``. Build
+        failures surface as ``error`` frames, not HTTP status — the connection
+        is already streaming by then.
+    """
+    seed = normalize_arxiv_id(request.args.get("seed", ""))
+    if not seed:
+        return jsonify({"error": "missing 'seed' arXiv id"}), 400
+    refresh = request.args.get("refresh", "").lower() in ("1", "true", "yes")
+    return sse_response(_build_stream(seed, refresh))
 
 
 @bp.get("/api/paper/<path:paper_ref>")

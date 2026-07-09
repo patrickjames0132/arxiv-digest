@@ -3,9 +3,22 @@
 
 from __future__ import annotations
 
+import json
+
 from atlas.integrations import semantic_scholar
 from atlas.routes import graph as graph_routes
 from atlas.services.graph import Counts, Graph, Node, Seed
+
+
+def frames(response) -> list[tuple[str, dict]]:
+    """Parse an SSE response body into ``(event, data)`` tuples."""
+    parsed = []
+    for chunk in response.data.decode().strip().split("\n\n"):
+        event_line, data_line = chunk.split("\n")
+        parsed.append(
+            (event_line.removeprefix("event: "), json.loads(data_line.removeprefix("data: ")))
+        )
+    return parsed
 
 
 def make_graph() -> Graph:
@@ -50,6 +63,44 @@ def test_graph_error_taxonomy(client, monkeypatch):
 
     monkeypatch.setattr(graph_routes.graph_service, "build_graph", s2_down)
     assert client.get("/api/graph?seed=1312.5602").status_code == 502  # S2 down
+
+
+def test_graph_stream_reports_progress_then_the_graph(client, monkeypatch):
+    def fake_build(seed, refresh=False, on_progress=None):
+        # A real build fires coarse stages through on_progress before returning.
+        if on_progress:
+            on_progress(0, 5, "Resolving seed paper…")
+            on_progress(2, 5, "Fetching citations…")
+        return make_graph()
+
+    monkeypatch.setattr(graph_routes.graph_service, "build_graph", fake_build)
+    response = client.get("/api/graph/stream?seed=https://arxiv.org/abs/1312.5602v2")
+    assert response.status_code == 200
+    assert response.mimetype == "text/event-stream"
+    events = frames(response)
+    assert [event for event, _ in events] == ["progress", "progress", "done"]
+    assert events[0][1] == {"done": 0, "total": 5, "label": "Resolving seed paper…"}
+    assert events[-1][1]["seed"]["id"] == "s2id01"  # the serialized graph
+
+
+def test_graph_stream_error_frames(client, monkeypatch):
+    # Missing seed is a pre-stream 400 (JSON), never an SSE frame.
+    assert client.get("/api/graph/stream").status_code == 400
+
+    monkeypatch.setattr(
+        graph_routes.graph_service,
+        "build_graph",
+        lambda seed, refresh=False, on_progress=None: None,
+    )
+    events = frames(client.get("/api/graph/stream?seed=1312.5602"))
+    assert events[-1][0] == "error"  # unknown paper -> error frame, not 404
+
+    def s2_down(seed, refresh=False, on_progress=None):
+        raise semantic_scholar.S2Error("rate limited")
+
+    monkeypatch.setattr(graph_routes.graph_service, "build_graph", s2_down)
+    events = frames(client.get("/api/graph/stream?seed=1312.5602"))
+    assert events == [("error", {"message": "Semantic Scholar is unavailable — try again."})]
 
 
 def test_paper_prefixes_arxiv_ids_but_not_raw_paperids(client, monkeypatch):

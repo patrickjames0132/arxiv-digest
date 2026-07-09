@@ -38,6 +38,11 @@ api/
 - **Ingestion streams progress**: `uploadSource`/`ingestUrl` consume an SSE
   stream (`progress` → callback, `done` → the record, `error` → thrown with
   the server's user-facing message) instead of one long silent POST.
+- **Graph builds stream progress too**: `fetchGraphStream` (used by
+  `loadGraph`) reads the SSE `/api/graph/stream` endpoint the same way —
+  `progress` → callback (coarse build stage), `done` → the graph, `error` →
+  thrown — so the "Building graph…" overlay shows a real bar. `fetchGraph` (the
+  plain GET) remains for non-streaming callers.
 - **`sse.ts` exists because `EventSource` is GET-only.** The three agent
   streams are POSTs answering `text/event-stream`, so the reader hand-decodes
   frames from `fetch`. Malformed frames are skipped, never fatal; a non-OK
@@ -65,8 +70,8 @@ api/
 
 ## Who uses it, and how/why (traced from the old app; components port next)
 
-- **`Atlas.tsx`** — `fetchGraph` (seed/re-seed), session save/restore via
-  `sessions.ts`.
+- **`Atlas.tsx`** — `fetchGraphStream` (seed/re-seed, via the `loadGraph`
+  thunk), session save/restore via `sessions.ts`.
 - **`search/`** — `searchLive` + `searchLocal` fan out in parallel per
   keystroke; `getFields` fills the filter picker once.
 - **`teacher/Teacher.tsx`** — the three `agents.ts` streams; `Discovery`

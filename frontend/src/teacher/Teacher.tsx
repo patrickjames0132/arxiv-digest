@@ -22,6 +22,7 @@ import Lightbox from '../figures/Lightbox'
 import BeatList from './transcript/BeatList'
 import ChatMessage from './transcript/ChatMessage'
 import { useConversation } from './useConversation'
+import { useResizablePanel } from '../ui/useResizablePanel'
 import './teacher.css'
 
 const MODES: { key: LectureMode; label: string }[] = [
@@ -63,6 +64,7 @@ export default function Teacher({
   const [scopeIds, setScopeIds] = useState<string[]>([])
   // The answer figure opened full-screen (null = closed).
   const [lightbox, setLightbox] = useState<AnswerFigure | null>(null)
+  const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.teacherWidth', 340)
 
   useEffect(() => {
     listSources()
@@ -87,7 +89,14 @@ export default function Teacher({
   }
 
   return (
-    <section className={`teacher ${collapsed ? 'collapsed' : ''}`}>
+    <section className={`teacher ${collapsed ? 'collapsed' : ''}`} style={{ width }}>
+      <div
+        className={`panel-resize-handle${dragging ? ' dragging' : ''}`}
+        onPointerDown={onHandlePointerDown}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize panel"
+      />
       <div className="teacher-head">
         <div className="teacher-head-top">
           <span className="teacher-title">{hasGraph ? 'AI teacher' : 'Ask your library'}</span>

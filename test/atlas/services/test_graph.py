@@ -110,3 +110,18 @@ def test_unknown_seed_returns_none(monkeypatch):
     monkeypatch.setattr(build.s2, "get_paper", lambda lookup: None)
     assert build.build_graph("0000.00000") is None
     assert build.build_graph("   ") is None
+
+
+def test_on_progress_fires_on_a_build_but_not_a_cache_hit(fake_s2):
+    stages: list[tuple[int, int, str]] = []
+    build.build_graph("1706.03762", on_progress=lambda done, total, label: stages.append((done, total, label)))
+    # One frame per coarse stage, in order (1-indexed so the last hits 100%),
+    # each carrying the same total.
+    assert [done for done, _, _ in stages] == [1, 2, 3, 4, 5]
+    assert {total for _, total, _ in stages} == {build._BUILD_STEPS}
+    assert all(label for _, _, label in stages)  # every stage has a human label
+
+    # A cache hit returns before the first stage — no frames.
+    stages.clear()
+    build.build_graph("1706.03762", on_progress=lambda done, total, label: stages.append((done, total, label)))
+    assert stages == []

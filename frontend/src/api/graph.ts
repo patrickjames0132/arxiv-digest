@@ -3,6 +3,8 @@
  * and a paper's figures.
  */
 
+import { readSSE } from './sse'
+
 /** How two papers on the graph relate. */
 export type EdgeType = 'reference' | 'citation' | 'similar' | 'latest'
 
@@ -102,6 +104,46 @@ export async function fetchGraph(
     throw new Error(data.error || `Failed to load graph (${res.status})`)
   }
   return res.json()
+}
+
+/** One coarse stage of an in-flight graph build: which step, of how many. */
+export interface BuildProgress {
+  done: number
+  total: number
+  /** Human-readable stage label, e.g. "Fetching citations…". */
+  label: string
+}
+
+/**
+ * The neighborhood graph for a seed, via the SSE build endpoint — identical
+ * result to {@link fetchGraph}, but reporting coarse build progress as it goes
+ * so the "Building graph…" overlay can show a real bar. A cached snapshot
+ * emits no `progress` frames (the server returns it before the first stage),
+ * so `onProgress` simply never fires and the graph resolves at once.
+ *
+ * @param seed       An arXiv id, a pasted abs/pdf URL, or a raw S2 paperId.
+ * @param refresh    Bypass the server's day-cached snapshot and rebuild from S2.
+ * @param onProgress Called per build stage with `{done, total, label}`.
+ * @throws With the server's error message when the graph can't be built.
+ */
+export async function fetchGraphStream(
+  seed: string,
+  refresh = false,
+  onProgress?: (progress: BuildProgress) => void,
+): Promise<GraphResponse> {
+  const params = new URLSearchParams({ seed })
+  if (refresh) params.set('refresh', '1')
+  const res = await fetch(`/api/graph/stream?${params.toString()}`)
+  let graph: GraphResponse | null = null
+  let message: string | null = null
+  await readSSE(res, (event, data) => {
+    if (event === 'progress') onProgress?.(data as BuildProgress)
+    else if (event === 'done') graph = data as GraphResponse
+    else if (event === 'error') message = (data as { message: string }).message
+  })
+  if (message) throw new Error(message)
+  if (!graph) throw new Error('Graph build failed (stream ended early)')
+  return graph
 }
 
 /**

@@ -3,6 +3,7 @@
    the graph so answers can light up its nodes; toggled from the header. */
 
 .teacher {
+  position: relative; /* anchors the .panel-resize-handle on the left edge */
   width: 340px;
   flex-shrink: 0;
   display: flex;

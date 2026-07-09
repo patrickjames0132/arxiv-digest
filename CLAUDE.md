@@ -28,7 +28,11 @@ For each feature, follow this cycle:
 2. **Hand off for testing** — Patrick tests it **in the browser himself** first.
    Give him specific things to check. **Do NOT commit until he approves.**
 3. On approval, **update the docs**: `README.md` and `OnePager.md` (tick roadmap
-   boxes, note what shipped). If a **notable bug** was found & fixed along the
+   boxes, note what shipped). **When a whole Backlog *section* becomes fully
+   complete** (every box ticked — e.g. all of "UI & rendering polish"), promote
+   that section out of the Backlog and up into the shipped Roadmap checklist so
+   it lives with the other completed groups; the Backlog only holds unfinished
+   work. If a **notable bug** was found & fixed along the
    way — non-obvious root cause, surprising repro, a lesson worth keeping — add
    an entry to **`BUGS.md`** (newest-first; see its header for the format).
    Small, obvious fixes don't need one — the commit message is enough.

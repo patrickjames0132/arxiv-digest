@@ -992,10 +992,11 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       the same `highlightIds` glow the click-to-re-light answer sections already
       use) so a citation points at the paper on the map instead of just naming
       an index. *(From the `todos.md` inbox, 2026-07-07.)*
-- [ ] **Adjustable side panels** — every docked side panel (the detail panel,
-      the assistant panel) is a fixed width today; make them all user-resizable
-      (a drag handle on the panel edge), ideally remembering the chosen size
-      across sessions. *(From the `todos.md` inbox, 2026-07-08.)*
+- [x] **Adjustable side panels** *(v3.7.0)* — both docked panels (detail +
+      assistant) are now user-resizable: a drag handle on each panel's inner
+      edge (`ui/useResizablePanel.ts`), width clamped 280–680px and remembered
+      across sessions in localStorage (`atlas.detailWidth` / `atlas.teacherWidth`).
+      *(From the `todos.md` inbox, 2026-07-08.)*
 - [ ] **Q&A answers need full Markdown + LaTeX rendering** — the research
       agent's answers come back as **Markdown**, but `ChatMessage.tsx` renders
       the prose as plain text wrapped in `<MathText>` (v3.2.0): LaTeX math now
@@ -1012,14 +1013,18 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       sizing/alignment, clearer grouping). Pure UI polish, no behavior change.
       Candidate to bundle with other small UI-cleanup tickets in one ship.
       *(From the `todos.md` inbox, 2026-07-08.)*
-- [ ] **Determinate "Building graph…" progress** — the graph-build notice
-      (`frontend/src/Atlas.tsx`) shows only a spinner; add a loading **percent**
-      like the Sources ingest does. Sources gets its determinate bar from **SSE
-      progress frames** (`api/sources.ts`), but the graph build is a single
-      blocking `/api/graph` request today — so this likely needs the build route
-      to **stream progress** (frontier hops fetched / total, or a coarse stage
-      count) the same way, not just a frontend change. *(From the `todos.md`
-      inbox, 2026-07-08.)*
+- [x] **Determinate "Building graph…" progress** *(v3.7.0)* — the build notice
+      now shows a real filling bar + live stage label, not just a spinner. As
+      predicted, this took a streaming build route: new SSE `GET
+      /api/graph/stream` bridges `build_graph`'s five coarse stages (resolve →
+      references → citations → similar → assemble) into `progress`/`done`/`error`
+      frames via a worker thread + queue (the Sources-ingest pattern), and
+      `loadGraph` consumes them into a `buildProgress` store field. A cache hit
+      streams no frames, so it stays instant. Covers **both** load paths — a
+      fresh build from an empty workspace and a re-seed over an existing graph
+      (a restored save rebuilds locally, so it needs no bar). The blocking
+      `GET /api/graph` stays for compatibility. *(From the `todos.md` inbox,
+      2026-07-08.)*
 
 
 ### Frontend quality

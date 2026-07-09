@@ -29,7 +29,7 @@ import './atlas.css'
 
 export default function Atlas() {
   const dispatch = useAppDispatch()
-  const { graph, epoch, loading, error } = useAppSelector((state) => state.workspace)
+  const { graph, epoch, loading, buildProgress, error } = useAppSelector((state) => state.workspace)
 
   // Drawer visibility + the assistant toggle — shell-local UI.
   const [showSources, setShowSources] = useState(false)
@@ -152,8 +152,17 @@ export default function Atlas() {
           {loading && (
             <div className={`overlay${hasGraph ? ' overlay-card' : ''}`}>
               <div className="overlay-loading">
-                <span className="spin" /> Building graph…
+                <span className="spin" /> {buildProgress?.label ?? 'Building graph…'}
               </div>
+              {buildProgress && (
+                <div className="build-progress" role="progressbar"
+                  aria-valuenow={buildProgress.done} aria-valuemin={0} aria-valuemax={buildProgress.total}>
+                  <div
+                    className="build-progress-fill"
+                    style={{ width: `${Math.round((buildProgress.done / buildProgress.total) * 100)}%` }}
+                  />
+                </div>
+              )}
             </div>
           )}
           {error && !hits && (

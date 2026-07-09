@@ -14,6 +14,7 @@ down.
 | Endpoint | Job |
 | --- | --- |
 | `GET /api/graph?seed=&refresh=` | build (or re-fetch) a seed's neighborhood graph |
+| `GET /api/graph/stream?seed=&refresh=` | same, as SSE with coarse build-stage progress |
 | `GET /api/paper/<ref>` | hydrate one paper's details for the panel |
 | `GET /api/paper/<ref>/figures` | the paper's ar5iv figures, proxied |
 | `GET /api/paper/<ref>/code` | Hugging Face code & artifact links |
@@ -27,6 +28,20 @@ Design decisions worth knowing:
   such paper), 502 (S2 down, with a user-facing "try again"). The panel
   niceties (figures, code) instead degrade to `available: false` on ANY
   upstream failure — a missing figure strip must never 500 the panel.
+- **`/api/graph/stream` is the determinate-progress twin of `/api/graph`.**
+  Same result, delivered as SSE so the frontend overlay shows a real filling
+  bar instead of a bare spinner. `build_graph` reports five coarse stages
+  through an `on_progress` callback; `_build_stream` runs it in a worker thread
+  and bridges each callback onto a queue the generator drains into
+  `progress`/`done`/`error` frames — the exact pattern `sources.py` uses for
+  ingestion. Two consequences fall out of the streaming shape: (1) build
+  failures surface as `error` **frames**, not HTTP status (the connection is
+  already 200/streaming by then), so only a *missing seed* is still a pre-stream
+  400; (2) the generator and its worker must use the **module logger**, never
+  `current_app` — they run after the request context is gone (see `sse.py`).
+  A cache hit fires no `progress` frames (`build_graph` returns before the first
+  stage), so the stream jumps straight to `done`. The blocking `GET /api/graph`
+  stays for compatibility and non-streaming callers.
 - **`normalize_arxiv_id` extracts; `looks_arxiv` discriminates.** The entry
   filter uses `ID_RE.search` to pull an id out of pasted text (URL-wrapped,
   version-suffixed, whatever); the S2 lookup then uses
