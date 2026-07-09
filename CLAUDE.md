@@ -34,7 +34,8 @@ For each feature, follow this cycle:
    it lives with the other completed groups; the Backlog only holds unfinished
    work. If a **notable bug** was found & fixed along the
    way — non-obvious root cause, surprising repro, a lesson worth keeping — add
-   an entry to **`BUGS.md`** (newest-first; see its header for the format).
+   an entry to the **Bugs** section of **`OnePager.md`** (newest-first; see its
+   header for the format).
    Small, obvious fixes don't need one — the commit message is enough.
 4. **Commit, tag, and push** (details below).
 

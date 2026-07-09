@@ -323,7 +323,7 @@ optional, behind a key.
       alone (auto-subscripting digits misfires on "GPT4", "COVID19"). Shipping
       it surfaced a backend bug: ar5iv figure captions arrived as tripled MathML
       soup (`subscriptitalic-ϵ…`); the fix emits each `<math>`'s clean `alttext`
-      LaTeX instead — see [BUGS.md](BUGS.md). Deferred to a later ticket:
+      LaTeX instead — see [Bugs](#bugs--notable-found--fixed). Deferred to a later ticket:
       user-uploaded source titles and researcher trace chips.
       *(From the `todos.md` inbox, 2026-07-08; shipped 2026-07-08.)*
 
@@ -904,7 +904,7 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Next up — OpenAlex hybrid data source *(v4.0.0 candidate — likely a major bump)*
 
-- [ ] **Spike: OpenAlex for the citation graph, S2 for enrichment.** The next
+- [x] **Spike: OpenAlex for the citation graph, S2 for enrichment.** The next
       version we take on. The motivation is the **landmark recency bias** (see
       "Iterative landmark mining" under Enhancements): today's bias is an
       artifact of two S2 citation-endpoint limits — citers come back
@@ -949,6 +949,43 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       build. A new `integrations/openalex/` package mirroring the
       `semantic_scholar/` shape (normalize → traversal → node model) is the
       probable landing spot. *(From a session discussion, 2026-07-08.)*
+
+      **Spike result (2026-07-09) → HYBRID.** Ran the live probes on the Hawking
+      1974 seed (`W2065805883`, 5,655 citers). Every mechanical claim held:
+      - `filter=cites:W…&sort=cited_by_count:desc` returns the landmarks in one
+        call — Page 1976 (4,886), Gibbons–Hawking 1977 (3,196), Strominger–Vafa
+        1996 (3,057) — edge guaranteed by the filter, no mining/verification.
+      - `publication_year:1974-1990` sorted recovers the **sparse early band**
+        directly (Page '76, Gibbons–Hawking '77, Unruh '81, Birrell–Davies '75).
+        This is the exact band single-round mining misses (see "Iterative
+        landmark mining" below) — the spike **retires that item's need**.
+      - Cursor paging (`cursor=*`) has no offset cap; batch hydration via
+        `ids.openalex:W|W|W` returns all in one GET; abstracts are an inverted
+        index (trivial to reverse). Corpus is **319M works** live (~480M claimed
+        across all entities) — larger than S2.
+
+      **Findings that shaped the call to *hybrid, not full migrate*:**
+      - **`related_works` is a poor Similar relation** — for the Hawking seed it
+        returns obscure Planck-scale papers (0–9 citations), concept
+        co-occurrence not intellectual siblings. **Keep S2's recommender.**
+      - **arXiv→work resolution is awkward** — the arXiv DOI 404s directly; the
+        arXiv id only lives in `locations[].landing_page_url`, which **isn't
+        filterable**. Resolve via title / published DOI. S2's clean `ARXIV:`
+        prefix stays the id bridge.
+      - **Pricing is now metered** (the "100k/day free" assumption is stale): a
+        **free API key gives $1/day**, unauthenticated $0.10/day; **id/DOI
+        lookups are free**, search/filter ~$1/1,000 calls. Our per-seed
+        traversal is a handful of filter calls, so $1/day is ample — but it
+        argues for hybrid (free id-batch hydration does the bulk; spend search
+        credits only on the landmark/year-band queries). Adds an
+        `OPENALEX_API_KEY` env var mirroring `S2_API_KEY`.
+      - Data-quality wrinkle: the transformer record reported `year: 2025` with
+        churny duplicate DOIs — be defensive about merged/re-indexed records.
+
+      **Recommendation → build the hybrid:** `integrations/openalex/` (client →
+      `nodes` normalize → `traversal`) owns citation/landmark/year-band
+      traversal; S2 keeps TL;DRs, *Similar*, `influential` edges, and `ARXIV:`
+      id-matching. Cross-match on DOI / arXiv id into the existing node dict.
 
 ### Teacher & agent reach
 
@@ -1007,24 +1044,15 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       Give them their own toggle alongside references / citations / similar so
       the user can hide/show them like any other relation. *(From the
       `todos.md` inbox, 2026-07-07.)*
-- [ ] **OpenAlex as a second citation provider** — the structural fix for
-      everything the mega-paper mining heuristic works around. OpenAlex is
-      free and keyless (~10 req/s, 100k/day — far gentler limits than S2's
-      congested shared pools) and its works API supports
-      `filter=cites:<id>` **with year filters and citation-count sorting** —
-      so "the most-cited papers citing AIAYN published in 2019" is ONE
-      request, no offset ceiling, no reference-list mining, no verification
-      batch. Needs: an `integrations/openalex` client, id mapping to/from S2
-      (via DOI / arXiv id, both present in S2's `externalIds`), and a
-      decision on where it slots in (likely: OpenAlex supplies the citation
-      *pool* for mega papers — or all papers — while S2 remains the backbone
-      for details/recommendations). Would let the landmark-mining path
-      retire. Note the user's original instinct here was arXiv itself, but
-      arXiv hosts preprints and has **no citation data** — citation edges
-      only exist in citation indexes (S2, OpenAlex, OpenCitations). And
-      parallelizing requests (asyncio) can't beat a rate limiter — the fix
-      is a provider with a friendlier one. *(From a live v3.0.x session,
-      2026-07-07.)*
+- [ ] **OpenAlex as a second citation provider** — promoted to the **Next up**
+      section above ("OpenAlex hybrid data source"), where the 2026-07-09 spike
+      validated it live and landed on a hybrid recommendation. The core insight
+      that framed it stays worth keeping: the original instinct was arXiv itself,
+      but arXiv hosts preprints and has **no citation data** — citation edges
+      only exist in citation indexes (S2, OpenAlex, OpenCitations), and
+      parallelizing requests (asyncio) can't beat a rate limiter; the fix is a
+      provider with a friendlier one. *(From a live v3.0.x session, 2026-07-07;
+      superseded by the Next-up spike.)*
 - [ ] **Search cache refresh override** — seed-search results are served from
       the whole-result cache (v2.0.0) with no way to bypass a stale entry; add
       a refresh/override button to the search surface, mirroring the graph's
@@ -1116,7 +1144,11 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       stopping criterion, and probably a budget in `config.graph.citation_mining`;
       the snapshot cache softens re-exploration but not the first build. An
       experiment, not a commitment — measure the coverage gain vs. the latency
-      hit. *(From a session observation, 2026-07-08.)*
+      hit. *(From a session observation, 2026-07-08.)* **Update (2026-07-09):**
+      the OpenAlex spike above confirmed a sorted+year-banded `cites:` query
+      recovers this exact Hawking 1974 early band directly (no loop, no
+      verification), so this stays only as the **S2-only fallback** if we don't
+      adopt OpenAlex.
 - [ ] **Tune the agents' citation-count weighting via a skill** — today a strong
       preference for highly-cited papers is *implicit*: the graph hands both
       agents a pool already ranked by citations (references/citations most-cited
@@ -1207,6 +1239,59 @@ the digest table, and the smart-pull ledger.
 
 ---
 
+## Bugs — notable, found & fixed
+
+A running log of bugs worth remembering — the ones with a non-obvious root
+cause, a surprising reproduction, or a lesson that outlives the fix. Everything
+here is already **fixed and shipped**; open work lives in the Roadmap/Backlog
+above and the `todos.md` inbox. The point is institutional memory: when a
+symptom recurs or someone touches the same code, the story is one grep away
+instead of buried in a diff.
+
+Keep it newest-first. One entry per bug, with **Symptom** (what was visibly
+wrong), **Root cause** (the actual mechanism, not the surface), **Fix** (what
+changed, and where), and **Lesson / guard** (what keeps it from coming back — a
+test, an invariant). Small, obvious bugs don't need an entry — the commit
+message is enough. This section is for the ones you'd want to re-read a year
+later.
+
+### Tripled MathML soup in ar5iv figure captions
+
+*Found & fixed v3.2.0 (2026-07-08), while shipping "Proper subscripts & math
+notation".*
+
+- **Symptom.** Figure captions in the detail panel and in the teacher's
+  answers rendered as garbled, tripled math — e.g. the Double Q-Learning paper
+  (arXiv 1509.06461) showed
+  `…the action values are Q(s,a)=V*(s)+eaQsasubscriptVssubscriptitalic-ϵaQ(s,a)=V_{*}(s)+\epsilon_{a} and the errors…`.
+  The new frontend KaTeX renderer couldn't help — the caption *string itself*
+  was already corrupt, and the LaTeX in it wasn't even `$`-delimited.
+- **Root cause.** ar5iv renders each formula as a `<math>` element whose
+  children are **three redundant text renderings** of the same formula:
+  presentation MathML (`<mi>`, `<msub>`…), a content-MathML / semantic
+  annotation (the source of the literal words `subscript`, `superscript`,
+  `italic-ϵ`), and a LaTeX annotation. `_FigureParser` in
+  `src/atlas/integrations/arxiv/figures.py` stripped tags and accumulated **all
+  of it**, concatenating the three into soup. The clean LaTeX was sitting
+  unused in each element's `alttext` attribute the whole time.
+- **Fix.** `_FigureParser` now tracks `<math>` nesting: on entering the
+  outermost `<math>` inside a caption it emits the element's `alttext` wrapped
+  in `$…$`, and suppresses the subtree's own text nodes. Captions come out as
+  clean, KaTeX-ready `$V_{*}(s)+\epsilon_{a}$`. Covers every figure surface at
+  once (detail panel, teacher `FigCard`, lightbox) because they all fetch
+  through `get_figures`.
+- **Lesson / guard.** When scraping rendered LaTeX (ar5iv/MathJax/KaTeX
+  output), prefer the source-carrying attribute (`alttext`, `data-tex`,
+  `<annotation encoding="application/x-tex">`) over the visual subtree — the
+  subtree is *display* markup, often duplicated for accessibility, and
+  text-stripping it is lossy. Two regression tests pin this
+  (`test_get_figures_math_becomes_delimited_latex_not_tripled_mathml`,
+  `…math_without_alttext_is_dropped_not_garbled`). Note the 30-day figure cache:
+  a parser fix doesn't reach already-cached captions until they re-fetch —
+  clear `figures:*` from the `cache` table to re-test immediately.
+
+---
+
 ## Open questions & costs
 
 - **Daily digest mode?** — Decide whether to keep any date-range "what's new
@@ -1214,11 +1299,12 @@ the digest table, and the smart-pull ledger.
 - **Semantic Scholar rate limits** — free key ~1 req/sec; need polite batching +
   caching. Key application submitted 2026-07-03 (S2 requires an academic /
   corporate email — used the old academic address, approval pending). Keyless
-  429s are painful enough that **OpenAlex** (free, no key, generous limits) is
-  under consideration as a fallback backbone — decision parked for a night.
-  Cache-first seed search (Phase 2.4) softens browsing in the meantime.
+  429s are painful enough that **OpenAlex** was under consideration as a fallback
+  backbone — now **decided**: the 2026-07-09 spike landed on a hybrid (OpenAlex
+  for citation/landmark traversal, S2 for enrichment; see the Next-up backlog
+  section). Cache-first seed search (Phase 2.4) softens browsing in the meantime.
 - **S2 coverage gaps** — arXiv CS/ML coverage is high but not total; some papers
-  may have sparse citation edges. Consider OpenAlex as a later fallback.
+  may have sparse citation edges. Addressed by the OpenAlex hybrid (Next up).
 - **AutoContent API** — ~€24/mo (1,000 credits: infographic 10, slide deck 30,
   video 50). Trial the cheap tier and judge quality by eye before committing.
 - **ElevenLabs** — optional premium TTS; free tier ~10k credits/mo.
