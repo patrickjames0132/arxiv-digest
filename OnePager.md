@@ -902,6 +902,54 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ## Backlog — not yet shipped
 
+### Next up — OpenAlex hybrid data source *(v4.0.0 candidate — likely a major bump)*
+
+- [ ] **Spike: OpenAlex for the citation graph, S2 for enrichment.** The next
+      version we take on. The motivation is the **landmark recency bias** (see
+      "Iterative landmark mining" under Enhancements): today's bias is an
+      artifact of two S2 citation-endpoint limits — citers come back
+      **newest-first only** (no sort control) and paging **stops at ~10k
+      offset** — which is what forces the whole `_mined_landmarks` +
+      reference-harvest + verification apparatus. **OpenAlex removes both:**
+      - `filter=cites:W<seed>&sort=cited_by_count:desc` returns the **most-cited
+        citers directly** — that *is* the landmark relation, in one call, edge
+        guaranteed by the filter (no mining, no verification), and the 10k
+        ceiling never bites because you take the top off page 1.
+      - **Cursor pagination** (`cursor=*`) traverses the full citer set when
+        depth is genuinely needed — no offset cap.
+      - **Year-band filters** (`publication_year:1974-1990`) give deliberate,
+        stratified coverage across the seed→today span — the "spread over the
+        years" the iterative-mining idea was chasing, without the loop. **This
+        spike likely subsumes / retires that backlog item.**
+      - Bonus: OpenAlex rate limits are far kinder (~100k/day, 10/s, keyless via
+        a `mailto` polite pool), which would relieve much of the S2-429 pacing
+        complexity our integration carries.
+      - Corpus: OpenAlex is the **larger** corpus (~250M+ works vs S2's ~200M+)
+        and broader across disciplines/formats — most relevant for older,
+        cross-disciplinary, or non-CS seeds (the Hawking case).
+
+      **Why hybrid, not a full switch — what S2 still owns:** OpenAlex has **no
+      TL;DRs** (we'd fall back to abstracts, which we already do via
+      `node.tldr or node.abstract`), **no recommender** for the *Similar*
+      relation (nearest sub is each work's `related_works`, concept-based, a
+      different flavor — or our own embeddings), and **no `influential`-citation
+      flag** (our heavier edges). So the shape to prototype is **OpenAlex for the
+      citation/landmark/year-band traversal, S2 kept for TL;DRs + Similar**,
+      matching works across the two by DOI / arXiv id. Downside is a second
+      integration + cross-source id-matching, and OpenAlex ergonomics differ
+      (arXiv resolved via DOI/landing page rather than a clean `ARXIV:` prefix;
+      abstracts arrive as an inverted index; batch is OR-filtered GETs (~50 ids)
+      rather than S2's `POST /paper/batch` of 500).
+
+      **Spike deliverable:** hit the live OpenAlex API on the Hawking 1974 seed,
+      confirm the sorted + year-bucketed citer queries actually recover the
+      sparse 1974–~2010 landmark band, sanity-check arXiv→work resolution and
+      `related_works` quality, verify the live corpus/rate-limit numbers, then
+      write up **migrate-fully vs. hybrid** with a recommendation before any
+      build. A new `integrations/openalex/` package mirroring the
+      `semantic_scholar/` shape (normalize → traversal → node model) is the
+      probable landing spot. *(From a session discussion, 2026-07-08.)*
+
 ### Teacher & agent reach
 
 - [ ] **Graph-less research mode** — let the researcher run with no graph
