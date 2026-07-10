@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -10,5 +11,12 @@ export default defineConfig({
     proxy: {
       '/api': 'http://127.0.0.1:5000',
     },
+  },
+  // Vitest. The suite lives in test/ (mirroring src/, like the backend's
+  // test/ mirrors src/atlas/) and is fully offline. Environment defaults to
+  // node; component/hook tests opt into jsdom per file with a
+  // `// @vitest-environment jsdom` docblock.
+  test: {
+    include: ['test/**/*.test.{ts,tsx}'],
   },
 })

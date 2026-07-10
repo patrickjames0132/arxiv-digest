@@ -34,8 +34,8 @@ For each feature, follow this cycle:
 
 1. **Build** the feature. Run `npm run build --prefix frontend` to typecheck the
    frontend; verify backend changes with a quick script or the Flask test client.
-   Run the whole backend quality gate with **`uv run nox`** (see below) before
-   handing off.
+   Run the whole quality gate — backend *and* frontend — with **`uv run nox`**
+   (see below) before handing off.
 2. **Hand off for testing** — Patrick tests it **in the browser himself** first.
    Give him specific things to check. **Do NOT commit until he approves.**
 3. On approval, **update the docs**: `README.md` and `OnePager.md` (tick roadmap
@@ -143,9 +143,9 @@ branch `main`.
 - Don't re-hit the live API repeatedly while iterating; it throttles the IP
   (shared with the browser).
 
-## Quality gate — `uv run nox`
+## Quality gate — `uv run nox` (backend + frontend)
 
-**`uv run nox`** runs the whole backend gate in one shot — four sessions defined
+**`uv run nox`** runs the whole repo's gate in one shot — five sessions defined
 in `noxfile.py`, all reusing the uv env (no per-session installs):
 
 - **`precommit`** — every pre-commit hook (`.pre-commit-config.yaml`): file
@@ -163,12 +163,18 @@ in `noxfile.py`, all reusing the uv env (no per-session installs):
   over `getattr` duck-typing, and use `flask.typing.ResponseReturnValue` for
   views that return `(body, status)` tuples.
 - **`tests`** — `pytest` over `test/`, which **mirrors `src/atlas/`**
-  (105 offline tests; no live arXiv/S2/Anthropic calls, ever). Shared fixtures
+  (328 offline tests; no live arXiv/S2/Anthropic calls, ever). Shared fixtures
   in `test/conftest.py`: autouse temp-DB isolation (tests can't touch real
   `data/`), `fake_claude` (a scripted Anthropic client built from **real SDK
   event objects** — use it for anything agentic), and `stub_embeddings`
   (deterministic hash embedder, no torch). Put new tests in the folder matching
   the module under test; pass args through with `uv run nox -s tests -- -k foo`.
+- **`vitest`** — the frontend suite: **Vitest** (+ RTL/jsdom) over
+  `frontend/test/`, which **mirrors `frontend/src/`**; fully offline, node
+  environment by default with per-file `// @vitest-environment jsdom` opt-in,
+  no test globals (import from `vitest` explicitly). Skips cleanly without
+  npm. See `frontend/test/README.md`; pass args through with
+  `uv run nox -s vitest -- -t name`.
 - **`security`** — **Trivy** filesystem scan; **skips cleanly when `trivy`
   isn't on PATH**, so the gate stays green locally without it. Trivy is pinned
   in `.tool-versions`, so the session-start `bin/setup` script installs it via

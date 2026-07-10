@@ -1002,6 +1002,42 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       is byte-identical). **New standing convention in `CLAUDE.md`**: every
       new package ships with a README; code changes refactor the affected
       READMEs in the same change. *(Patrick's ask, 2026-07-09.)*
+- [x] **Frontend pre-commit (format + lint)** *(2026-07-09, no version
+      bump — dev tooling, not the app)* — **prettier** (3.8.4, pinned exact)
+      added as the formatter, configured to the existing house style
+      (`semi: false`, single quotes, printWidth 100) so the one-time sweep
+      stayed small (23 files, +166/−159, render-equivalent JSX whitespace
+      reflows only); scoped to `src/**/*.{ts,tsx,css}` + `test/` +
+      `vite.config.ts` — deliberately not the hand-formatted READMEs or the
+      JSONC tsconfigs.
+      Two **local pre-commit hooks** (prettier then oxlint, both running the
+      frontend's own npm scripts) join the existing gate, so
+      `uv run nox -s precommit` now enforces frontend hygiene the same way
+      it does backend hygiene — prettier fixes in place like ruff `--fix`
+      (verified with a negative test: a deliberately mangled file failed the
+      run and came back formatted). New npm scripts `format` /
+      `format:check`. *(From the `todos.md` inbox, 2026-07-07.)*
+- [x] **Frontend tests — Vitest + React Testing Library** *(v4.4.0;
+      completes the "Frontend quality" backlog section, promoted here)* —
+      the frontend now has a real offline test surface: **Vitest 4** (+
+      jsdom + RTL), configured in `vite.config.ts`'s `test` block, with the
+      suite in **`frontend/test/`** mirroring `src/` the way the backend's
+      `test/` mirrors `src/atlas/`. Seven files / **54 tests** cover the
+      pure logic with real edge cases — `graph/model` helpers (incl. the
+      `ID_RE` pasted-id fast path), `notation/splitMath` (math vs. currency
+      vs. mid-stream unclosed delimiters) and `latexToUnicode`, the
+      `<<FIG n>>` interleaver (streaming-tail holdback, invented slots,
+      leftovers), `remarkCite` on hand-built mdast — plus a jsdom/RTL pair
+      (`Legend`'s conditional agent entries, `useResizablePanel`'s
+      seed/clamp/drag/persist). Node environment by default, per-file
+      `@vitest-environment jsdom` opt-in, no test globals (everything
+      imported from `vitest` explicitly). A new **`vitest` nox session**
+      joins the default gate — `uv run nox` is now the whole-repo gate
+      (backend 328 + frontend 54; skips cleanly without npm, the Trivy
+      pattern) — and prettier's scope covers `test/`. Next natural target
+      (per `frontend/test/README.md`): `useConversation` driven by scripted
+      SSE events, the `fake_claude` idea client-side. *(From the `todos.md`
+      inbox, 2026-07-07.)*
 
 ## Backlog — not yet shipped
 
@@ -1112,29 +1148,6 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       `GET /api/graph` stays for compatibility. *(From the `todos.md` inbox,
       2026-07-08.)*
 
-
-### Frontend quality
-
-- [x] **Frontend pre-commit (format + lint)** *(2026-07-09, no version
-      bump — dev tooling, not the app)* — **prettier** (3.9.5, pinned exact)
-      added as the formatter, configured to the existing house style
-      (`semi: false`, single quotes, printWidth 100) so the one-time sweep
-      stayed small (23 files, +166/−159, render-equivalent JSX whitespace
-      reflows only); scoped to `src/**/*.{ts,tsx,css}` + `vite.config.ts` —
-      deliberately not the hand-formatted READMEs or the JSONC tsconfigs.
-      Two **local pre-commit hooks** (prettier then oxlint, both running the
-      frontend's own npm scripts) join the existing gate, so
-      `uv run nox -s precommit` now enforces frontend hygiene the same way
-      it does backend hygiene — prettier fixes in place like ruff `--fix`
-      (verified with a negative test: a deliberately mangled file failed the
-      run and came back formatted). New npm scripts `format` /
-      `format:check`. *(From the `todos.md` inbox, 2026-07-07.)*
-- [ ] **Frontend tests** — the backend has a 291-test offline suite
-      (`uv run nox -s tests`); the frontend has none. Stand up a runner
-      (Vitest + React Testing Library is the natural fit for this Vite/React
-      app) and start covering components/hooks, mirroring the backend's
-      offline-only, no-live-API discipline.
-      *(From the `todos.md` inbox, 2026-07-07.)*
 
 ### Enhancements & tech debt
 
