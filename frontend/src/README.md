@@ -22,9 +22,9 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
    ├─ graph area                   graph/GraphExplorer.tsx
    │  ├─ overlays (from the shell): hit list  search/HitList.tsx
    │  │                             loading / error / hint  (Atlas.tsx)
-   │  ├─ controls panel            graph/GraphControls.tsx
-   │  ├─ the canvas                graph/GraphCanvas.tsx
-   │  ├─ legend                    graph/Legend.tsx
+   │  ├─ controls panel            graph/controls/GraphControls.tsx
+   │  ├─ the canvas                graph/canvas/GraphCanvas.tsx
+   │  ├─ legend                    graph/controls/Legend.tsx
    │  ├─ detail panel (on select)  detail/DetailPanel.tsx
    │  └─ figure lightbox           figures/Lightbox.tsx
    └─ assistant panel (🎓)         teacher/Teacher.tsx
@@ -44,9 +44,10 @@ Non-visual folders: `api/` (the typed backend client — the only layer that
 knows URLs and SSE frames), `store/` (the three slices + typed hooks),
 `notation/` (the cross-cutting math renderer — `<MathText>` for the DOM
 surfaces, `latexToUnicode` for canvas node labels), `graph/hooks/` +
-`graph/model.ts`/`theme.ts` (the sim machinery), `search/useSeedSearch.ts`,
-`detail/useSelection.ts`, `teacher/useConversation.ts` (each feature's
-state/logic hooks).
+`graph/model.ts`/`theme.ts` (the sim machinery), `ui/` (cross-cutting UI
+utilities — `useResizablePanel` for both right-docked panels),
+`search/useSeedSearch.ts`, `detail/useSelection.ts`,
+`teacher/useConversation.ts` (each feature's state/logic hooks).
 
 Every folder has its own README with the full story — this file is just the
 map. Verified by `npm run build` (strict tsc + Vite) and oxlint; behavior

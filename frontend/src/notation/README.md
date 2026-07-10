@@ -30,7 +30,7 @@ there are two entry points sharing one parser:
   (with MathML for accessibility). This is the good path — proper fractions,
   superscripts, symbols.
 - **Canvas → Unicode** (`latexToUnicode`). Graph node labels are painted with
-  `ctx.fillText` (`graph/GraphCanvas.tsx`), where HTML/KaTeX can't reach. There's
+  `ctx.fillText` (`graph/canvas/GraphCanvas.tsx`), where HTML/KaTeX can't reach. There's
   no way to typeset on a canvas, so this is a deliberate *approximation*: strip
   the delimiters, map Greek letters and simple sub/superscripts to their Unicode
   glyphs (β, ₂, ²), and leave anything unmappable as readable source. The goal is
@@ -72,7 +72,7 @@ caption). Every figure-caption render path is covered — the detail panel's
 inline captions, the teacher's inline `FigCard`, and the shared enlarged
 `Lightbox`.
 
-`latexToUnicode` (canvas): `graph/GraphCanvas.tsx` (node labels + the hover
+`latexToUnicode` (canvas): `graph/canvas/GraphCanvas.tsx` (node labels + the hover
 tooltip string).
 
 Deliberately *not* wired up: user-uploaded source titles

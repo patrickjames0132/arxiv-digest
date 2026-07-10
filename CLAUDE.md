@@ -104,6 +104,16 @@ branch `main`.
   (`ctx`, `fg`, `lo`/`hi`, `aid`, `err`, `msg`, `buf`, `frac`) are fine; the
   rule is specifically about single letters. The whole codebase was swept clean
   of them once — keep it that way, don't reintroduce them.
+- **Every package has a README, kept current.** A new package — backend or
+  frontend, nested sub-packages included (e.g. `graph/canvas/`,
+  `teacher/transcript/`) — ships **with its own `README.md`** telling that
+  package's full story (what it is, design decisions worth knowing, who uses
+  it, how it's verified — match the established README voice). And when a
+  code change alters a package's behavior, structure, or contracts,
+  **refactor its README in the same change** — including any *other* README
+  that names the moved/changed thing (`src/README.md`'s render-tree map,
+  cross-references like `notation/README.md`). `frontend/src/README.md`'s
+  claim that "every folder has its own README" must stay true.
 
 ## Caveats — read before committing
 

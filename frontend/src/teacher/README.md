@@ -17,6 +17,8 @@ teacher/
   transcript/        ← sub-package: rendering the conversation
     BeatList.tsx     — lecture beats (click to light their papers)
     ChatMessage.tsx  — one turn: retrieval line, trace chips, prose+figures
+    AnswerMarkdown.tsx — Markdown + KaTeX + [n]-citation rendering
+    remarkCite.ts    — the remark plugin behind the citation chips
   teacher.css
 ```
 

@@ -1,24 +1,29 @@
 # `src/graph`
 
-The graph explorer's engine room: the view-model types, the visual
-constants, and the three hooks that manage a live force simulation without
-fighting it. (The canvas/controls/legend *components* live here too and are
-documented below as they land.)
+The graph explorer's engine room: the composition root, the view-model
+types, the visual constants, and three nested sub-packages — the canvas,
+the DOM chrome, and the simulation hooks — each with its own README.
 
 ```
 graph/
+  GraphExplorer.tsx — the composition root of the graph area (see below)
   model.ts          — view-model types (VNode/VLink/Base) + pure helpers
   theme.ts          — the relation color scheme + layout geometry constants
-  hooks/
-    useDiscovery.ts — the sim-side discovery merge, in place
-    usePinning.ts   — user pins (drag / toggle / release), timeline-aware
-    useTimeline.ts  — the Timeline layout: year pinning, collide, axis painting
-  GraphExplorer.tsx — the composition root of the graph area (see below)
-  GraphCanvas.tsx   — the ForceGraph2D wrapper: every canvas painter
-  GraphControls.tsx — layout toggle, filter chips, year slider, pin/fit
-  Legend.tsx        — the color legend (agent entries appear on first use)
-  graph.css         — styles (ported light-touch)
+  graph.css         — styles for the whole graph area (ported light-touch)
+  canvas/           ← sub-package: the ForceGraph2D wrapper, every canvas painter
+  controls/         ← sub-package: the declutter panel + the color legend
+  hooks/            ← sub-package: useDiscovery / usePinning / useTimeline
 ```
+
+All three sub-packages are single-parent clusters under `GraphExplorer` —
+the hybrid structure rule's nesting case. Their components are purely
+presentational: every set, id, and count arrives as a prop, and every
+interaction fires a callback upward. The canvas paints, the shell decides.
+
+(`model.ts`/`theme.ts` stay at the root: the sub-packages AND outside
+consumers — `search/HitList` uses `formatPubDate`, Atlas uses `ID_RE`,
+`detail/` uses both — all import them. `graph.css` also stays at the root:
+it styles the whole area, and both `controls/` components import it.)
 
 ## `GraphExplorer` — where the mutable world lives
 
@@ -34,35 +39,6 @@ ids. The shell passes its overlays (hit list, loading/error/hint) as
 them. Note the discovery data flow is one-way: teacher → store → explorer
 → `base` — the discovery *lists* live in the workspace slice (grounding,
 Save, and the legend read them there); this folder owns only the sim merge.
-
-(`model.ts`/`theme.ts` stay at the root: components, hooks, AND outside
-consumers — `search/HitList` uses `formatPubDate`, Atlas uses `ID_RE` —
-all import them. The hooks cluster under `hooks/` purely to keep the
-folder scannable.)
-
-## The components: purely presentational, by design
-
-All three components own NO state — every set, id, and count arrives as a
-prop, and every interaction fires a callback upward. That's the Phase 6
-state directive in its oldest corner: the canvas paints, the shell decides.
-Points worth knowing:
-
-- **`GraphCanvas`'s ring vocabulary**: gold glow + ring = the teacher is
-  talking about it; dashed ring = agent-discovered mid-chat; pale ring =
-  user-pinned; bright ring = selected. Labels are zoom-gated (seed /
-  selected / highlighted always; everyone else past 1.6× zoom, truncated
-  at 42 chars). Influential citations draw heavier; `similar` edges get no
-  arrowhead — they aren't citations, mirroring the backend's
-  `influential=null` semantics.
-- **It must never copy `data`** — the nodes are the live objects the sim
-  mutates (the `Base` identity contract above). The lib's generic prop
-  typings fight our accessor signatures, so it renders through an untyped
-  alias (kept, with its comment).
-- **`GraphControls`** renders the year slider only when the graph spans
-  more than one year, and its hint line teaches per-layout gestures.
-- **`Legend`** shows the two agent-related entries only after the agent
-  has actually discovered papers — it never explains marks that aren't on
-  screen.
 
 ## The core constraint: react-force-graph MUTATES your objects
 
@@ -92,50 +68,6 @@ canvas-local *mutable object* state — it must never move into Redux. The
 store question applies to app-level state (selection, chat, filters), not
 to anything in this folder.
 
-## `useDiscovery` — the graph grows mid-conversation
-
-Merges the papers a workflow pulls in (the researcher's expand/search tools, the
-lecture's backward walk) into the live graph:
-
-- **In-place append** with id/edge-key dedupe (an edge key is
-  `source|target|type`).
-- **Anchored spawning:** a new paper starts near the paper it was discovered
-  from, so it doesn't fly in from the canvas origin when the sim reheats;
-  ungrounded topic-search hits (no edge) anchor on the seed with a wider
-  scatter so they settle into a loose cluster instead of stacking.
-- **Year-range widening:** a discovery older/newer than anything visible
-  widens both the base range and the active year filter — a discovered
-  paper must never arrive invisible.
-- **Reheat without camera yank:** `d3ReheatSimulation`, never `zoomToFit` —
-  the user may be reading the chat, not watching the graph.
-- `discoveredNodes` mirrors what was merged, kept separately so follow-up
-  questions can extend the researcher's grounding without rebuilding `base`; on
-  a restored session it's re-collected from the saved nodes' `discovered`
-  flags.
-
-## `usePinning` + `useTimeline` — two layouts, one pin vocabulary
-
-Pins are just `fx`/`fy`, but their *semantics* are layout-aware:
-
-- **Force mode:** drag pins where dropped; unpin frees the node entirely.
-- **Timeline mode:** a node's x is ALWAYS its date column — dragging only
-  sets height, unpinning restores the column pin, and `releaseAll` keeps the
-  date structure. `nodeTimelineX` maps year + month fraction to x (papers
-  sit *between* year gridlines by publication month; a paper with no year
-  sits at the **seed's own exact x** — same year AND month fraction, so it's
-  pixel-aligned with the seed's own column, not just parked somewhere within
-  its year — rather than an "n.d." lane at the timeline's edge. S2 not
-  knowing a date isn't evidence the paper predates everything else on the
-  graph, and a node reached from the seed tends to be contemporaneous with
-  it anyway. Falls back to the earliest year only if the seed itself has
-  none; there's no day-level precision anywhere in this system, only
-  year+month, so "exact" tops out at whatever precision the seed has).
-- Timeline physics: pin every x, add a radius-sized collide force so a year
-  column spreads out instead of clumping; `freezeSettledY` freezes heights
-  once the sim settles so dragging one node can't re-relax the rest. The
-  axis painter draws year gridlines/labels in graph coordinates, thinning
-  labels when zoom would crowd them (≥28px apart on screen).
-
 ## `model.ts` helpers & `theme.ts`
 
 - `primaryRel`: the one relation that colors a node — seed wins, then
@@ -154,17 +86,14 @@ Pins are just `fx`/`fy`, but their *semantics* are layout-aware:
   states, `YEAR_SPACING`, filter labels) so the canvas painting and the DOM
   chrome can never disagree about what "a reference" looks like.
 
-## Who uses it, and how/why (traced from the old app; components port next)
+## Who uses it, and how/why
 
-- **`GraphCanvas.tsx`** — renders `Base` through ForceGraph2D with
-  `theme.ts` colors, `nodeRadius`, `drawAxis`, and the pin handlers.
-- **`GraphControls.tsx`** — the layout toggle calls `applyLayoutPhysics`;
-  filter chips read `REL_LABEL`/`REL_COLOR`; the year slider feeds
-  `yearLo`/`yearHi`.
-- **`Atlas.tsx`** (the shell, for now) — owns `base`, wires the three hooks
-  together, feeds `onDiscovery` into the agent streams' handlers, and uses
-  `cleanNode`/`countRels` for session save/restore.
-- **`search/`** — `ID_RE` for the pasted-id fast path.
+- **`Atlas.tsx`** (the shell) — renders `GraphExplorer` and passes its
+  overlays as children; uses `ID_RE` for the pasted-id fast path.
+- **`detail/`** — `useSelection` types against `Base`/`VNode`;
+  `DetailPanel` uses `formatPubDate` + `REL_COLOR`.
+- **`search/HitList`** — `formatPubDate`.
+- **`store/workspace`** — `cleanNode`/`countRels` for session save/restore.
 
 ## How it's verified
 

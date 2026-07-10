@@ -3,8 +3,8 @@
  * appear once the agent has actually discovered papers mid-conversation.
  */
 
-import { REL_COLOR } from './theme'
-import './graph.css'
+import { REL_COLOR } from '../theme'
+import '../graph.css'
 
 /** Props for {@link Legend}. */
 export interface LegendProps {

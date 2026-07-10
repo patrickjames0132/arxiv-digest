@@ -11,11 +11,11 @@
  */
 
 import ForceGraph2DImport from 'react-force-graph-2d'
-import type { GraphNode } from '../api'
-import { latexToUnicode } from '../notation/latexToUnicode'
-import { nodeRadius, primaryRel } from './model'
-import type { VLink, VNode } from './model'
-import { DIM_EDGE, DIM_NODE, EDGE_COLOR, REL_COLOR } from './theme'
+import type { GraphNode } from '../../api'
+import { latexToUnicode } from '../../notation/latexToUnicode'
+import { nodeRadius, primaryRel } from '../model'
+import type { VLink, VNode } from '../model'
+import { DIM_EDGE, DIM_NODE, EDGE_COLOR, REL_COLOR } from '../theme'
 
 // The lib's generic prop typings fight our accessor signatures; render via an
 // untyped alias so our canvas/link callbacks stay readable.

@@ -986,6 +986,22 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       `config.json`** (it's gitignored and single-user, so shipped as a
       minor by agreement): move your `s2`/`openalex` blocks under
       `"providers": { ... }` — values unchanged.
+- [x] **Frontend package nesting + full README coverage** *(v4.3.1 — prep
+      for the "Frontend quality" backlog)* — `GraphCanvas` and
+      `GraphControls` moved into nested sub-packages **`graph/canvas/`**
+      and **`graph/controls/`** (Legend joined `controls/` — same
+      single-parent DOM-chrome layer), each with its own README;
+      `graph/README.md` refactored down to the package overview + the
+      cross-cutting RFG identity contract, with the component/hook
+      deep-dives relocated into `canvas/`, `controls/`, and `hooks/`
+      READMEs. A full-frontend sweep against the hybrid structure rule
+      found no other nesting warranted but four folders missing READMEs —
+      `graph/hooks/`, `teacher/figures/`, `teacher/transcript/`, `ui/` —
+      all written, so `src/README.md`'s "every folder has its own README"
+      claim is now true. Zero behavior change (the production bundle hash
+      is byte-identical). **New standing convention in `CLAUDE.md`**: every
+      new package ships with a README; code changes refactor the affected
+      READMEs in the same change. *(Patrick's ask, 2026-07-09.)*
 
 ## Backlog — not yet shipped
 
