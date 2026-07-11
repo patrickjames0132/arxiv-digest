@@ -1238,12 +1238,17 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       supplement when the latest pool comes back suspiciously thin (the
       fallback is currently all-or-nothing on seed resolution). *(From the
       `todos.md` inbox, 2026-07-09; findings 2026-07-10.)*
-- [ ] **Prune ghost similar papers (no citations AND no publication
-      history)** — Patrick doesn't want to see them on the graph: an S2
-      recommendation with zero citations and no year/date is unverifiable
-      noise. Filter them out of the similar relation at build time (keep the
-      filter server-side so the slider's pool is honest). *(From the
-      `todos.md` inbox, 2026-07-10.)*
+- [x] **Prune ghost similar papers (no citations AND no publication history)**
+      *(v4.10.2)* — S2 recommendations that carry **zero citations AND no
+      year/date** are unverifiable noise, so they're dropped from the *similar*
+      relation at build time (`build._is_ghost_similar`, in the recommendation
+      loop) — before the node and before the `similar` count, so the slider's
+      pool stays honest. Both conditions are required (any citations, or any
+      year/`pub_date`, keeps the paper); the prune is scoped to `similar` only,
+      never to a verified reference/citation/latest link. Pinned by a
+      boundary-case unit test on the helper plus a build-level test that a ghost
+      is dropped while a cited-but-dateless and a dated-but-uncited
+      recommendation stay. *(From the `todos.md` inbox, 2026-07-10.)*
 - [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
       `search` relation from the researcher's `search_papers` tool) are
       currently **always shown** with no filter chip of their own (see the

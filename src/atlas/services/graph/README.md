@@ -154,7 +154,12 @@ drift — at the cost of a validate on each cache hit, a deliberate trade.
      package's README).
    - **similar** → `seed → neighbor` — recommendations aren't citations, so
      there's no citation direction and no `influential`; the edge just anchors
-     the neighbor to the seed visually.
+     the neighbor to the seed visually. **Ghost recommendations are pruned
+     here** (`_is_ghost_similar`): S2 occasionally suggests a paper with **zero
+     citations AND no year/date** — unverifiable noise — so it's dropped before
+     the node and the `similar` count, keeping the slider's pool honest. This
+     applies only to `similar`; a verified reference/citation/latest link is
+     never pruned this way.
 
    Getting a direction backwards would silently invert the citation arrows in
    the UI, which is why this is the most-commented part of the code.

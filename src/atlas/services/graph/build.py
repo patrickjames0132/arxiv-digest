@@ -141,6 +141,27 @@ def _upgrade_node(existing: Node, sighting: dict) -> None:
             setattr(existing, field_name, sighting[field_name])
 
 
+def _is_ghost_similar(node_data: dict) -> bool:
+    """Whether a *similar* recommendation is an unverifiable ghost to prune.
+
+    S2's recommendations occasionally surface papers with **zero citations and
+    no publication date at all** — nothing to place them in time and nothing
+    vouching for them, so they read as noise on the graph. This flags exactly
+    that pairing (both conditions must hold); a paper with any citations, or any
+    year/date, stays. Applied only to the ``similar`` relation — references,
+    citations, and latest are verified links, not embedding guesses.
+
+    Args:
+        node_data: The normalized recommendation node dict.
+
+    Returns:
+        True when the node has no citations *and* no year/pub_date.
+    """
+    has_citations = bool(node_data.get("citation_count"))
+    has_date = bool(node_data.get("year") or node_data.get("pub_date"))
+    return not has_citations and not has_date
+
+
 #: Progress callback: ``(steps_done, steps_total, label)``. The streaming
 #: ``/api/graph/stream`` route bridges these into SSE ``progress`` frames so
 #: the "Building graph…" overlay can show a real bar instead of a bare spinner.
@@ -351,10 +372,15 @@ def build_graph(
 
     # Recommendations: embedding-similar papers. These are NOT citations, so
     # there's no direction meaning and no ``influential`` (left None); we draw
-    # seed -> neighbor just to anchor them to the seed visually.
+    # seed -> neighbor just to anchor them to the seed visually. Ghost
+    # recommendations (no citations AND no date) are pruned here, before the
+    # count, so the slider's pool stays honest.
     similar_rank = 0
     for recommendation in similar:
-        node_id = add_neighbor(recommendation["node"], "similar")
+        node = recommendation["node"]
+        if _is_ghost_similar(node):
+            continue
+        node_id = add_neighbor(node, "similar")
         if add_edge(seed_id, node_id, "similar", None, similar_rank):
             similar_rank += 1
 
