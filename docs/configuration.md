@@ -51,6 +51,19 @@ because those are chat/tool-use credentials, not graph data sources).
   `services/graph/budget.py`; it's fit by `ml_pipelines/cite_budget/train.py`
   (see that package's README, and `research/cite_budget/` for the exploratory
   study). Turn off to always ship the flat `cite_limit`.
+- **`adaptive_latest_band: true`** — the *Latest Publications* relation fills
+  recent years evenly, one query per year up to the current year; the lower edge
+  defaults to a fixed `latest_band_years` offset (5). For an old seed whose
+  landmarks tail off years before that, the timeline shows a dead stretch between
+  the last landmark and the first band. When on, the band start is chosen **per
+  seed** at the **density tail edge** of the seed's landmark cluster — the most
+  recent year still holding ≥ `tau` of its peak year's landmark count (a second
+  model trained on real data, `ml_pipelines/models/latest_gap.joblib`, served in
+  `services/graph/bands.py`) — so an old classic's bands widen back to meet its
+  cluster while a young paper starts at its own recent edge (a tight frontier). A
+  `max_span` cap bounds query cost. Turn off (or if the model can't load) to use
+  the fixed `latest_band_years` span. See `ml_pipelines/latest_gap/README.md` and
+  `research/latest_gap/`.
 - **`recs_pool: "all-cs"`** — the Recommendations API's default `"recent"`
   pool only draws from newly published papers. Seed on anything older than
   a year or two (e.g. a 2017 paper) and `"recent"` returns *zero* similar

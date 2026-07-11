@@ -65,7 +65,7 @@ FIELDS = (["work_id", "label", "year", "cited_by_count", "pool_size",
           + [f"n_star_k{cap}" for cap in DENSITY_CAP_GRID] + ["is_anchor"])
 
 
-def citer_years(work_id: str) -> list[int]:
+def citer_years(work_id: str, *, to_year: int | None = None) -> list[int]:
     """Publication years of a seed's top-``POOL_SIZE`` citers, in citation rank.
 
     Pages the same ``cites:<id>`` / ``cited_by_count:desc`` query the app ships
@@ -75,16 +75,23 @@ def citer_years(work_id: str) -> list[int]:
 
     Args:
         work_id: The seed's bare OpenAlex work id (``W…``).
+        to_year: When set, cap the query at ``to_publication_date:<to_year>-12-31``
+            — the exact date bound the build's landmark query applies (the
+            ``latest_gap`` collector passes the landmark-era cutoff; this
+            pipeline's own label deliberately spans all years).
 
     Returns:
         Up to ``POOL_SIZE`` publication years, ordered by descending citer
         citation count.
     """
+    filter_clause = f"cites:{work_id}"
+    if to_year is not None:
+        filter_clause += f",to_publication_date:{to_year}-12-31"
     years: list[int] = []
     cursor = "*"
     while len(years) < POOL_SIZE and cursor:
         payload = client.request(client.works_url({
-            "filter": f"cites:{work_id}",
+            "filter": filter_clause,
             "sort": "cited_by_count:desc",
             "select": "publication_year",
             "per-page": str(PAGE),

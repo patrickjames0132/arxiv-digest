@@ -37,7 +37,7 @@ from ...config import config
 from ...integrations import arxiv, openalex
 from ...integrations import semantic_scholar as s2
 from ...storage import cache
-from . import budget
+from . import bands, budget
 from .model import Counts, Edge, Graph, Node, Seed
 
 log = logging.getLogger(__name__)
@@ -104,6 +104,7 @@ def _citation_relations(seed_paper: dict, seed_id: str) -> tuple[list[dict], lis
                 work_id,
                 landmark_limit=landmark_limit,
                 latest_limit=config.graph.latest_limit,
+                band_start=bands.earliest_band_year,
             )
             log.info("citations via OpenAlex for seed %s (work %s)", seed_id, work_id)
             return landmark, latest
@@ -217,7 +218,7 @@ def build_graph(
     report(2, "Fetching references…")
     refs = s2.references(seed_id, config.graph.ref_limit)
     # Citations split into two disjoint relations — landmark (most-cited
-    # historic citers) and the latest frontier (last ~12 months) — from OpenAlex
+    # historic citers) and the latest frontier (recent per-year bands) — from OpenAlex
     # (server-sorted ``cites:`` queries, no recency bias), falling back to S2's
     # paged+mined path when OpenAlex can't resolve the seed. See
     # ``_citation_relations`` and the OpenAlex spike in OnePager.md.

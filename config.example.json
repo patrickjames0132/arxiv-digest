@@ -25,6 +25,7 @@
     "latest_limit": 150,
     "similar_limit": 60,
     "latest_band_years": 5,
+    "adaptive_latest_band": true,
     "latest_per_year": 50,
     "recs_pool": "all-cs",
     "cache_ttl": 86400

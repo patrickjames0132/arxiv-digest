@@ -7,6 +7,7 @@ graph/
   build.py   — build_graph: the assembly logic (S2 traversals, dedupe, cached)
   model.py   — the Pydantic Graph / Node / Edge / Seed / Counts
   budget.py  — adaptive landmark-budget serving: load the trained model, predict
+  bands.py   — adaptive latest-band serving: where a seed's Latest bands start
 ```
 
 `__init__.py` re-exports `build_graph` and the models, so callers use
@@ -102,6 +103,26 @@ drift — at the cost of a validate on each cache hit, a deliberate trade.
    and `ml_pipelines/cite_budget/README.md` for the derivation and how to
    retrain.
 
+   The **latest bands adapt to the seed** too, when
+   `config.graph.adaptive_latest_band` is on. Latest Publications fills recent
+   years evenly with one query per year, up to the current year; the *lower edge*
+   defaults to a fixed `latest_band_years` offset, but for an old seed whose
+   landmarks tail off well before that, the timeline shows a dead stretch between
+   the last landmark and the first band. `bands.py` closes it: `citation_relations`
+   hands the shipped landmarks' years to `bands.earliest_band_year`, which places
+   the start at the **density tail edge** of the landmark cluster — the most recent
+   year still holding ≥ `tau` of the peak year's count (a second model trained
+   offline, `ml_pipelines/models/latest_gap.joblib`), floored by a `max_span` cost
+   cap. There's no only-widen clamp, so a young seed whose cluster edge is recent
+   gets a tight frontier (QMIX → 3 bands) while an old seed widens back (Hawking →
+   start 2020). Unlike the budget, the boundary is a property of the landmark
+   *distribution*, not seed features — a feature regression on age/citations fails,
+   and a *quantile* is the wrong detector (mass-based, dragged years before the
+   visible edge); see `research/latest_gap`. `build.py` injects
+   `bands.earliest_band_year` as the `band_start` callable so `integrations/openalex`
+   stays below `services` in the import order; a missing model or the toggle off
+   falls back to the fixed span. See `ml_pipelines/latest_gap/README.md`.
+
 4. **Dedupe with cross-source identity + relation accumulation.** The
    `add_neighbor()` closure merges neighbors into one node table — keyed by raw
    id, with identity resolved through the **arXiv id** whenever a sighting has
@@ -182,6 +203,11 @@ they load the committed model and pin the four working anchors to its
 predictions, check age monotonically lifts the budget, the ceiling/floor clamps
 hold, and every fallback (toggle off, missing year, unloadable model) returns
 the flat `cite_limit`. Here in `test_graph.py`, one wiring test asserts the
-adapted budget is what *both* citation sources actually receive. The training
-pipeline that produces the model has its own offline tests under
+adapted budget is what *both* citation sources actually receive. The adaptive
+latest band's serving tests live in **`test_bands.py`**: the committed model
+loads, the density tail edge finds the recent dense year (ignoring sparse
+stragglers), an old cluster is capped at `max_span` while a young one starts at
+its recent edge (no only-widen), a couple of misdated-future years don't move the
+boundary, and every fallback returns `None` (keep the fixed span). The training
+pipelines that produce both models have their own offline tests under
 `test/ml_pipelines/`.

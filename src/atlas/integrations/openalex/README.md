@@ -32,23 +32,27 @@ band S2's newest-first paging buried.
 Sorting the whole citer set by citation count over-corrects: it fills with old,
 highly-cited papers and **starves recent citers that haven't accrued citations
 yet**. Verified live — Hawking's 500th landmark had **80 citations**, a bar a
-2024 paper can't clear, so papers from ~2022 to the latest-window cutoff fell
-into a visible gap between the landmark cloud and the recent frontier (the mirror
-image of S2's old-era bias).
+2024 paper can't clear, so recent papers fell into a visible gap between the
+landmark cloud and the current frontier (the mirror image of S2's old-era bias).
 
 So the two relations are:
 
 - **Field Landmarks** (`citation`) — the **all-time most-cited** citers:
   `to_publication_date:<end of last landmark year>`, `sort=cited_by_count:desc`.
   The historic giants; naturally old.
-- **Latest Publications** (`latest`) — **recent** citers: the newest date window
-  (`from_publication_date:<first latest year>-01-01`, `sort=publication_date:desc`,
-  the last `_LATEST_YEARS` = 2 calendar years) **plus per-year bands** below it —
-  `latest_band_years` (config; default 5) separate `publication_year:<Y>` queries,
-  each top `latest_per_year` (config; default 50) by citations. Anything already a
-  Field Landmark is excluded (a recent *giant* stays a landmark, not double-shown);
-  the rest ship **oldest-first** (a `latest_limit` still keeps the newest N), so
-  the frontend's reveal slider walks forward through time toward the present.
+- **Latest Publications** (`latest`) — **recent** citers as **uniform per-year
+  bands**: one `publication_year:<Y>` query per year (each top `latest_per_year`
+  (config; default 50) by citations), from the band start **up to the current
+  year** — no separate newest-date window, every recent year gets its own fair
+  slice. The band's lower edge is `latest_band_years` (config; default 5) below
+  the landmark cutoff by default, but **adapts per seed** when a `band_start`
+  chooser is supplied (see below): for an old seed whose landmarks tail off
+  early, the bands *widen* backward to meet the cluster. The newest
+  `_LATEST_YEARS` = 2 calendar years are never landmarks — they're always the top
+  bands. Anything already a Field Landmark is excluded (a recent *giant* stays a
+  landmark, not double-shown); the rest ship **oldest-first** (a `latest_limit`
+  still keeps the newest N), so the frontend's reveal slider walks forward through
+  time toward the present.
 
 The recent papers are deliberately **Latest Publications, not landmarks** — they
 *are* recent work, and the old giants are the true field landmarks. Together the
@@ -57,8 +61,16 @@ giants peter out). Per-year banding is the fix for a subtlety we hit live: a
 single recent-window query sorted by citations lets its oldest year (longest to
 accrue citations) dominate — DQN's overlay came back 214/295 for 2020/21 and only
 6 for 2024. Per-year banding gives each recent year its own fair slice (a flat 50
-for 2022–24). A **dynamic** window sized from the seed's age + citation count is
-the natural v2 — staged in OnePager.
+for 2022–24). The band span's **lower edge** is itself adaptive: `citation_relations`
+takes an optional `band_start` callable — `(landmark_years, landmark_max_year) →
+first band year | None` — that `services/graph` wires to the trained per-seed rule
+(`bands.earliest_band_year`), placing the start at the **density tail edge** of the
+landmark cluster (where the per-year count falls off). Its return is used directly
+(no only-widen clamp), so it can sit earlier than the fixed start for an old seed
+(closing the gap) or later for a young one (a tight recent frontier). It's a
+*parameter*, not an import, so `integrations` stays below `services` in the
+dependency order; `None` (the default) keeps the fixed `latest_band_years` span.
+See `services/graph/bands.py` and `ml_pipelines/latest_gap`.
 
 ### Why the split is by year, not an exact date
 
@@ -67,8 +79,8 @@ OpenAlex dating is **coarse**: a large fraction of works carry a year-only
 (what the S2 path used) therefore silently drops almost every recent-year citer —
 verified live: DQN had **1** citer in a `from_publication_date:2025-07-09` window
 but **30** in publication_year 2025 (6 of them dated exactly `2025-01-01`). So the
-latest window filters from **Jan 1** of the first latest year, robust to the
-Jan-1 default.
+latest relation is built **entirely** from `publication_year:<Y>` bands (no date
+window at all), each robust to the Jan-1 default by construction.
 
 ## How it's structured
 
@@ -82,7 +94,8 @@ traversal.py  — resolve_work (seed → OpenAlex work) + citation_relations/cit
 
 Mirrors `semantic_scholar/`'s package split by concern. `__init__.py` re-exports
 the public API (`OpenAlexError`, `resolve_work`, `bare_work_id`,
-`citation_relations`, `citations`, `node`, `bare_openalex_id`) so callers read
+`citation_relations`, `citations`, `landmark_max_year`, `node`,
+`bare_openalex_id`) so callers read
 `from ..integrations import openalex; openalex.citation_relations(...)`.
 
 ## Two OpenAlex-specific translations (both flagged by the spike)
@@ -156,5 +169,6 @@ Mirrors the source: `test_client.py` (credential params, 429/5xx backoff, the
 404-as-data path), `test_nodes.py` (inverted-index abstracts, arXiv-id
 extraction, id priority, shape parity), `test_traversal.py` (arXiv-DOI vs.
 title-search resolution, the two disjoint sorted citer queries, cursor paging,
-caps). No network — HTTP is faked at `client.request` (or `urlopen` for the
-client itself).
+caps, and the `band_start` chooser widening the span vs. `None` keeping the fixed
+one). No network — HTTP is faked at `client.request` (or `urlopen` for the client
+itself).

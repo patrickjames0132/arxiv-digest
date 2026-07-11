@@ -79,25 +79,23 @@ def _split_years():
     return current_year, latest_from, latest_from - 1  # current, latest_from, landmark_max
 
 
-def test_landmark_is_all_time_latest_is_window_plus_year_bands(monkeypatch):
-    """Field Landmarks = the all-time cited_by_count query only. Latest = the
-    newest date window PLUS one cited_by_count query per recent year (below the
-    window), shipped oldest-first so the reveal slider walks toward the present
-    — and a recent paper that's also an all-time giant stays a landmark,
-    excluded from latest (not double-shown)."""
+def test_landmark_is_all_time_latest_is_uniform_year_bands(monkeypatch):
+    """Field Landmarks = the all-time cited_by_count query only. Latest = one
+    cited_by_count query per year, from the band start up to the CURRENT year
+    (no separate newest-date window), shipped oldest-first so the reveal slider
+    walks toward the present — and a recent paper that's also an all-time giant
+    stays a landmark, excluded from latest (not double-shown)."""
     monkeypatch.setattr(config.graph, "latest_band_years", 3)
     monkeypatch.setattr(config.graph, "latest_per_year", 40)
-    _, latest_from, landmark_max = _split_years()
+    current, _, landmark_max = _split_years()  # bands: (landmark_max-2) .. current
     band_years = []
 
     def fake_request(url):
         params = _query(url)
         filter_clause = params["filter"]
-        if params["sort"] == "publication_date:desc":  # newest window
-            assert filter_clause == f"cites:W5,from_publication_date:{latest_from}-01-01"
-            return {"results": [_work("Wwin", doi="10/win", year=latest_from,
-                                      date=f"{latest_from}-06-01")], "meta": {"next_cursor": None}}
-        if "publication_year:" in filter_clause:  # a recent 1-year band
+        # No newest-date window any more: latest is publication_year bands only.
+        assert params["sort"] != "publication_date:desc"
+        if "publication_year:" in filter_clause:  # a 1-year band
             assert params["per-page"] == "40"
             year = int(filter_clause.split("publication_year:")[1])
             band_years.append(year)
@@ -114,35 +112,42 @@ def test_landmark_is_all_time_latest_is_window_plus_year_bands(monkeypatch):
     monkeypatch.setattr(client, "request", fake_request)
     landmark, latest = traversal.citation_relations("W5", landmark_limit=None, latest_limit=None)
 
-    assert band_years == [landmark_max - 2, landmark_max - 1, landmark_max]  # 3 years to landmark_max
-    # Landmark = all-time only (old + recent giant); no window/band-only papers.
+    # Bands span from the fixed start up to and INCLUDING the current year.
+    assert band_years == list(range(landmark_max - 2, current + 1))
+    # Landmark = all-time only (old + recent giant); no band-only papers.
     assert {entry["node"]["id"] for entry in landmark} == {"DOI:10/giant", "DOI:10/rg"}
     latest_ids = [entry["node"]["id"] for entry in latest]
     assert "DOI:10/rg" not in latest_ids  # the recent giant stays a landmark
-    assert "DOI:10/win" in latest_ids and f"DOI:10/b{landmark_max}" in latest_ids
-    # Oldest-first: the earliest band year leads, the newest window paper ends.
+    assert f"DOI:10/b{landmark_max}" in latest_ids and f"DOI:10/b{current}" in latest_ids
+    # Oldest-first: the earliest band year leads, the current year ends.
     assert latest[0]["node"]["id"] == f"DOI:10/b{landmark_max - 2}"
-    assert latest[-1]["node"]["id"] == "DOI:10/win"
+    assert latest[-1]["node"]["id"] == f"DOI:10/b{current}"
     assert latest[0]["influential"] is False
 
 
-def test_latest_uses_year_window_not_exact_date(monkeypatch):
-    """The latest window filters from Jan 1 of the first latest year — robust to
-    OpenAlex's coarse year-only (``<year>-01-01``) dates, not a mid-year cutoff."""
+def test_latest_is_year_bands_with_no_date_window(monkeypatch):
+    """Latest is built purely from ``publication_year`` bands — no
+    ``from_publication_date``/``publication_date:desc`` window at all — robust to
+    OpenAlex's coarse year-only (``<year>-01-01``) dates, and the bands run right
+    up to the current year (the ex-window years are just more bands now)."""
     monkeypatch.setattr(config.graph, "latest_band_years", 1)
     monkeypatch.setattr(config.graph, "latest_per_year", 40)
-    _, latest_from, _ = _split_years()
-    windows = []
+    current, _, landmark_max = _split_years()
+    filters = []
 
     def fake_request(url):
         params = _query(url)
-        if params["sort"] == "publication_date:desc":
-            windows.append(params["filter"])
+        # A date window would sort by publication_date or use from_publication_date.
+        assert params["sort"] != "publication_date:desc"
+        assert "from_publication_date" not in params["filter"]
+        if "publication_year:" in params["filter"]:
+            filters.append(int(params["filter"].split("publication_year:")[1]))
         return {"results": [], "meta": {"next_cursor": None}}
 
     monkeypatch.setattr(client, "request", fake_request)
     traversal.citation_relations("W5", landmark_limit=None, latest_limit=None)
-    assert windows == [f"cites:W5,from_publication_date:{latest_from}-01-01"]
+    # band_years=1 → fixed start is landmark_max; bands cover landmark_max..current.
+    assert filters == list(range(landmark_max, current + 1))
 
 
 def test_latest_limit_keeps_newest_but_ships_oldest_first(monkeypatch):
@@ -155,18 +160,100 @@ def test_latest_limit_keeps_newest_but_ships_oldest_first(monkeypatch):
 
     def fake_request(url):
         params = _query(url)
-        if params["sort"] == "publication_date:desc":  # newest window
+        filter_clause = params["filter"]
+        if f"publication_year:{current_year}" in filter_clause:  # the newest band
             return {"results": [
                 _work("Wnew", doi="10/new", year=current_year, date=f"{current_year}-06-01"),
                 _work("Wmid", doi="10/mid", year=current_year, date=f"{current_year}-02-01"),
-                _work("Wold", doi="10/old", year=latest_from, date=f"{latest_from}-03-01"),
             ], "meta": {"next_cursor": None}}
-        return {"results": [], "meta": {"next_cursor": None}}  # bands + landmarks empty
+        if f"publication_year:{latest_from}" in filter_clause:  # an older band
+            return {"results": [_work("Wold", doi="10/old", year=latest_from,
+                                      date=f"{latest_from}-03-01")], "meta": {"next_cursor": None}}
+        return {"results": [], "meta": {"next_cursor": None}}  # other bands + landmarks empty
 
     monkeypatch.setattr(client, "request", fake_request)
     _, latest = traversal.citation_relations("W5", landmark_limit=None, latest_limit=2)
     # Wold (the oldest) is trimmed away; the kept two run oldest → newest.
     assert [entry["node"]["id"] for entry in latest] == ["DOI:10/mid", "DOI:10/new"]
+
+
+def test_band_start_callable_places_the_band_span(monkeypatch):
+    """A supplied band_start chooser places the first band year per-seed from the
+    landmark distribution — it's fed the shipped landmarks' years and the
+    landmark-max year, and its return is used directly (no only-widen clamp), so
+    it can place the start earlier OR later than the fixed latest_band_years."""
+    monkeypatch.setattr(config.graph, "latest_band_years", 2)
+    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    current, _, landmark_max = _split_years()
+    band_years = []
+    seen_args = {}
+
+    def fake_request(url):
+        params = _query(url)
+        filter_clause = params["filter"]
+        if "publication_year:" in filter_clause:
+            band_years.append(int(filter_clause.split("publication_year:")[1]))
+            return {"results": [], "meta": {"next_cursor": None}}
+        # landmarks: an old cluster (years drive the chooser)
+        return {"results": [_work("Wg", doi="10/g", year=2001, cites=900)],
+                "meta": {"next_cursor": None}}
+
+    def band_start(landmark_years, lm_max):
+        seen_args["years"] = landmark_years
+        seen_args["lm_max"] = lm_max
+        return landmark_max - 4  # place the start well back from the fixed 2-year span
+
+    monkeypatch.setattr(client, "request", fake_request)
+    traversal.citation_relations("W5", landmark_limit=None, latest_limit=None,
+                                 band_start=band_start)
+    # The chooser saw the landmark year and the max year (no fixed-start arg now).
+    assert seen_args["years"] == [2001]
+    assert seen_args["lm_max"] == landmark_max
+    # Bands run from the chooser's start up to the current year, used directly.
+    assert band_years == list(range(landmark_max - 4, current + 1))
+
+
+def test_band_start_none_keeps_the_fixed_span(monkeypatch):
+    """When the chooser returns None (or isn't supplied), the band span is the
+    fixed latest_band_years — the non-adaptive fallback behavior is unchanged."""
+    monkeypatch.setattr(config.graph, "latest_band_years", 3)
+    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    current, _, landmark_max = _split_years()
+    band_years = []
+
+    def fake_request(url):
+        params = _query(url)
+        if "publication_year:" in params["filter"]:
+            band_years.append(int(params["filter"].split("publication_year:")[1]))
+        return {"results": [], "meta": {"next_cursor": None}}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    traversal.citation_relations("W5", landmark_limit=None, latest_limit=None,
+                                 band_start=lambda years, lm_max: None)
+    # None → the fixed 3-year start, bands running up to the current year.
+    assert band_years == list(range(landmark_max - 2, current + 1))
+
+
+def test_band_start_callable_can_place_a_later_start(monkeypatch):
+    """With no only-widen clamp, a chooser may start the bands LATER than the
+    fixed span too — a young seed whose landmark cluster edge is recent gets a
+    tight recent frontier, not the full fixed span."""
+    monkeypatch.setattr(config.graph, "latest_band_years", 5)
+    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    current, _, landmark_max = _split_years()
+    band_years = []
+
+    def fake_request(url):
+        params = _query(url)
+        if "publication_year:" in params["filter"]:
+            band_years.append(int(params["filter"].split("publication_year:")[1]))
+        return {"results": [], "meta": {"next_cursor": None}}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    # Fixed span would start at landmark_max-4; the chooser places it LATER.
+    traversal.citation_relations("W5", landmark_limit=None, latest_limit=None,
+                                 band_start=lambda years, lm_max: landmark_max)
+    assert band_years == list(range(landmark_max, current + 1))  # tight, no widening back
 
 
 def test_landmark_limit_caps_all_time_query(monkeypatch):

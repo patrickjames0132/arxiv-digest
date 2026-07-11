@@ -9,6 +9,7 @@ you run on demand to (re)produce a model.
 ```
 ml_pipelines/
   cite_budget/   — the adaptive landmark-budget model (graph.adaptive_cite_limit)
+  latest_gap/    — the adaptive latest-band boundary (graph.adaptive_latest_band)
   models/        — committed trained artifacts (*.joblib) + metadata.json sidecars
 ```
 
@@ -16,11 +17,13 @@ ml_pipelines/
 
 **Pipelines depend on the app; the app never depends on the pipelines.** A
 pipeline imports `atlas` for two things: the data-source clients (e.g. the
-throttled OpenAlex client) and — crucially — the **feature contract** (the app's
-`compute_features`), so the matrix a model is trained on is built the exact same
-way as the vector it's later asked to predict on. That's what keeps train/serve
-skew out. The app only ever reaches the other way by *loading a file* from
-`models/` — never by importing training code.
+throttled OpenAlex client) and — crucially — the **shared contract**, the
+serving-side function that decides how inputs map to a prediction (`cite_budget`
+imports the app's `compute_features`; `latest_gap` imports the app's
+`quantile_year` rule). Training builds on that same function, so the model is fit
+exactly the way it's later served. That's what keeps train/serve skew out. The
+app only ever reaches the other way by *loading a file* from `models/` — never by
+importing training code.
 
 ## Running a pipeline
 
@@ -41,10 +44,12 @@ counter data drift) is deliberately left for later — for now it's a manual run
 Each sub-package is self-contained with its own README:
 
 - `collect.py` — pull a labelled corpus to a committed `corpus.csv`.
-- `features.py` — any training-only label/feature logic (the *serving* features
-  are the app's contract, imported from `atlas`).
-- `train.py` — fit, cross-validate, and serialize to `ml_pipelines/models/`.
-- `README.md` — the question, the method, and which app constant it feeds.
+- `features.py` — any training-only label/feature logic, when a pipeline needs it
+  (`cite_budget` has one for its density label; the *serving* contract always
+  lives in `atlas`, imported from there). `latest_gap` needs none — its rule is
+  the app's `quantile_year`.
+- `train.py` — fit and serialize to `ml_pipelines/models/`.
+- `README.md` — the question, the method, and which app setting it feeds.
 
 The exploratory write-up that justified a pipeline's approach lives separately in
 `research/` (Jupyter notebooks); `ml_pipelines/` is the productionized, repeatable

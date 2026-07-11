@@ -638,6 +638,38 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 - **Latest citations** (NEW, light green `#86efac`) — citers from the **rolling
   last 12 months** (via `pub_date`), from the same fetch. "The frontier, right now."
 
+- [x] **Adaptive latest-band boundary — a trained model sizes the Latest span
+      per seed** *(v4.6.0)* — Field Landmarks are a seed's all-time most-cited
+      citers (any year); *Latest Publications* fills recent years evenly, one
+      `cited_by_count` query per year, from the band start **up to the current
+      year** (this ship also **retired the separate newest-date window** — latest
+      is now uniform per-year bands the whole way, so every recent year gets its
+      own fair slice). The band's lower edge was a **fixed** `latest_band_years`
+      offset (5 → start 2020). For an *old* seed whose landmark cluster tails off
+      years before that, the timeline showed a dead stretch between the last
+      landmark and the first band. Now the band start is chosen **per seed** from
+      the recent edge of the landmark distribution: `citation_relations` hands the
+      shipped landmarks' years to `bands.earliest_band_year`, which places the
+      start at the **density tail edge** — the most recent year still holding ≥
+      `tau` of the peak year's landmark count — floored by a `max_span` cost cap.
+      No only-widen clamp, so a young seed whose cluster edge is recent gets a
+      *tight* frontier too (Hawking → start 2020 / 7 bands; QMIX → 2024 / 3 bands).
+      **Derived from data, not hand-tuned:** a new `ml_pipelines/latest_gap/`
+      pipeline reuses the `cite_budget` seed sample, pulls each seed's
+      shipped-landmark year distribution, and fits `tau` on **misdate-robustness**
+      (**tau=0.25, max_span=7**; only ~1/64 seeds' boundary movable by a two-citer
+      misdate), serialized to `ml_pipelines/models/latest_gap.joblib`; the app
+      loads it in `services/graph/bands.py` and degrades to the fixed span when it
+      can't. The rule is injected as a callable so `integrations/openalex` stays
+      below `services`. Findings: **seed features can't predict the boundary** —
+      a regression on age + log-citations (as `cite_budget` uses) scored a
+      *negative* CV R²; and a **quantile is the wrong detector** — it's mass-based,
+      so a large old bulk drags it years before the cluster's visible edge
+      (Hawking's 0.85 quantile is 2013, but the cluster stays dense to ~2020). The
+      density tail edge tracks where the count actually falls off.
+      `research/latest_gap/analyze.ipynb` is the write-up. Config:
+      `graph.adaptive_latest_band` (on by default). *(Backend heuristic; anchors
+      eyeballed by Patrick, 2026-07-10.)*
 - [x] **Adaptive landmark budget — a trained model sizes `cite_limit` per seed**
       *(v4.5.0)* — the flat landmark budget showed the same node count for every
       seed; now the ship count is **predicted from the seed's age + citation
@@ -1124,16 +1156,6 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Citations & graph data
 
-- [ ] **Close the landmark→latest gap by fitting the landmark date
-      distribution** — there's often a visible gap between where the ~500
-      landmark papers end and where Latest Publications begin, because the
-      latest window is a hardcoded rolling span (`latest_band_years: 5` in
-      config). Instead, apply classic ML/stats to the **distribution of
-      landmark publication dates** already fetched: find where the landmark
-      "cluster" tails off, and use that boundary as the `start_date` for the
-      second (latest) OpenAlex call — replacing the fixed window and possibly
-      redefining what "Latest Publication" means (everything after the
-      landmark era, per-seed). *(Patrick's brainstorm, 2026-07-10.)*
 - [ ] **Even Latest-Publications spread via citation velocity** — the
       stratified/per-year band approach has been tried several times and the
       spread still isn't even. Revisit **citation velocity** as the ranking

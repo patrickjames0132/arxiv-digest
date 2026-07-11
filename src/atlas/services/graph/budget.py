@@ -101,14 +101,43 @@ def _reset_model_cache() -> None:
         cache_clear()
 
 
+def model_budget(year: int, citation_count: int, *, as_of_year: int,
+                 ceiling: int | None = None) -> int | None:
+    """Predict and clamp one seed's landmark budget — the raw model call, config-free.
+
+    The pure predict-and-clamp shared by serving (:func:`adaptive_cite_limit`,
+    which layers the config flag/ceiling on top) and the ``latest_gap`` corpus
+    collector (which must trim citer-year distributions exactly the way a build
+    would, without depending on the local ``config.json``).
+
+    Args:
+        year: The seed's publication year.
+        citation_count: The seed's total citation count.
+        as_of_year: The year to measure the seed's age from.
+        ceiling: The clamp ceiling; None uses the traversals' unbounded landmark
+            cap.
+
+    Returns:
+        The clamped budget, or None when the model artifact isn't loadable.
+    """
+    bundle = load_model()
+    if bundle is None:
+        return None
+    if ceiling is None:
+        ceiling = openalex.UNBOUNDED_LANDMARK_CAP
+    features = compute_features(year, citation_count, as_of_year=as_of_year)
+    predicted = float(bundle["model"].predict([features])[0])
+    return min(max(round(predicted), int(bundle["floor"])), ceiling)
+
+
 def adaptive_cite_limit(seed_paper: dict, *, as_of_year: int) -> int | None:
     """The seed-adapted landmark ship count, from the trained model.
 
-    Runs the model's ``predict`` on the seed's features and clamps the result to
-    ``[floor, ceiling]`` — the ceiling is the configured ``cite_limit`` (its
-    ``null`` unbounded cap when unset), the floor the smallest budget seen in
-    training. The budget only ever shrinks the ceiling; it never ships more than
-    the flat config would.
+    Runs the model's ``predict`` on the seed's features (:func:`model_budget`)
+    and clamps the result to ``[floor, ceiling]`` — the ceiling is the
+    configured ``cite_limit`` (its ``null`` unbounded cap when unset), the floor
+    the smallest budget seen in training. The budget only ever shrinks the
+    ceiling; it never ships more than the flat config would.
 
     Falls back to the flat ``cite_limit`` (passed through unchanged) when the
     feature is off, the seed has no publication year, or the model isn't loadable.
@@ -129,17 +158,12 @@ def adaptive_cite_limit(seed_paper: dict, *, as_of_year: int) -> int | None:
     seed_year = seed_paper.get("year")
     if not isinstance(seed_year, int):
         return ceiling  # no publication year — the model has no age to run on
-    bundle = load_model()
-    if bundle is None:
-        return ceiling
-    if ceiling is None:
-        ceiling = openalex.UNBOUNDED_LANDMARK_CAP
     citation_count = seed_paper.get("citation_count") or 0
-    features = compute_features(seed_year, citation_count, as_of_year=as_of_year)
-    predicted = float(bundle["model"].predict([features])[0])
-    budget = min(max(round(predicted), int(bundle["floor"])), ceiling)
+    budget = model_budget(seed_year, citation_count, as_of_year=as_of_year, ceiling=ceiling)
+    if budget is None:
+        return ceiling
     log.info(
-        "adaptive landmark budget %d for seed year=%d citations=%d (ceiling %d)",
-        budget, seed_year, citation_count, ceiling,
+        "adaptive landmark budget %d for seed year=%d citations=%d",
+        budget, seed_year, citation_count,
     )
     return budget

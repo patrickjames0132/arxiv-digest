@@ -33,6 +33,8 @@ uv run --group research jupyter nbconvert --execute --to notebook \
 research/
   cite_budget/   — how the adaptive landmark budget was derived
                    (productionized in ml_pipelines/cite_budget/)
+  latest_gap/    — how the adaptive latest-band boundary was derived
+                   (productionized in ml_pipelines/latest_gap/)
 ```
 
 Each study has its own README pointing at the pipeline it justified. Corpora and

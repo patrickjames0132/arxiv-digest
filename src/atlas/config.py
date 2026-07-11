@@ -209,10 +209,19 @@ class GraphConfig(ConfigModel):
         "Similar slider's max. null = as many as S2 will return."
     )
     latest_band_years: PositiveInt = Field(
-        description="How many years of per-year 'Latest Publications' bands sit just below "
-        "the newest date window — one cited_by_count:desc query per year, each feeding the "
-        "LATEST relation (not landmarks). Fills recent years evenly. See "
-        "openalex/traversal.py citation_relations."
+        description="How far below the landmark cutoff the per-year 'Latest Publications' "
+        "bands start — one cited_by_count:desc query per year, each feeding the LATEST "
+        "relation (not landmarks), running up to the current year. Fills recent years "
+        "evenly. The fixed FALLBACK lower edge when adaptive_latest_band is off or its model "
+        "can't load. See openalex/traversal.py citation_relations."
+    )
+    adaptive_latest_band: bool = Field(
+        description="Start the 'Latest Publications' bands at the density tail edge of the "
+        "seed's landmark cluster (the most recent still-dense year) instead of a fixed "
+        "latest_band_years lower edge: an old classic whose landmarks tail off early extends "
+        "its bands back to close the gap, while a young paper starts at its own recent edge "
+        "(a tight frontier). Capped by max_span for bounded query cost. See "
+        "services/graph/bands.py earliest_band_year."
     )
     latest_per_year: PositiveInt = Field(
         description="Top-N most-cited citers kept from each Latest-Publications year band "

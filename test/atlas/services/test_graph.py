@@ -87,7 +87,7 @@ def test_citations_come_from_openalex_when_seed_resolves(fake_s2, monkeypatch):
 
     captured = {}
 
-    def openalex_relations(work_id, *, landmark_limit, latest_limit):
+    def openalex_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
         captured["work_id"] = work_id
         landmark = [{"node": make_node("DOI:10/oa-cite"), "influential": False}]
         latest = [{"node": make_node("DOI:10/oa-latest", pub_date="2026-06-01"),
@@ -115,7 +115,7 @@ def test_same_paper_across_sources_merges_into_one_node(fake_s2, monkeypatch):
     duplicate edges, and compact ranks."""
     monkeypatch.setattr(build.openalex, "resolve_work", lambda **kwargs: {"id": "W99"})
 
-    def openalex_relations(work_id, *, landmark_limit, latest_limit):
+    def openalex_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
         landmark = [
             {"node": make_node("DOI:10.48550/arxiv.1509.02971",
                                arxiv_id="1509.02971", citation_count=5379),
@@ -167,7 +167,7 @@ def test_a_citer_that_is_the_seed_never_self_loops(fake_s2, monkeypatch):
     seed keeps its single 'seed' tag."""
     monkeypatch.setattr(build.openalex, "resolve_work", lambda **kwargs: {"id": "W99"})
 
-    def openalex_relations(work_id, *, landmark_limit, latest_limit):
+    def openalex_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
         return [{"node": make_node("DOI:10/seed-twin", arxiv_id="1706.03762"),
                  "influential": False}], []
 
@@ -250,7 +250,7 @@ def test_adaptive_budget_reaches_both_citation_sources(fake_s2, monkeypatch):
     build.build_graph("1706.03762")  # fake_s2 resolves no OpenAlex work → S2 path
     assert received["s2"] == expected
 
-    def openalex_relations(work_id, *, landmark_limit, latest_limit):
+    def openalex_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
         received["openalex"] = landmark_limit
         return [], []
 

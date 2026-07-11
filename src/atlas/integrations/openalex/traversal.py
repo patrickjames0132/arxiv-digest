@@ -9,11 +9,12 @@ citation endpoint. The citation relation is:
 
 * **landmark** (*Field Landmarks*) — the all-time most-cited citers
   (``cited_by_count:desc``). The historic giants; naturally old.
-* **latest** (*Latest Publications*) — recent citers: the newest window (by date)
-  plus per-year bands over the years just below it (one ``cited_by_count:desc``
-  query *per year*, so no single year dominates — a subtlety we hit live). A
-  recent paper that's also an all-time giant stays a landmark, not double-shown;
-  the rest ship oldest-first (the reveal slider walks toward the present).
+* **latest** (*Latest Publications*) — recent citers as per-year bands: one
+  ``cited_by_count:desc`` query *per year* from the band start up to the current
+  year (so no single year dominates — a subtlety we hit live), no separate
+  newest-date window. A recent paper that's also an all-time giant stays a
+  landmark, not double-shown; the rest ship oldest-first (the reveal slider walks
+  toward the present).
 
 The landmark/latest split is by **publication year**, not an exact date, because
 OpenAlex dating is coarse (many works are year-only, defaulted to ``01-01``) —
@@ -27,6 +28,7 @@ from __future__ import annotations
 import datetime
 import logging
 import re
+from typing import Callable
 
 from ...config import config
 from . import client, nodes
@@ -41,17 +43,34 @@ _PER_PAGE = 200
 # year-only ``publication_date`` defaulted to ``<year>-01-01`` — so a rolling
 # 12-month *date* window (what the S2 path used) silently drops almost every
 # recent-year citer (verified live: DQN had 1 citer in a from-date window vs 30
-# in the same year). So ``latest`` = citers from the last ``_LATEST_YEARS``
-# calendar years; ``landmark`` = everything older.
-_LATEST_YEARS = 2  # current year + previous year → the recent frontier
+# in the same year). ``_LATEST_YEARS`` marks the boundary: citers from the last
+# ``_LATEST_YEARS`` calendar years are never landmarks (always ``latest`` bands);
+# ``landmark`` = the all-time most-cited up to the year below that.
+_LATEST_YEARS = 2  # current year + previous year are latest-only, never landmarks
 
-# How many citers to pull for an *unbounded* relation (config ship count =
-# ``null``). Server-sorted, so these are the top-N by the relation's key — plenty
-# of range for the frontend's reveal-on-demand slider without paging a mega
-# seed's entire citer list (Hawking has ~5.7k; "Attention" ~150k). An explicit
-# numeric limit overrides this.
+# How many landmark citers to pull for an *unbounded* relation (config ship count
+# = ``null``). Server-sorted, so these are the top-N by citation count — plenty of
+# range for the frontend's reveal-on-demand slider without paging a mega seed's
+# entire citer list (Hawking has ~5.7k; "Attention" ~150k). An explicit numeric
+# limit overrides this.
 UNBOUNDED_LANDMARK_CAP = 500
-_UNBOUNDED_LATEST_CAP = 200
+
+
+def landmark_max_year(as_of: datetime.date) -> int:
+    """The last calendar year that still counts as landmark-era.
+
+    Everything published after this year falls in the newest ``latest`` window
+    (the last ``_LATEST_YEARS`` calendar years). Public because the
+    ``latest_gap`` corpus collector must cap its citer-year pulls at exactly
+    this bound to mirror the build's landmark query.
+
+    Args:
+        as_of: The date the split is computed from (today at build time).
+
+    Returns:
+        The landmark-era cutoff year (e.g. 2024 when ``as_of`` is in 2026).
+    """
+    return as_of.year - _LATEST_YEARS
 
 
 def _clean_search(title: str) -> str:
@@ -191,23 +210,33 @@ def _by_recency(entry: dict) -> tuple:
     return (node.get("year") or 0, node.get("pub_date") or "")
 
 
+#: Injected boundary chooser: ``(landmark_years, landmark_max_year) -> first band
+#: year | None``. ``services/graph`` passes ``bands.earliest_band_year`` (the
+#: trained per-seed rule); None keeps the fixed ``latest_band_years`` span. A
+#: parameter, not an import, so ``integrations`` stays below ``services`` in the
+#: dependency order.
+BandStartFn = Callable[[list[int], int], int | None]
+
+
 def citation_relations(
     work_id: str,
     *,
     landmark_limit: int | None,
     latest_limit: int | None,
+    band_start: BandStartFn | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Split a seed's OpenAlex citers into landmark and latest relations.
 
     * **landmark** (green, *Field Landmarks*) — the **all-time most-cited**
       citers: ``to_publication_date:<end of the last landmark year>``,
       ``sort=cited_by_count:desc``. The historic giants; naturally old.
-    * **latest** (light-green, *Latest Publications*) — **recent** citers, from:
-      - the newest window — ``from_publication_date:<first latest year>-01-01``,
-        ``sort=publication_date:desc`` (the last ``_LATEST_YEARS`` calendar years),
-      - plus per-year bands — ``config.graph.latest_band_years`` separate
-        ``publication_year:<Y>`` queries (each top ``latest_per_year`` by
-        citations) over the years just below the window.
+    * **latest** (light-green, *Latest Publications*) — **recent** citers as
+      **per-year bands**: one ``publication_year:<Y>`` query per year (each top
+      ``latest_per_year`` by citations), from the band start up to the current
+      year. The band span defaults to ``config.graph.latest_band_years`` (below
+      the landmark cutoff) plus the ``_LATEST_YEARS`` latest-only years above it,
+      but when a ``band_start`` chooser is supplied it may **widen** per seed to
+      close the landmark→latest gap (see :func:`bands.earliest_band_year`).
       Anything already a Field Landmark is excluded (a recent *giant* stays a
       landmark, not double-shown). A ``latest_limit`` keeps the **newest** N,
       but the returned order is **oldest-first** — the enumeration rank drives
@@ -215,14 +244,18 @@ def citation_relations(
 
     The split is by **publication year**, not an exact date, because OpenAlex
     dating is coarse — many works are year-only, defaulted to ``<year>-01-01``,
-    which an exact rolling window would wrongly drop. Per-year banding of the
-    recent side gives *even* coverage: a single recent-window query sorted by
-    citations lets its oldest year (longest to accrue citations) dominate.
+    which an exact date window would wrongly drop. Per-year banding gives *even*
+    coverage the whole way: a single multi-year query sorted by citations lets its
+    oldest year (longest to accrue citations) dominate and starve the newest.
 
     Args:
         work_id: The seed's bare OpenAlex id (``W…``).
         landmark_limit: Max all-time landmarks, or None for the unbounded cap.
         latest_limit: Max latest citers (keeps the newest), or None for all.
+        band_start: Optional per-seed band-start chooser (the shipped landmarks'
+            years and the landmark-max year → first band year, or None to keep
+            the fixed span). None (the default) always uses the fixed
+            ``latest_band_years`` span.
 
     Returns:
         ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
@@ -231,30 +264,33 @@ def citation_relations(
         client.OpenAlexError: When a query fails after retries.
     """
     current_year = datetime.date.today().year
-    latest_from_year = current_year - (_LATEST_YEARS - 1)  # newest window: years ≥ this
-    landmark_max_year = latest_from_year - 1  # landmarks capped here; below-window bands end here
+    max_landmark_year = landmark_max_year(datetime.date.today())
     cap = landmark_limit if landmark_limit is not None else UNBOUNDED_LANDMARK_CAP
     per_year = config.graph.latest_per_year
 
     # FIELD LANDMARKS: the all-time giants, up to the last landmark year.
     landmark = _fetch_citers(
-        f"cites:{work_id},to_publication_date:{landmark_max_year}-12-31",
+        f"cites:{work_id},to_publication_date:{max_landmark_year}-12-31",
         "cited_by_count:desc",
         cap,
         nodes.NEIGHBOR_SELECT,
     )
     landmark_ids = {entry["node"]["id"] for entry in landmark}
 
-    # LATEST PUBLICATIONS: the newest window (by date) + per-year recent bands (by
-    # citations, one query each so no single year dominates), excluding giants.
-    recent = _fetch_citers(
-        f"cites:{work_id},from_publication_date:{latest_from_year}-01-01",
-        "publication_date:desc",
-        latest_limit if latest_limit is not None else _UNBOUNDED_LATEST_CAP,
-        nodes.NEIGHBOR_SELECT,
-    )
-    earliest_band_year = landmark_max_year - config.graph.latest_band_years + 1
-    for year in range(earliest_band_year, landmark_max_year + 1):
+    # LATEST PUBLICATIONS: one ``publication_year`` band per year, from the band
+    # start up to the current year (by citations, one query each so no single year
+    # dominates), excluding giants. Uniform per-year bands the whole way — no
+    # separate newest-date window — so every recent year gets its own fair slice.
+    earliest_band_year = max_landmark_year - config.graph.latest_band_years + 1
+    if band_start is not None:
+        landmark_years = [entry["node"].get("year") for entry in landmark]
+        adaptive_start = band_start(
+            [year for year in landmark_years if year], max_landmark_year
+        )
+        if adaptive_start is not None:
+            earliest_band_year = adaptive_start
+    recent: list[dict] = []
+    for year in range(earliest_band_year, current_year + 1):
         recent += _fetch_citers(
             f"cites:{work_id},publication_year:{year}",
             "cited_by_count:desc",
