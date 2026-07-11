@@ -12,6 +12,7 @@ joins it with blank lines itself; this module only supplies the parts.
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -46,6 +47,28 @@ def skill(name: str) -> str:
     return (SKILLS_DIR / f"{name}.md").read_text().strip()
 
 
+def _node_line(number: int, node: Node) -> str:
+    """One paper's numbered line: ``[n] (year, citations; relations) Title —
+    <tldr or abstract, truncated>``.
+
+    Args:
+        number: The paper's 1-based position in the numbered list.
+        node: The graph node to render.
+
+    Returns:
+        The single formatted line.
+    """
+    year = node.year if node.year is not None else "n.d."
+    citations = (
+        f", {node.citation_count} citations" if node.citation_count is not None else ""
+    )
+    summary = node.tldr or node.abstract or ""
+    if summary:
+        summary = " — " + " ".join(summary.split())[:240]
+    relations = ",".join(node.rels) or "?"
+    return f"[{number}] ({year}{citations}; {relations}) {node.title}{summary}"
+
+
 def node_lines(nodes: Sequence[Node]) -> str:
     """Render graph nodes as the numbered list the model refers into.
 
@@ -60,19 +83,50 @@ def node_lines(nodes: Sequence[Node]) -> str:
         One line per paper — ``[n] (year, citations; relations) Title — <tldr
         or abstract, truncated>``.
     """
-    lines = []
+    return "\n".join(_node_line(number, node) for number, node in enumerate(nodes, start=1))
+
+
+def node_lines_by_era(nodes: Sequence[Node], buckets: int = 3) -> str:
+    """``node_lines`` with the papers banded into era separators.
+
+    The rendering half of the lecture's full-span guardrail: the same numbered
+    lines (numbers still come from the list position, so ``idx_to_id`` is
+    unchanged), but split into ``buckets`` equal-width year spans with a
+    ``--- YEAR1–YEAR2 ---`` header before each. The nodes are assumed already
+    sorted oldest-first (the orchestrator's ``_chronological``), so the headers
+    read top-to-bottom in time and an undated tail lands under ``--- undated
+    ---``. Seeing the timeline laid out this way nudges the model to give each
+    era a beat instead of dwelling on the oldest, most-cited papers.
+
+    Falls back to a plain ``node_lines`` when there aren't at least two distinct
+    years to band (nothing to spread).
+
+    Args:
+        nodes: The story's nodes, oldest-first.
+        buckets: How many era bands to split the dated range into.
+
+    Returns:
+        The numbered list with era-separator lines interleaved.
+    """
+    dated_years = {node.year for node in nodes if node.year is not None}
+    if len(dated_years) < 2:
+        return node_lines(nodes)
+    earliest, latest = min(dated_years), max(dated_years)
+    width = max(1, math.ceil((latest - earliest + 1) / buckets))
+    lines: list[str] = []
+    current_band: int | None = -1  # sentinel: no header emitted yet
     for number, node in enumerate(nodes, start=1):
-        year = node.year if node.year is not None else "n.d."
-        citations = (
-            f", {node.citation_count} citations"
-            if node.citation_count is not None
-            else ""
-        )
-        summary = node.tldr or node.abstract or ""
-        if summary:
-            summary = " — " + " ".join(summary.split())[:240]
-        relations = ",".join(node.rels) or "?"
-        lines.append(f"[{number}] ({year}{citations}; {relations}) {node.title}{summary}")
+        band = None if node.year is None else min(buckets - 1, (node.year - earliest) // width)
+        if band != current_band:
+            current_band = band
+            if band is None:
+                lines.append("--- undated ---")
+            else:
+                start = earliest + band * width
+                end = min(latest, start + width - 1)
+                label = f"{start}" if start == end else f"{start}–{end}"
+                lines.append(f"--- {label} ---")
+        lines.append(_node_line(number, node))
     return "\n".join(lines)
 
 

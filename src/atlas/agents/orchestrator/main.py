@@ -9,10 +9,10 @@ in ``skills/workflows/``:
 * ``lecture``   — delegation to ``lecturer.lecture``. A lecture narrates
   the graph *as the user sees it* — it never expands nodes (that's the
   researcher's job, on explicit questions). Modes are scoped by
-  ``_story_nodes``: history ends AT the seed, evolution starts from it,
-  frontier keeps only the configured recency window (the lecturer's
-  ``frontier_window_months`` extra, default ~5 years); intuition and bridge
-  see the whole visible set.
+  ``_story_nodes``, one graph relation each: history narrates the seed's
+  references, evolution the landmark citers, frontier the Latest-Publications
+  nodes; intuition stays on the seed alone and bridge sees the whole visible
+  set.
 * ``research``  — pure delegation to ``researcher.answer``.
 * ``librarian`` — pure delegation to ``librarian.answer``.
 
@@ -26,77 +26,79 @@ free-form entry point exists in the UI, the model half lands here.
 
 from __future__ import annotations
 
-import datetime
 import logging
 from typing import Iterator
 
 from ...services.graph import Node
 from .. import events, lecturer, librarian, researcher
-from ..lecturer.config import FRONTIER_WINDOW_MONTHS
 from ..models import Intent, LectureMode
 
 log = logging.getLogger(__name__)
 
+# Which graph relation each directional lecture narrates. A mode is now pinned
+# to exactly ONE kind of neighbor (the tag ``build.py`` writes into a node's
+# ``rels``) rather than to a slice of the timeline: HISTORY tells the story of
+# the seed's references, LANDMARKS ("evolution") of the landmark citers, and
+# FRONTIER of the recent "Latest Publications" bands. INTUITION and BRIDGE
+# aren't relation-scoped (see ``_story_nodes``).
+_MODE_RELATION: dict[LectureMode, str] = {
+    LectureMode.HISTORY: "reference",
+    LectureMode.EVOLUTION: "citation",
+    LectureMode.FRONTIER: "latest",
+}
 
-def _is_recent(node: Node, cutoff_iso: str, min_year: int) -> bool:
-    """Whether a node falls in the current-frontier window — by ``pub_date`` at
-    or after ``cutoff_iso``, or (lacking a pub_date) by ``year >= min_year``.
+
+def _chronological(nodes: list[Node]) -> list[Node]:
+    """The nodes sorted oldest-first, undated ones last.
+
+    The ordering half of the full-span guardrail: the lecturer numbers the
+    story in this order and (via ``prompts.node_lines_by_era``) can band it by
+    era, so a beat's papers read left-to-right in time instead of by citation
+    count. ``node_lines``/``idx_to_id`` stay consistent because the same
+    ordered list is both numbered and mapped back.
+
+    Args:
+        nodes: The story's nodes, in arbitrary order.
+
+    Returns:
+        The nodes sorted by year ascending, undated papers pushed to the end.
     """
-    if node.pub_date:
-        return node.pub_date >= cutoff_iso
-    return node.year is not None and node.year >= min_year
+    return sorted(nodes, key=lambda node: (node.year is None, node.year or 0))
 
 
 def _story_nodes(seed: Node, nodes: list[Node], mode: LectureMode) -> list[Node]:
     """The node set a lecture mode may narrate.
 
-    A lecture never expands the graph — but a mode also shouldn't wander onto
-    the wrong part of the story. HISTORY tells the story *up to* the seed, so it
-    only sees the seed plus papers published in or before the seed's year;
-    EVOLUTION tells the story *since* it (in or after). FRONTIER stays at the
-    leading edge: the seed plus only papers from the last
-    ``FRONTIER_WINDOW_MONTHS`` — the lecturer's ``frontier_window_months``
-    config extra, default ~5 years so the lecture covers the same span as the
-    graph's light-green "Latest Publications" nodes (any relation — so recent
-    citations AND recent similar work), scoped by absolute recency, not
-    relative to the seed.
-    INTUITION and BRIDGE see everything. Undated papers are left out of the
-    year-clamped directional modes — they can't be placed in a chronological
-    story. No seed year -> no history/evolution clamp (frontier still applies).
+    A lecture never expands the graph — and each mode is pinned to exactly one
+    kind of neighbor so the four lectures don't overlap. Scoping is by
+    *relation*, not by year: HISTORY narrates the seed's **references**,
+    EVOLUTION ("Summarize the landmark papers since") the **landmark citers**,
+    and FRONTIER the recent **Latest Publications** — each keeping only nodes
+    carrying that ``rels`` tag (plus the seed itself), then sorted
+    chronologically (see ``_chronological``). INTUITION stays on the **seed
+    alone**, so it structurally can't wander onto another paper. BRIDGE sees
+    the whole visible set.
 
     Args:
-        seed: The seed paper (its year anchors the history/evolution clamp).
+        seed: The seed paper (always included in every mode's set).
         nodes: The visible graph nodes.
         mode: The lecture mode being narrated.
 
     Returns:
-        The (possibly narrowed) node list to hand the lecturer.
+        The mode-scoped node list to hand the lecturer.
     """
-    if mode is LectureMode.FRONTIER:
-        today = datetime.date.today()
-        months = today.year * 12 + (today.month - 1) - FRONTIER_WINDOW_MONTHS
-        cutoff = f"{months // 12:04d}-{months % 12 + 1:02d}-{today.day:02d}"
-        # A year-only paper counts from the cutoff's year: OpenAlex dating is
-        # coarse (many works are year-only), so err toward inclusion.
-        cutoff_year = months // 12
-        return [
+    if mode is LectureMode.INTUITION:
+        return [node for node in nodes if node.is_seed or node.id == seed.id]
+    relation = _MODE_RELATION.get(mode)
+    if relation is None:  # BRIDGE (and any future non-directional mode)
+        return list(nodes)
+    return _chronological(
+        [
             node
             for node in nodes
-            if node.is_seed or node.id == seed.id or _is_recent(node, cutoff, cutoff_year)
+            if node.is_seed or node.id == seed.id or relation in node.rels
         ]
-    if seed.year is None or mode not in (LectureMode.HISTORY, LectureMode.EVOLUTION):
-        return list(nodes)
-    backward = mode is LectureMode.HISTORY
-    return [
-        node
-        for node in nodes
-        if node.is_seed
-        or node.id == seed.id
-        or (
-            node.year is not None
-            and (node.year <= seed.year if backward else node.year >= seed.year)
-        )
-    ]
+    )
 
 
 def run(
@@ -134,9 +136,9 @@ def run(
                 return
             # A lecture never expands the graph — every mode narrates only
             # nodes the user can see (only the researcher, on explicit Q&A,
-            # may pull new papers in) — and the directional modes are scoped
-            # to their side of the seed: history ends AT the seed, evolution
-            # starts from it.
+            # may pull new papers in) — and each mode is pinned to one graph
+            # relation: history=references, evolution=landmark citers,
+            # frontier=latest; intuition stays on the seed alone.
             yield from lecturer.lecture(seed, _story_nodes(seed, nodes, mode), mode, target)
         elif intent is Intent.RESEARCH:
             if question is None or seed is None or nodes is None:

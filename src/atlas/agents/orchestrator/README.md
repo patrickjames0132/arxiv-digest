@@ -31,17 +31,19 @@ walks that used to enrich history/evolution lectures were removed for
 exactly this reason — a lecture should tell the story of the graph you
 built, not silently grow it.)
 
-**Modes are scoped by `_story_nodes`:** history's story ends AT the seed, so
-the lecturer only receives the seed plus papers published in or before its year;
-evolution starts from the seed (in or after); frontier keeps the seed plus only
-papers inside the configured recency window — the lecturer's
-`frontier_window_months` config extra, default 60 (~5 years) so the lecture
-covers the same span as the graph's light-green "Latest Publications" nodes
-(the leading edge, any relation — recent citations and recent similar work).
-Undated papers are dropped from the
-year-clamped directional modes — they can't be placed in a chronological story.
-Intuition
-and bridge see the whole visible set; an undated seed disables the clamp.
+**Modes are scoped by `_story_nodes`, one graph relation each** (the tag
+`build.py` writes into a node's `rels`), so the four lectures don't overlap:
+history narrates the seed's **references**, evolution ("Summarize the landmark
+papers since") the **landmark citers** (`citation`), frontier the recent
+**Latest Publications** (`latest`). Each keeps only nodes carrying that tag
+(plus the seed) and returns them **sorted oldest-first** (`_chronological`) —
+the lecturer numbers and era-bands the story in that order, so a beat's papers
+read left-to-right in time. An undated paper carrying the tag still appears,
+sorted to the end. Intuition stays on the **seed alone** (it structurally can't
+wander onto another paper); bridge sees the whole visible set. Loosely-`similar`
+work belongs to no directional mode. (`frontier_window_months` no longer filters
+nodes — the `latest` relation already is the recent frontier — it only frames
+the FRONTIER narration; see the lecturer README.)
 
 ## Design decisions worth knowing
 
@@ -82,7 +84,7 @@ and bridge see the whole visible set; an undated seed disables the clamp.
 
 `test_main.py` fakes the three sub-agents at the module seam: relay +
 `Done` appending, full kwargs passthrough, the per-mode lecture scoping
-(history ancestors-only, evolution descendants-only, frontier inside the
-configured window any-relation, intuition everything, undated seed → no clamp;
-no trace/discovery frames ever precede a lecture), mid-stream failure →
-`Error` (and no `Done`), and bad input → `Error`.
+(history = references, evolution = landmark citers, frontier = latest,
+intuition = the seed alone, bridge = everything; each directional set sorted
+oldest-first with undated papers last; no trace/discovery frames ever precede a
+lecture), mid-stream failure → `Error` (and no `Done`), and bad input → `Error`.

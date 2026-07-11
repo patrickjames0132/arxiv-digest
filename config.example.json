@@ -76,8 +76,8 @@
         "model": "anthropic:claude-sonnet-4-6",
         "extras": {
           "frontier_window_months": 60,
-          "min_beats": 5,
-          "max_beats": 9
+          "min_beats": 7,
+          "max_beats": 12
         }
       },
       {

@@ -158,15 +158,17 @@ The Vite dev server proxies `/api/*` to Flask.
 4. **Learn** (the 🎓 Assistant panel):
    - **Lectures** — the past → present → future arc, narrated over the
      graph **as you built it** (lectures never expand it — only the research
-     agent does): "How we got here" (chronologically through the ancestors,
-     ending AT the seed), "This paper's intuition" (tightly on the seed
-     itself, drawing on your library for context), "What's evolved
-     since" (the seed onward through the work that built on it), and "The
-     current frontier" (a survey of just the newest work — recent citations
-     and similar papers inside a configurable recency window, ~5 years by
-     default to match the Latest Publications span). Lecture length is
-     tunable too (`min_beats`/`max_beats` in the lecturer's config `extras`).
-     Beats light up their papers
+     agent does), each pinned to one kind of graph node so they don't overlap:
+     "How we got here" (chronologically through the seed's **references**,
+     ending AT the seed), "This paper's intuition" (the seed **alone** — it
+     reads the paper's full text and teaches it in chapters with its real math,
+     no detours to other papers), "Summarize the landmark papers since" (the
+     **landmark citers** onward through the work that built on it), and "The
+     current frontier" (just the graph's **Latest Publications**). The
+     chronological lectures are nudged to span the whole publication history —
+     both ends, not just the oldest, most-cited papers. Lecture length is
+     tunable too (`min_beats`/`max_beats` in the lecturer's config `extras`,
+     default 7–12). Beats light up their papers
      and carry the papers' **real figures** inline — click to enlarge.
    - **Ask** — the research agent answers grounded in what it actually
      reads, streaming its tool steps live (read / expand / search / search

@@ -40,9 +40,11 @@ export interface Beat {
 }
 
 /**
- * What story the lecture tells: the field's history, the seed paper's
- * intuition, how the field evolved forward from the seed, or a conceptual
- * bridge from the seed to a target paper.
+ * What story the lecture tells, each pinned to one kind of graph node: the
+ * seed's references (`history`), the seed paper itself read in chapters
+ * (`intuition`), the landmark papers that cite it (`evolution`), the latest
+ * publications (`frontier`), or a conceptual bridge from the seed to a target
+ * paper (`bridge`).
  */
 export type LectureMode = 'history' | 'intuition' | 'evolution' | 'frontier' | 'bridge'
 

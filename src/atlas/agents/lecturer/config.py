@@ -24,9 +24,11 @@ EXTRA_DEFAULTS: dict[str, int] = {
     "frontier_window_months": 60,
     # How many beats a lecture asks for. The bound lives in the prompt (there
     # is no hard output cap): it's also what keeps lecture length in check —
-    # raising max_beats materially lengthens (and slows) every lecture.
-    "min_beats": 5,
-    "max_beats": 9,
+    # raising max_beats materially lengthens (and slows) every lecture. Widened
+    # (from 5–9) so a long publication history has room for a beat at each end
+    # plus the middle — too few beats for a multi-decade story forces skipping.
+    "min_beats": 7,
+    "max_beats": 12,
 }
 
 _extras = factory.agent_entry(AGENT_ID).extras
@@ -85,59 +87,78 @@ SYSTEM_PROMPT = (
     "Deliver a short, vivid lecture as an ordered sequence of BEATS — "
     f"{_BEAT_RANGE} in total. Each beat is:\n"
     "- heading: a 3-6 word signpost for where the story is;\n"
-    "- text: ONE tight paragraph (2-4 sentences) that advances the story;\n"
+    "- text: ONE tight paragraph (2-4 sentences) that advances the story — an "
+    "intuition CHAPTER may run a little longer (up to ~6) to carry its math;\n"
     "- nodes: the numbered-list indices of the 1-4 papers the beat is about, "
     "so they light up on the graph as you speak. Use an empty list only for "
     "a pure framing or closing beat."
 )
 
+# Appended to every chronological (multi-paper) mode: the full-span guardrail
+# in words. The prompt separately states the concrete YEAR1–YEAR2 range and
+# bands the numbered list by era; this is the behavioural instruction that
+# stops the lecture clustering on the oldest, most-cited papers.
+_SPAN_NUDGE = (
+    " Span the WHOLE range: the numbered list runs oldest to newest and is "
+    "banded by era — your beats must reach both ends, giving early, middle, and "
+    "recent work its own beat. Bigger, more-cited papers deserve room, but never "
+    "let the story stall in the earliest years and skip the rest."
+)
+
 MODE_INTENTS: dict[LectureMode, str] = {
     LectureMode.HISTORY: (
-        "Mode: HOW WE GOT HERE. Tell the story chronologically — from the "
-        "oldest roots among the references, through the key ideas that made "
-        "each next step possible — and END AT the SEED paper: the seed is "
-        "the destination and the final beat. Never discuss work that came "
-        "after the seed (that story belongs to WHAT'S EVOLVED SINCE). When "
-        "figures from the story's papers are listed, attach the most "
-        "illuminating one to the beat about that paper (set the beat's "
-        "`figure` to its number) and weave what it shows into the narration."
+        "Mode: HOW WE GOT HERE. Tell the story of the SEED's REFERENCES — the "
+        "papers it stands on. Go chronologically: from the oldest roots, "
+        "through the key ideas that made each next step possible, and END AT "
+        "the SEED paper, the destination and final beat. Every non-seed paper "
+        "on your list is a reference the seed cites; don't reach for anything "
+        "else. When figures from the story's papers are listed, attach the most "
+        "illuminating one to the beat about that paper (set the beat's `figure` "
+        "to its number) and weave what it shows into the narration." + _SPAN_NUDGE
     ),
     LectureMode.INTUITION: (
-        "Mode: INTUITION OF THIS PAPER. Stay tightly on the SEED paper "
-        "itself — do NOT retell the field's history or tour the surrounding "
-        "graph (those are other modes' jobs). Walk through the paper's own "
-        "components: the problem it tackles, the core idea, how the method "
-        "actually works (architecture / algorithm / training), what the "
-        "results showed, and WHY the idea works. A surrounding paper may be "
-        "named only in passing, for contrast. When the SEED's figures are "
-        "listed, attach the most illuminating one to the beat it belongs to "
-        "(set the beat's `figure` to its number) and weave what the figure "
-        "shows into that beat's narration. When library passages are "
-        "provided, draw on them for extra context and attribute them inline."
+        "Mode: INTUITION OF THIS PAPER. Teach the SEED paper itself, and ONLY "
+        "the seed — do NOT devote a beat to any other paper (there are none on "
+        "your list; this is not a tour of the field). Read the provided full "
+        "text and walk through the paper as a sequence of detailed CHAPTERS, "
+        "one component per beat: the problem it tackles, the core idea, how the "
+        "method actually works (architecture / algorithm / training), the key "
+        "math or derivation, what the results showed, and WHY the idea works. "
+        "Be concrete and technical — name the actual equations, quantities, and "
+        "numbers from the text, and render any math inline in LaTeX (e.g. "
+        "`$\\mathcal{L} = \\dots$`) so it typesets. When the SEED's figures are "
+        "listed, attach the most illuminating one to the chapter it belongs to "
+        "(set the beat's `figure` to its number) and read what the figure "
+        "shows into that chapter. When library passages are provided, draw on "
+        "them for extra context and attribute them inline."
     ),
     LectureMode.EVOLUTION: (
-        "Mode: WHAT'S EVOLVED SINCE. Start at the SEED paper and move FORWARD "
-        "in time through the work that built on it — the follow-ups, newer "
-        "architectures, and refinements its citations represent — showing how "
-        "each step advanced the idea, and ending at the current frontier / "
-        "state of the art. The reverse of HOW WE GOT HERE: tell the future, "
-        "not the past. When figures from the story's papers are listed, "
-        "attach the most illuminating one to the beat about that paper (set "
-        "the beat's `figure` to its number) and weave what it shows into the "
-        "narration."
+        "Mode: SUMMARIZE THE LANDMARK PAPERS SINCE. Every non-seed paper on "
+        "your list is a LANDMARK paper that CITES the seed — the influential "
+        "work that built on it. Start at the SEED and move FORWARD in time "
+        "through those landmarks — the follow-ups, newer architectures, and "
+        "refinements — showing how each advanced the idea, and ending at the "
+        "current state of the art. The reverse of HOW WE GOT HERE: tell the "
+        "future, not the past, and stay on the landmark citers (not the seed's "
+        "references or loosely-similar work). When figures from the story's "
+        "papers are listed, attach the most illuminating one to the beat about "
+        "that paper (set the beat's `figure` to its number) and weave what it "
+        "shows into the narration." + _SPAN_NUDGE
     ),
     LectureMode.FRONTIER: (
-        "Mode: THE CURRENT FRONTIER. Survey the NEWEST work around the seed — "
-        f"only the papers of the last {_window_phrase(FRONTIER_WINDOW_MONTHS)} "
-        "or so, both recent citations and "
-        "recent similar work — to show what is active RIGHT NOW. This is NOT "
-        "the whole arc since the seed (that is WHAT'S EVOLVED SINCE); stay at "
-        "the leading edge. Group the recent papers into a few coherent current "
-        "threads (open problems, hot directions, the latest advances) rather "
-        "than a flat list, and say where the frontier seems to be heading. "
-        "When figures from the story's papers are listed, attach the most "
-        "illuminating one to the beat about that paper (set the beat's "
-        "`figure` to its number) and weave what it shows into the narration."
+        "Mode: THE CURRENT FRONTIER. Survey ONLY the graph's Latest "
+        "Publications — the newest papers around the seed (roughly the last "
+        f"{_window_phrase(FRONTIER_WINDOW_MONTHS)} of per-year bands) — to show "
+        "what is active RIGHT NOW. Every paper on your list is one of those "
+        "recent works; don't reach back to older landmarks or references. Group "
+        "them into a few coherent current threads (open problems, hot "
+        "directions, the latest advances) — one thread per beat, not a flat "
+        "list. Move forward in time as you go: order the threads from the "
+        "earlier-emerging recent directions toward the very newest, and close "
+        "by saying where the frontier seems to be heading. When figures from "
+        "the story's papers are listed, attach the most illuminating one to the "
+        "beat about that paper (set the beat's `figure` to its number) and "
+        "weave what it shows into the narration." + _SPAN_NUDGE
     ),
     LectureMode.BRIDGE: (
         "Mode: BRIDGE. Build a conceptual bridge between the SEED paper and "

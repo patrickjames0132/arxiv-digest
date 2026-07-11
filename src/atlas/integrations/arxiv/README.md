@@ -63,7 +63,14 @@ vocab.py        — the bundled taxonomy: what categories exist + their labels
   image) and `_abs_url()`. Both private.
 - **`fulltext.py`** — `get_fulltext()` and `html_to_text()`, backed by
   `_TextParser`. `html_to_text()` is public because it's reused outside this
-  package — see below.
+  package — see below. **Equations survive:** ar5iv carries each formula's
+  source LaTeX in the MathML `alttext`, and `get_fulltext()` passes
+  `keep_math=True` so `_TextParser` lifts that LaTeX inline (`$…$` / `$$…$$`
+  for a displayed equation) instead of dropping the formula — a reader
+  (researcher, intuition lecture) sees the paper's actual math, which the
+  frontend renders with KaTeX. The MathML subtree is always suppressed either
+  way. `html_to_text()` defaults to `keep_math=False`, so the web-page ingester
+  below is unaffected.
 - **`categories.py`** — `fetch_categories()` (the raw arXiv export API call,
   parsed from its Atom feed with stdlib `xml.etree.ElementTree`) and
   `get_categories()` (labels + caches). Its own `_USER_AGENT` and host
@@ -109,6 +116,9 @@ vocab.py        — the bundled taxonomy: what categories exist + their labels
 - **`agents/researcher/tools.py`** — the `read_paper` tool calls `get_fulltext()`
   for a paper's actual content beyond the abstract/TL;DR, and `show_figure`
   calls `get_figures()`.
+- **`agents/lecturer/main.py`** — the INTUITION lecture calls `get_fulltext()`
+  (`_seed_fulltext`) to read the seed paper and teach it in chapters with its
+  real equations, and `get_figures()` for every mode's figure pool.
 - **`services/sources/extract.py`** — calls `html_to_text()` directly (not
   `get_fulltext()`) to turn an ingested web page into searchable text — the
   one caller with nothing to do with ar5iv or arXiv (see the layering note).

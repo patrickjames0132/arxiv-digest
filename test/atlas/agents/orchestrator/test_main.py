@@ -33,9 +33,10 @@ def make_node(node_id: str, title: str, **overrides) -> Node:
 SEED = make_node("seed01", "Seed", is_seed=True, rels=[], year=2015)
 NODES = [
     SEED,
-    make_node("node02", "Ancestor", year=1992),
-    make_node("desc01", "Descendant", year=2023, rels=["citation"]),
-    make_node("nodate", "Undated Similar", year=None, rels=["similar"]),
+    make_node("ref01", "Reference", year=1992, rels=["reference"]),
+    make_node("cite01", "Landmark citer", year=2023, rels=["citation"]),
+    make_node("late01", "Latest", year=2025, rels=["latest"]),
+    make_node("simil01", "Undated Similar", year=None, rels=["similar"]),
 ]
 
 
@@ -66,24 +67,27 @@ def test_research_intent_passes_everything_through(monkeypatch):
     assert out[-1] == events.Done()
 
 
-def test_lecture_scopes_the_visible_nodes_per_mode(monkeypatch):
+def test_lecture_scopes_the_visible_nodes_per_relation(monkeypatch):
     """A lecture never expands the graph — the lecturer only ever receives
-    visible nodes — and the directional modes are clamped to their side of
-    the seed: history ends AT the seed (no descendants), evolution starts
-    from it (no ancestors). Undated papers can't be placed in a
-    chronological story, so the clamped modes drop them; intuition sees
-    everything."""
+    visible nodes — and each mode is pinned to ONE graph relation: history
+    narrates the seed's references, evolution the landmark citers, frontier
+    the Latest-Publications nodes. Loosely-similar work never enters a
+    directional mode. The directional sets come back sorted oldest-first
+    (with the seed slotted by its own year); intuition stays on the seed
+    alone; bridge sees everything, unsorted."""
     seen: dict = {}
 
     def fake_lecture(seed, nodes, mode="history", target=None):
         seen["seed"], seen["nodes"], seen["mode"] = seed, nodes, mode
-        yield events.Beat(heading="Roots", text="It began.", node_ids=["node02"])
+        yield events.Beat(heading="Roots", text="It began.", node_ids=["ref01"])
 
     monkeypatch.setattr(orchestrator_main.lecturer, "lecture", fake_lecture)
     expected = {
-        LectureMode.HISTORY: ["seed01", "node02"],
-        LectureMode.EVOLUTION: ["seed01", "desc01"],
-        LectureMode.INTUITION: ["seed01", "node02", "desc01", "nodate"],
+        LectureMode.HISTORY: ["ref01", "seed01"],  # 1992, then the 2015 seed
+        LectureMode.EVOLUTION: ["seed01", "cite01"],  # 2015 seed, then 2023
+        LectureMode.FRONTIER: ["seed01", "late01"],  # 2015 seed, then 2025
+        LectureMode.INTUITION: ["seed01"],  # the seed alone
+        LectureMode.BRIDGE: ["seed01", "ref01", "cite01", "late01", "simil01"],
     }
     for mode, node_ids in expected.items():
         out = list(run(Intent.LECTURE, seed=SEED, nodes=NODES, mode=mode))
@@ -94,9 +98,9 @@ def test_lecture_scopes_the_visible_nodes_per_mode(monkeypatch):
     assert seen["seed"] is SEED
 
 
-def test_lecture_with_an_undated_seed_skips_the_clamp(monkeypatch):
-    """No seed year -> nothing to clamp against; the directional modes fall
-    back to the full visible set rather than dropping everything."""
+def test_directional_lecture_sorts_undated_nodes_last(monkeypatch):
+    """A relation-scoped mode still includes an undated paper carrying its
+    tag, sorted to the end (it can't be placed in the timeline)."""
     seen: dict = {}
 
     def fake_lecture(seed, nodes, mode="history", target=None):
@@ -104,53 +108,14 @@ def test_lecture_with_an_undated_seed_skips_the_clamp(monkeypatch):
         yield events.Beat(heading="H", text="T.", node_ids=[])
 
     monkeypatch.setattr(orchestrator_main.lecturer, "lecture", fake_lecture)
-    undated_seed = make_node("seed01", "Seed", is_seed=True, rels=[], year=None)
-    nodes = [undated_seed, *NODES[1:]]
-    list(run(Intent.LECTURE, seed=undated_seed, nodes=nodes, mode=LectureMode.HISTORY))
-    assert [node.id for node in seen["nodes"]] == ["seed01", "node02", "desc01", "nodate"]
-
-
-def test_frontier_lecture_scopes_to_the_configured_window(monkeypatch):
-    """THE CURRENT FRONTIER keeps the seed plus only papers inside the
-    configured ``frontier_window_months`` window — any relation (recent
-    citations AND recent similar) — by absolute recency, not relative to the
-    seed's (old) year. Widening the window (the lecturer's config extra)
-    pulls older papers into the story."""
-    import datetime
-
-    def days_ago(days: int) -> str:
-        return (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
-
-    seed = make_node("seed01", "Seed", is_seed=True, rels=[], year=2015)
     nodes = [
-        seed,
-        make_node("fresh-cite", "Fresh citation", pub_date=days_ago(30), year=2026,
-                  rels=["latest"]),
-        make_node("fresh-sim", "Fresh similar", pub_date=days_ago(30), year=2026,
-                  rels=["similar"]),
-        make_node("mid-cite", "Four-year-old citation", pub_date=days_ago(1500), year=2022,
-                  rels=["citation"]),
-        make_node("old-cite", "Ancient citation", pub_date=days_ago(3000), year=2018,
-                  rels=["citation"]),
+        SEED,
+        make_node("ref-old", "Old ref", year=1990, rels=["reference"]),
+        make_node("ref-nd", "Undated ref", year=None, rels=["reference"]),
     ]
-    seen: dict = {}
-
-    def fake_lecture(seed, nodes, mode="history", target=None):
-        seen["nodes"] = nodes
-        yield events.Beat(heading="H", text="T.", node_ids=[])
-
-    monkeypatch.setattr(orchestrator_main.lecturer, "lecture", fake_lecture)
-    # A narrow 12-month window keeps only the fresh pair...
-    monkeypatch.setattr(orchestrator_main, "FRONTIER_WINDOW_MONTHS", 12)
-    list(run(Intent.LECTURE, seed=seed, nodes=nodes, mode=LectureMode.FRONTIER))
-    assert [node.id for node in seen["nodes"]] == ["seed01", "fresh-cite", "fresh-sim"]
-    # ...and widening it to 5 years (the default) pulls the four-year-old
-    # citation in; the ancient one still drops.
-    monkeypatch.setattr(orchestrator_main, "FRONTIER_WINDOW_MONTHS", 60)
-    list(run(Intent.LECTURE, seed=seed, nodes=nodes, mode=LectureMode.FRONTIER))
-    assert [node.id for node in seen["nodes"]] == [
-        "seed01", "fresh-cite", "fresh-sim", "mid-cite",
-    ]
+    list(run(Intent.LECTURE, seed=SEED, nodes=nodes, mode=LectureMode.HISTORY))
+    # 1990, 2015 seed, then the undated reference last.
+    assert [node.id for node in seen["nodes"]] == ["ref-old", "seed01", "ref-nd"]
 
 
 def test_a_failing_workflow_ends_with_error_not_done(monkeypatch):

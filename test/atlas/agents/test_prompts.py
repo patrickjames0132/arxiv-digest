@@ -57,6 +57,39 @@ def test_node_lines_truncates_long_summaries():
     assert len(line) < 400 and line.endswith("x")
 
 
+def test_node_lines_by_era_bands_by_year_keeping_positional_numbers():
+    # Oldest-first (as the orchestrator hands them); the numbers still come from
+    # list position, so idx_to_id stays valid, and era headers split the range.
+    nodes = [
+        make_node("a", title="Roots", year=1990),
+        make_node("b", title="Middle", year=2004),
+        make_node("c", title="Recent", year=2018),
+    ]
+    lines = prompts.node_lines_by_era(nodes).splitlines()
+    # 1990–2018 span, width 10: three era bands, each with its paper beneath.
+    assert lines[0].startswith("--- 1990")
+    assert lines[1].startswith("[1] (1990")
+    assert any(line.startswith("[3] (2018") for line in lines)
+    assert sum(line.startswith("---") for line in lines) == 3
+
+
+def test_node_lines_by_era_falls_back_without_a_range():
+    # A single distinct year has nothing to band — plain node_lines, no headers.
+    nodes = [make_node("a", year=2015), make_node("b", year=2015)]
+    assert prompts.node_lines_by_era(nodes) == prompts.node_lines(nodes)
+
+
+def test_node_lines_by_era_sorts_undated_nodes_under_their_own_header():
+    nodes = [
+        make_node("a", title="Dated", year=2000),
+        make_node("b", title="Other", year=2010),
+        make_node("c", title="Undated", year=None),
+    ]
+    lines = prompts.node_lines_by_era(nodes).splitlines()
+    assert "--- undated ---" in lines
+    assert lines[-1].startswith("[3] (n.d.")
+
+
 def test_idx_to_id_maps_and_ignores_out_of_range():
     nodes = [make_node("a"), make_node("b")]
     assert prompts.idx_to_id(nodes, [2, 1, 99, 0, -3]) == ["b", "a"]

@@ -8,6 +8,11 @@ readable text, and cache it in SQLite (same thin cache as graph snapshots).
 Only papers with an arXiv id and an ar5iv render have full text; everything else
 falls back to the abstract (handled by the caller). The extracted text is cached
 whole; the caller truncates to a char budget at read time.
+
+Equations survive: ar5iv carries each formula's source LaTeX in the MathML
+``alttext``, and the reader lifts it inline as ``$…$`` / ``$$…$$`` (``keep_math``)
+so a reader — the researcher, and the seed-reading intuition lecture — can quote a
+paper's actual math, which the frontend renders with KaTeX.
 """
 
 from __future__ import annotations
@@ -19,31 +24,53 @@ from . import client
 
 # Block-level tags whose text we keep (paragraphs, headings, list items).
 _TEXT_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li"}
-# Subtrees to drop entirely: math renders as noisy markup, and these aren't body.
-_SKIP_TAGS = {"math", "script", "style", "figure", "nav", "cite"}
+# Subtrees to drop entirely: these aren't body text. ``math`` is handled
+# separately (``_TextParser`` either drops it or lifts its LaTeX out, per
+# ``keep_math``) — its noisy MathML subtree is always suppressed either way.
+_SKIP_TAGS = {"script", "style", "figure", "nav", "cite"}
 
 
 class _TextParser(HTMLParser):
     """Collect readable body text: the text of each block-level element, with
-    math / scripts / figures / citations dropped. Blocks join with blank lines.
+    scripts / figures / citations dropped. Blocks join with blank lines. Math
+    is either dropped or lifted out as LaTeX (see ``keep_math``); its MathML
+    subtree is always suppressed so the formula's markup never leaks into prose.
     """
 
-    def __init__(self) -> None:
-        """Set up empty block/depth accumulators."""
+    def __init__(self, keep_math: bool = False) -> None:
+        """Set up empty block/depth accumulators.
+
+        Args:
+            keep_math: When True, a ``<math>`` element's ``alttext`` LaTeX is
+                emitted (delimited) in place of the dropped formula.
+        """
         super().__init__(convert_charrefs=True)
         self.blocks: list[str] = []
         self._in_text = 0  # depth inside a kept block tag
         self._skip = 0  # depth inside a dropped subtree
         self._cur: list[str] = []
+        self._keep_math = keep_math
 
     def handle_starttag(self, tag: str, attrs: list) -> None:
-        """Open a kept block or a skipped subtree.
+        """Open a kept block, a skipped subtree, or a math formula.
 
         Args:
             tag: The tag name.
-            attrs: The tag's attributes (unused).
+            attrs: The tag's attributes (read for a ``<math>``'s ``alttext``).
         """
-        if tag in _SKIP_TAGS:
+        if tag == "math":
+            # ar5iv renders every formula as MathML carrying the source LaTeX in
+            # `alttext`. When keeping math we lift that LaTeX into the paragraph
+            # (delimited for KaTeX) — `$$` for a displayed equation, `$` inline —
+            # while still suppressing the noisy MathML subtree below.
+            if self._keep_math and self._in_text and not self._skip:
+                attributes = dict(attrs)
+                latex = (attributes.get("alttext") or "").strip()
+                if latex:
+                    fence = "$$" if attributes.get("display") == "block" else "$"
+                    self._cur.append(f" {fence}{latex}{fence} ")
+            self._skip += 1
+        elif tag in _SKIP_TAGS:
             self._skip += 1
         elif tag in _TEXT_TAGS and not self._skip:
             self._in_text += 1
@@ -54,7 +81,7 @@ class _TextParser(HTMLParser):
         Args:
             tag: The tag name.
         """
-        if tag in _SKIP_TAGS and self._skip:
+        if (tag == "math" or tag in _SKIP_TAGS) and self._skip:
             self._skip -= 1
         elif tag in _TEXT_TAGS and self._in_text and not self._skip:
             self._in_text -= 1
@@ -74,21 +101,26 @@ class _TextParser(HTMLParser):
             self._cur.append(data)
 
 
-def html_to_text(html: str) -> str:
+def html_to_text(html: str, *, keep_math: bool = False) -> str:
     """Strip an HTML document down to readable body text.
 
-    Keeps block-level elements (paragraphs, headings, list items); drops math,
+    Keeps block-level elements (paragraphs, headings, list items); drops
     scripts, figures, and citations. Shared by the ar5iv paper reader and the
     bring-your-own-sources web-page ingester (``library/sources.py``) — this
     function has nothing ar5iv-specific about it, it's generic HTML-to-text.
 
     Args:
         html: The full HTML document.
+        keep_math: When True, a MathML ``<math>``'s ``alttext`` LaTeX is kept
+            inline (fenced ``$…$`` / ``$$…$$`` for KaTeX) instead of the whole
+            formula being dropped. The ar5iv reader opts in so a lecture can
+            quote a paper's equations; the web-page ingester keeps the default
+            (drop) since arbitrary pages carry no reliable ``alttext``.
 
     Returns:
         The extracted text, blocks joined by blank lines.
     """
-    parser = _TextParser()
+    parser = _TextParser(keep_math=keep_math)
     parser.feed(html)
     return "\n\n".join(parser.blocks)
 
@@ -126,6 +158,6 @@ def get_fulltext(arxiv_id: str, *, refresh: bool = False) -> dict:
         cache.set(key, result)
         return result
 
-    result = {"available": True, "text": html_to_text(html)}
+    result = {"available": True, "text": html_to_text(html, keep_math=True)}
     cache.set(key, result)
     return result

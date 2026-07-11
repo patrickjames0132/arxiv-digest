@@ -20,9 +20,10 @@ researcher's job, on explicit questions). Lectures are illustrated: each
 storytelling mode gets a deterministic pre-fetched **figure pool** (the
 seed's own ar5iv figures for intuition; the story's landmark papers' for
 history/evolution) whose entries beats can attach; intuition additionally
-grounds in retrieved library passages. No tools involved — all fetched
-(cached) before the run. Model failures propagate — the caller ends the
-event stream with ``Error``.
+grounds in the seed's **full text** (ar5iv, equations kept as LaTeX — it
+reads the paper and teaches it in chapters) and retrieved library passages.
+No tools involved — all fetched (cached) before the run. Model failures
+propagate — the caller ends the event stream with ``Error``.
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ from pydantic_ai.run import AgentRunResultEvent
 from pydantic_core import from_json
 
 from ...integrations.arxiv import figures as figures_mod
+from ...integrations.arxiv import fulltext as fulltext_mod
 from ...services.graph import Node
 from ...services.sources import retrieval
 from .. import events, factory, prompts, streams
@@ -81,6 +83,22 @@ agent: Agent[None, list[LectureBeat]] = Agent(
 # prompt's figure list stay small.
 _FIGURE_PAPERS = 4
 _FIGURES_PER_PAPER = 3
+
+# How much of the seed's full text the intuition lecture reads. Bounded so the
+# prompt stays a sane size; the ar5iv reader caches the whole text, this just
+# caps what's fed at request time (the paper's front matter — problem, method,
+# results — leads, which is what the chapters teach from).
+_SEED_FULLTEXT_CHARS = 12000
+
+# The chronological, many-paper modes: their numbered list is sorted oldest
+# first and banded by era, and they carry the full-span guardrail. HISTORY and
+# EVOLUTION are arcs; FRONTIER is a thematic survey but still oriented forward
+# in time, so it gets the same temporal scaffolding (era-banded list + span
+# line). Intuition (seed only) and bridge (a two-paper conceptual link) are not
+# banded.
+_CHRONOLOGICAL_MODES = frozenset(
+    {LectureMode.HISTORY, LectureMode.EVOLUTION, LectureMode.FRONTIER}
+)
 
 
 def _paper_figures(paper: Node) -> list[dict]:
@@ -154,6 +172,56 @@ def _seed_passages(seed: Node) -> list[dict]:
         return []
 
 
+def _seed_fulltext(seed: Node) -> str:
+    """The seed paper's readable full text, for the intuition lecture to teach from.
+
+    The same ar5iv reader the researcher uses — equations preserved as LaTeX
+    (``keep_math``) so the chapters can quote the paper's actual math — truncated
+    to ``_SEED_FULLTEXT_CHARS``. Empty for a non-arXiv seed, when ar5iv has no
+    render, or on any failure: the intuition lecture still runs from the
+    abstract, figures, and library passages.
+
+    Args:
+        seed: The seed paper.
+
+    Returns:
+        The truncated full text, or an empty string when unavailable.
+    """
+    if not seed.arxiv_id:
+        return ""
+    try:
+        result = fulltext_mod.get_fulltext(seed.arxiv_id)
+    except Exception:
+        log.warning("seed fulltext fetch failed for %s", seed.arxiv_id, exc_info=True)
+        return ""
+    if not result.get("available"):
+        return ""
+    return (result.get("text") or "")[:_SEED_FULLTEXT_CHARS]
+
+
+def _span_line(nodes: list[Node]) -> str:
+    """The story's concrete year range, as a full-span reminder for the prompt.
+
+    The numbers behind the ``_SPAN_NUDGE`` words — computed from the actual
+    node set so the model is told the real endpoints it must reach. Empty when
+    fewer than two distinct years are present (nothing to span).
+
+    Args:
+        nodes: The mode-scoped story nodes.
+
+    Returns:
+        A one-line reminder like ``The numbered list spans 1998–2024; …``, or
+        an empty string.
+    """
+    years = {node.year for node in nodes if node.year is not None}
+    if len(years) < 2:
+        return ""
+    return (
+        f"The numbered list spans {min(years)}–{max(years)}; make sure your beats "
+        "reach both ends of that range."
+    )
+
+
 def _prompt(
     seed: Node,
     nodes: list[Node],
@@ -161,18 +229,21 @@ def _prompt(
     target: Node | None,
     figures: list[dict],
     passages: list[dict],
+    fulltext: str,
 ) -> str:
     """Assemble the lecture request: mode intent, seed/target header, the
-    numbered paper list, and (intuition mode) the seed's figure list and
-    retrieved library passages.
+    numbered paper list (era-banded for the chronological modes), and — intuition
+    mode — the seed's full text, figure list, and retrieved library passages.
 
     Args:
         seed: The seed paper.
-        nodes: The visible graph nodes, in display order.
+        nodes: The visible graph nodes, in display order (oldest-first for the
+            chronological modes).
         mode: Which story to tell.
         target: The bridge target (bridge mode only), or None.
         figures: The mode's figure pool (see ``_figure_pool``; may be empty).
         passages: Retrieved library passages (empty outside intuition mode).
+        fulltext: The seed's full text (intuition mode only; empty otherwise).
 
     Returns:
         The full user prompt.
@@ -180,11 +251,24 @@ def _prompt(
     header = f"SEED paper: {seed.title}"
     if mode == "bridge" and target:
         header += f"\nTARGET paper: {target.title}"
-    sections = [
-        MODE_INTENTS[mode],
-        header,
-        f"Papers on the graph (numbered):\n{prompts.node_lines(nodes)}",
-    ]
+    if mode in _CHRONOLOGICAL_MODES:
+        # Oldest-first, banded by era, with the concrete year span spelled out —
+        # the rendering + reminder half of the full-span guardrail.
+        paper_section = (
+            "Papers on the graph (numbered, oldest first, banded by era):\n"
+            + prompts.node_lines_by_era(nodes)
+        )
+        span = _span_line(nodes)
+        if span:
+            paper_section += f"\n\n{span}"
+    else:
+        paper_section = f"Papers on the graph (numbered):\n{prompts.node_lines(nodes)}"
+    sections = [MODE_INTENTS[mode], header, paper_section]
+    if fulltext:
+        sections.append(
+            "Full text of the SEED paper (read it and teach from it — quote its "
+            "actual equations, quantities, and numbers):\n" + fulltext
+        )
     if figures:
         figure_lines = []
         for number, figure in enumerate(figures, 1):
@@ -290,9 +374,11 @@ def lecture(
     """
     # Every storytelling mode gets a figure pool (the seed's own figures for
     # intuition; the story's landmark papers' for history/evolution — see
-    # _figure_pool); library passages ground the intuition lecture only.
+    # _figure_pool); library passages and the seed's full text ground the
+    # intuition lecture only (it reads the paper and teaches it in chapters).
     figures = _figure_pool(seed, nodes, mode)
     passages = _seed_passages(seed) if mode is LectureMode.INTUITION else []
+    fulltext = _seed_fulltext(seed) if mode is LectureMode.INTUITION else ""
 
     emitted = 0
     args_buffer = ""
@@ -306,7 +392,8 @@ def lecture(
             if beat.text.strip():
                 yield _beat(beat, nodes, figures)
 
-    for event in streams.drive(agent, _prompt(seed, nodes, mode, target, figures, passages)):
+    prompt = _prompt(seed, nodes, mode, target, figures, passages, fulltext)
+    for event in streams.drive(agent, prompt):
         if isinstance(event, PartStartEvent) and isinstance(event.part, ToolCallPart):
             if event.part.tool_name == streams.OUTPUT_TOOL:
                 output_part = event.index

@@ -438,7 +438,30 @@ optional, behind a key.
       published in or before its year — the story ends AT the seed — while
       "What's evolved since" receives the seed onward; intuition/bridge see
       everything (undated papers sit out of the clamped modes; an undated
-      seed disables the clamp).
+      seed disables the clamp). **Scoping reworked in v4.8.0** — modes are now
+      pinned to a graph *relation* (references / landmark citers / latest), not
+      a year clamp (see "Lectures tightened" above).
+- [x] **Lectures tightened: per-relation scoping, a PDF-reading intuition, and
+      full-span guardrails** *(v4.8.0)* — each lecture is now pinned to one graph
+      relation instead of a slice of the timeline (`_story_nodes`): "How we got
+      here" narrates the seed's **references**, "Summarize the landmark papers
+      since" (renamed from "What's evolved since") the **landmark citers**, "The
+      current frontier" the **Latest Publications**, and "This paper's intuition"
+      the **seed alone** — so the four stories no longer overlap and
+      loosely-`similar` work never leaks into a directional lecture. **Intuition
+      now reads the PDF:** the ar5iv reader preserves equations as LaTeX
+      (`keep_math` lifts the MathML `alttext`, KaTeX-rendered), and the intuition
+      lecture pulls the seed's full text to teach it in detailed chapters with
+      real math. **Full-span guardrails** stop a lecture clustering on the
+      oldest, most-cited papers: the numbered list is sorted oldest-first and
+      banded by era (`node_lines_by_era`), a concrete YEAR₁–YEAR₂ span line plus
+      the `_SPAN_NUDGE` tell the model to reach both ends, and beat counts
+      widened 5–9 → 7–12. The current frontier stays a **thematic** survey
+      (grouped into current threads) but oriented forward in time. `frontier_
+      window_months` no longer filters nodes (the `latest` relation already is
+      the recent frontier) — it only frames the FRONTIER narration now. Closes
+      "Lectures should span the whole publication history." *(Patrick's asks,
+      browser-tested 2026-07-10.)*
 - [x] **Lecturer knobs: configurable frontier window + beat-count bounds**
       *(v4.2.0)* — the lecturer gained an `extras` staging area in its
       `config.llm.agents` entry (the researcher's budget pattern — unknown
@@ -806,7 +829,9 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       frontend mode button + `LectureMode` type. Completeness guard added
       (`set(MODE_INTENTS) == set(LectureMode)`). **Window configurable since
       v4.2.0** (`frontier_window_months` lecturer extra, default ~5 years —
-      see "Lecturer knobs" under AI teacher & lectures).
+      see "Lecturer knobs" under AI teacher & lectures). **Rescoped in v4.8.0**
+      to the `latest` relation only (no longer folds in `similar` nodes, and
+      the window stopped filtering nodes — see "Lectures tightened" above).
 - [x] **Ship C — live per-relation count sliders** *(v3.6.0)*. Each `Edge`
       carries a `rank` (its index in the relation's order — references/citations by
       influence, latest by recency, similar by S2); the backend ships the whole
@@ -1097,18 +1122,6 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Teacher & agent reach
 
-- [ ] **Lectures should span the whole publication history** — Patrick's
-      browser observation: a "How we got here" / "What's evolved since"
-      lecture typically stops a little short of the graph's full time span
-      (e.g. the oldest roots or the newest visible descendants never get a
-      beat). Add a mechanism or guardrail so the story actually reaches both
-      ends — likely a prompt-side nudge (the mode intents could state the
-      span explicitly: "the numbered list runs YEAR₁–YEAR₂; your story must
-      reach both ends") and/or a deterministic check on the returned beats
-      (compare the years the beats' nodes cover against the story set's
-      range). Worth considering alongside `min_beats`/`max_beats` (v4.2.0):
-      too few beats for a long history forces skipping. *(From the
-      `todos.md` inbox, 2026-07-10.)*
 - [ ] **Graph-less research mode** — let the researcher run with no graph
       open: agentic research from scratch (search S2 + the local library, no
       seed required). Would retire the librarian in its favor — today's

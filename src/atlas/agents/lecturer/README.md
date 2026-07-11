@@ -8,10 +8,12 @@ spoken.
 ## Why it exists
 
 The lecture is the app's showpiece: press the button and the teacher
-narrates the intellectual history (or intuition, the forward evolution since
-the seed, a survey of the current frontier, or a bridge between two areas) over
-the citation graph you're looking at, highlighting papers as the story reaches
-them. The old repo did this by begging the model for
+narrates the intellectual history (or the seed's own intuition, the landmark
+papers that built on it, a survey of the current frontier, or a bridge between
+two areas) over the citation graph you're looking at, highlighting papers as the
+story reaches them. Each mode is pinned to one kind of graph neighbor so the
+stories don't overlap (the orchestrator's `_story_nodes` does the scoping — see
+below). The old repo did this by begging the model for
 newline-delimited JSON and armoring a parser against disobedience
 (fence-stripping, line buffering, malformed-JSON tolerance). Here the shape
 is *enforced*, not requested: the model's output type IS `list[LectureBeat]`,
@@ -22,7 +24,9 @@ validated by Pydantic as it streams.
 ```
 lecturer.lecture(seed, nodes, mode, target)          main.py
   1  prompt = mode intent + SEED/TARGET header
-     + the numbered paper list (prompts.node_lines)
+     + the numbered paper list — era-banded + a concrete year-span line for the
+       chronological modes (prompts.node_lines_by_era), plain otherwise
+     + (intuition) the seed's full text, figures, and library passages
   2  streams.drive(agent, ...) — the shared sync event bridge
   3  the output tool's args JSON is partial-parsed as it grows; a beat is
      emitted the moment the model starts the next one — narration begins
@@ -35,7 +39,9 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
 
 - **`config.py`** — `AGENT_ID`, `SKILLS` (`numbered-papers`,
   `teaching-voice`, `citation-discipline`), the beat-structure
-  `SYSTEM_PROMPT`, and the three `MODE_INTENTS` paragraphs.
+  `SYSTEM_PROMPT`, the per-mode `MODE_INTENTS` paragraphs, and the
+  `_SPAN_NUDGE` (the full-span guardrail in words, appended to every
+  chronological mode).
 - **`main.py`** — `LectureBeat` (the model-facing beat: indices, not ids),
   the `Agent`, and `lecture`.
 - No `tools.py` — the lecturer narrates what it's given. Lectures never
@@ -50,10 +56,12 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
   history/evolution/frontier pool the seed plus the story's **landmark papers'**
   (the most-cited arXiv papers in the mode-scoped node set — `_FIGURE_PAPERS`
   papers, `_FIGURES_PER_PAPER` each); bridge pools none. Intuition
-  additionally grounds in `_seed_passages` — library passages about the
-  seed (the librarian's hybrid retrieval, queried with the seed's title —
-  optional context, attributed inline). Everything degrades to empty on
-  any failure; a lecture never blocks on its illustrations.
+  additionally **reads the seed** — `_seed_fulltext` pulls the paper's ar5iv
+  body text (equations kept as LaTeX, capped at `_SEED_FULLTEXT_CHARS`) so the
+  lecture teaches it in chapters with its real math — and grounds in
+  `_seed_passages` library passages (the librarian's hybrid retrieval, queried
+  with the seed's title — optional context, attributed inline). Everything
+  degrades to empty on any failure; a lecture never blocks on its grounding.
 
 ## Design decisions worth knowing
 
@@ -80,16 +88,16 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
 - **The `extras` knobs** (the researcher's budget pattern — unknown extras
   keys fail at import):
   - `frontier_window_months` — THE CURRENT FRONTIER's recency window, read
-    at import into `FRONTIER_WINDOW_MONTHS`. Default 60 (~5 years), wide on
-    purpose: since the OpenAlex hybrid the graph's light-green "Latest
-    Publications" nodes span several years, and a 12-month lecture window
-    narrated almost none of them. The orchestrator's `_story_nodes` scopes
-    with it, and the FRONTIER mode intent describes the same window
-    (`_window_phrase`), so the prompt and the filter can't drift.
+    at import into `FRONTIER_WINDOW_MONTHS`. Default 60 (~5 years). Since the
+    scoping rework it **no longer filters nodes** — FRONTIER is scoped to the
+    `latest` relation, which already is the recent frontier — it only *frames*
+    the FRONTIER narration (`_window_phrase`, "roughly the last N years").
   - `min_beats` / `max_beats` — how many beats a lecture asks for (default
-    5–9), phrased into the system prompt (`_BEAT_RANGE`; pinning both ends
+    7–12), phrased into the system prompt (`_BEAT_RANGE`; pinning both ends
     to the same value reads "exactly N"). A prompt bound, not a hard cap —
-    and it's also what keeps lecture length in check (see below).
+    and it's also what keeps lecture length in check (see below). Widened from
+    5–9 as one of the full-span levers: a multi-decade history needs beats to
+    spare, or reaching both ends forces skipping the middle.
 - **No `max_tokens` knob.** The old `TEACHER_MAX_TOKENS` (3000) died with
   the config rewrite; the beat bound in the prompt caps length
   naturally. If runaway lectures ever appear, the knob goes in this agent's
@@ -116,7 +124,9 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
 output tool's envelope itself) streams canned beats through partial
 validation, proving index→id mapping, blank-beat dropping, and
 hallucinated-index tolerance; a recording `stream_function` captures the
-request to pin the mode intent, SEED/TARGET header, numbered list format,
-and that skills ride along as instructions; an exploding one proves model
-failures reach the caller. `prompts.node_lines` / `idx_to_id` have their own
-tests in `test_prompts.py`.
+request to pin the mode intent, SEED/TARGET header, numbered list format, the
+intuition grounding (seed full text + figures + passages), and the chronological
+modes' era-banded list + concrete span line, and that skills ride along as
+instructions; an exploding one proves model failures reach the caller (and that
+grounding failures never block a lecture). `prompts.node_lines` /
+`node_lines_by_era` / `idx_to_id` have their own tests in `test_prompts.py`.

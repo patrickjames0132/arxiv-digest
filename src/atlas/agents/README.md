@@ -264,10 +264,11 @@ See its own README.
 ### `lecturer` — the streamed graph lecture *(built)*
 
 - **Input:** seed, visible nodes (numbered), mode
-  (`history` / `intuition` / `evolution` / `bridge`), target paper (bridge
-  only). Lectures never expand the graph, and the orchestrator scopes the
-  directional modes to their side of the seed (history: ancestors only,
-  ending at the seed; evolution: the seed onward).
+  (`history` / `intuition` / `evolution` / `frontier` / `bridge`), target paper
+  (bridge only). Lectures never expand the graph, and the orchestrator scopes
+  each mode to one graph relation (history = references ending at the seed;
+  evolution = landmark citers onward; frontier = the Latest Publications;
+  intuition = the seed alone, read from its full text).
 - **Tools:** none.
 - **Output:** a streamed sequence of typed `Beat` objects
   (`heading`, `text`, `node_indices` → mapped back to node ids) so the
@@ -276,8 +277,9 @@ See its own README.
   parser.
 - **Skills:** `numbered-papers`, `teaching-voice`, `citation-discipline`.
 - **Config:** the five mode-intent paragraphs; `extras` knobs for the
-  frontier recency window (`frontier_window_months`, default 60) and the
-  beat-count bounds (`min_beats`/`max_beats`, default 5–9).
+  frontier narration window (`frontier_window_months`, default 60 — now frames
+  the FRONTIER wording only, no longer a node filter) and the beat-count bounds
+  (`min_beats`/`max_beats`, default 7–12 — widened as a full-span lever).
 
 ### `researcher` — agentic Q&A over the graph *(built)*
 

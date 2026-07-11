@@ -30,6 +30,19 @@ def test_html_to_text_drops_figure_subtrees():
     assert fulltext.html_to_text(html) == "Body."
 
 
+def test_html_to_text_keeps_math_as_latex_when_requested():
+    # ar5iv carries the source LaTeX in `alttext`; keep_math lifts it inline
+    # (`$` inline, `$$` for a displayed equation) and drops the MathML subtree.
+    html = (
+        '<p>The loss <math alttext="\\mathcal{L}(\\theta)"><mi>L</mi></math> falls, '
+        'and <math display="block" alttext="E=mc^2"><mi>E</mi></math> holds.</p>'
+    )
+    text = fulltext.html_to_text(html, keep_math=True)
+    assert "$\\mathcal{L}(\\theta)$" in text
+    assert "$$E=mc^2$$" in text
+    assert "<mi>" not in text  # the noisy MathML never leaks in
+
+
 def test_html_to_text_empty_document():
     assert fulltext.html_to_text("<div>no block tags here</div>") == ""
 
@@ -38,6 +51,19 @@ def test_get_fulltext_extracts_text(monkeypatch):
     monkeypatch.setattr(client, "fetch_html", lambda arxiv_id: "<p>Full paper text.</p>")
     result = fulltext.get_fulltext("2406.12345")
     assert result == {"available": True, "text": "Full paper text."}
+
+
+def test_get_fulltext_preserves_equations(monkeypatch):
+    # The reader opts into keep_math, so a reader (researcher / intuition
+    # lecture) sees the paper's actual equations as LaTeX.
+    monkeypatch.setattr(
+        client,
+        "fetch_html",
+        lambda arxiv_id: '<p>Minimize <math alttext="\\mathcal{L}"><mi>L</mi></math>.</p>',
+    )
+    result = fulltext.get_fulltext("2406.54321")
+    assert result["available"] is True
+    assert "$\\mathcal{L}$" in result["text"]
 
 
 def test_get_fulltext_unavailable_when_ar5iv_has_no_render(monkeypatch):
