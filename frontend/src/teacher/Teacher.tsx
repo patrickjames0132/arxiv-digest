@@ -13,10 +13,11 @@
  */
 
 import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 import { listSources, type AnswerFigure, type LectureMode, type Source } from '../api'
 import { useAppSelector } from '../store'
 import { selectVisibleBeats } from '../store/transcript'
+import { REL_COLOR } from '../graph/theme'
 import ScopePicker from './ScopePicker'
 import Lightbox from '../figures/Lightbox'
 import BeatList from './transcript/BeatList'
@@ -25,11 +26,15 @@ import { useConversation } from './useConversation'
 import { useResizablePanel } from '../ui/useResizablePanel'
 import './teacher.css'
 
-const MODES: { key: LectureMode; label: string }[] = [
-  { key: 'history', label: 'How we got here' },
-  { key: 'intuition', label: "This paper's intuition" },
-  { key: 'evolution', label: 'The landmark papers since' },
-  { key: 'frontier', label: 'The current frontier' },
+// Each lecture narrates one graph relation, so its button is tinted that
+// relation's node colour (`rel` → REL_COLOR) and carries a small `tag` in the
+// top-right corner naming the relation — the same colour as the graph's filter
+// chips and legend dots, so the button visibly ties to the nodes it lights up.
+const MODES: { key: LectureMode; label: string; rel: string; tag: string }[] = [
+  { key: 'history', label: 'How we got here', rel: 'reference', tag: 'References' },
+  { key: 'intuition', label: "This paper's intuition", rel: 'seed', tag: 'This paper' },
+  { key: 'evolution', label: "What's evolved since", rel: 'citation', tag: 'Landmarks' },
+  { key: 'frontier', label: 'The current frontier', rel: 'latest', tag: 'Latest' },
 ]
 
 /**
@@ -69,6 +74,9 @@ export default function Teacher({
   // the chat. Show the button whenever the active context has something to wipe.
   const clearsLecture = activeMode !== null
   const showClear = clearsLecture || chat.length > 0
+  // The shown lecture's metadata (name + relation colour), for the transcript's
+  // "Now playing" header. null when no lecture is shown (a Q&A chat, or idle).
+  const activeModeMeta = MODES.find((mode) => mode.key === activeMode) ?? null
 
   const [input, setInput] = useState('')
   // The uploaded library, powering the source-scope picker. The picker only
@@ -137,6 +145,10 @@ export default function Teacher({
         </div>
         {hasGraph && (
           <div className="teacher-modes">
+            <p className="lecture-intro">
+              Play a lecture to summarize different node types. Each lecture is grounded in the
+              papers currently shown on the graph — filter the graph to narrow what it covers.
+            </p>
             <div className="lecture-grid">
               {MODES.map((mode) => {
                 const active = activeMode === mode.key
@@ -144,27 +156,31 @@ export default function Teacher({
                 // The "click to show" dot marks a played-but-hidden lecture;
                 // a loading one shows its hopping dots instead.
                 const cached = !loading && (lectures[mode.key]?.length ?? 0) > 0
+                // The button shows only the short node-type word; the full
+                // lecture name rides in the tooltip, the aria-label, and the
+                // "Now playing" header above the transcript.
+                const stateHint = loading
+                  ? active
+                    ? 'click to hide (still loading)'
+                    : 'loading — click to show'
+                  : active
+                    ? 'click to hide'
+                    : cached
+                      ? 'click to show'
+                      : 'click to play'
                 return (
                   <button
                     key={mode.key}
                     className={`teach-btn${active ? ' active' : ''}${
                       cached && !active ? ' cached' : ''
                     }`}
+                    style={{ '--c': REL_COLOR[mode.rel] } as CSSProperties}
                     // Lectures load in parallel — every button stays live so
                     // you can show/hide or start another while one generates.
                     onClick={() => toggleLecture(mode.key)}
                     aria-pressed={active}
-                    title={
-                      loading
-                        ? active
-                          ? 'Loading… click to hide (keeps loading)'
-                          : 'Loading in the background… click to show'
-                        : active
-                          ? 'Hide this lecture'
-                          : cached
-                            ? 'Show this lecture'
-                            : mode.label
-                    }
+                    aria-label={mode.label}
+                    title={`${mode.label} — ${stateHint}`}
                   >
                     {loading ? (
                       <span className="hop-dots" aria-label="Loading lecture">
@@ -173,16 +189,12 @@ export default function Teacher({
                         <span className="hop-dot" />
                       </span>
                     ) : (
-                      mode.label
+                      mode.tag
                     )}
                   </button>
                 )
               })}
             </div>
-            <p className="lecture-scope-note">
-              Each lecture is grounded in the papers currently shown on the graph — filter the graph
-              to narrow what it covers.
-            </p>
           </div>
         )}
       </div>
@@ -204,36 +216,56 @@ export default function Teacher({
       )}
 
       <div className="teacher-scroll">
-        <BeatList
-          beats={beats}
-          activeBeat={activeBeat}
-          onBeatClick={onBeatClick}
-          onRefClick={onRefClick}
-          onEnlarge={setLightbox}
-        />
-
-        {chat.map((message, index) => {
-          const clickable =
-            message.role === 'assistant' && !!message.cited && message.cited.length > 0
-          return (
-            <ChatMessage
-              key={`c${index}`}
-              message={message}
-              active={activeChat === index}
-              streaming={asking}
-              onActivate={clickable ? () => onChatClick(index, message.cited!) : undefined}
+        {/* One panel, two views: a shown lecture takes over the scroll (its
+            "Now playing" header + beats); otherwise it's the Q&A chat. Asking a
+            question hides the lecture, so the two never stack on top of each
+            other. Both survive the switch — the lecture stays cached, the chat
+            stays in the store. */}
+        {activeModeMeta ? (
+          <>
+            <div
+              className="lecture-now"
+              style={{ '--c': REL_COLOR[activeModeMeta.rel] } as CSSProperties}
+            >
+              <span className="lecture-now-eyebrow">Now playing</span>
+              <span className="lecture-now-title">{activeModeMeta.label}</span>
+            </div>
+            <BeatList
+              beats={beats}
+              activeBeat={activeBeat}
+              onBeatClick={onBeatClick}
               onRefClick={onRefClick}
               onEnlarge={setLightbox}
             />
-          )
-        })}
-
-        {beats.length === 0 && chat.length === 0 && loadingModes.length === 0 && (
-          <div className="teacher-hint">
-            {hasGraph
-              ? 'Play a lecture, or ask a question about the papers on the graph.'
-              : 'Ask a question and I’ll answer straight from your uploaded sources — books, PDFs, and pages — citing them by page. No graph needed.'}
-          </div>
+            {beats.length === 0 && loadingModes.includes(activeModeMeta.key) && (
+              <div className="teacher-hint">Preparing the lecture…</div>
+            )}
+          </>
+        ) : (
+          <>
+            {chat.map((message, index) => {
+              const clickable =
+                message.role === 'assistant' && !!message.cited && message.cited.length > 0
+              return (
+                <ChatMessage
+                  key={`c${index}`}
+                  message={message}
+                  active={activeChat === index}
+                  streaming={asking}
+                  onActivate={clickable ? () => onChatClick(index, message.cited!) : undefined}
+                  onRefClick={onRefClick}
+                  onEnlarge={setLightbox}
+                />
+              )
+            })}
+            {chat.length === 0 && (
+              <div className="teacher-hint">
+                {hasGraph
+                  ? 'Ask a question about the papers on the graph — or play a lecture above.'
+                  : 'Ask a question and I’ll answer straight from your uploaded sources — books, PDFs, and pages — citing them by page. No graph needed.'}
+              </div>
+            )}
+          </>
         )}
         {error && <div className="teacher-error">{error}</div>}
       </div>

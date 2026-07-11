@@ -292,6 +292,9 @@ export function useConversation() {
       setActiveBeat(null)
       setActiveChat(null)
       setActiveRef(null)
+      // Asking drops into the Q&A view: hide any shown lecture (its cache and
+      // any in-flight stream survive — re-select its button to return to it).
+      if (activeMode) dispatch(lectureHidden())
       askIdxRef.current = chatLength + 1 // the assistant turn we're about to add
       dispatch(turnStarted(question))
       try {
@@ -358,7 +361,7 @@ export function useConversation() {
         setAsking(false)
       }
     },
-    [seedNode, groundingNodes, chatLength, dispatch, highlight],
+    [seedNode, groundingNodes, chatLength, activeMode, dispatch, highlight],
   )
 
   return {

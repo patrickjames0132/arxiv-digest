@@ -163,7 +163,7 @@ The Vite dev server proxies `/api/*` to Flask.
      "How we got here" (chronologically through the seed's **references**,
      ending AT the seed), "This paper's intuition" (the seed **alone** — it
      reads the paper's full text and teaches it in chapters with its real math,
-     no detours to other papers), "The landmark papers since" (the
+     no detours to other papers), "What's evolved since" (the
      **landmark citers** onward through the work that built on it), and "The
      current frontier" (just the graph's **Latest Publications**). Each lecture
      is **grounded in the papers currently shown on the graph** — filter the
@@ -172,9 +172,13 @@ The Vite dev server proxies `/api/*` to Flask.
      most-cited papers. Lecture length is tunable too (`min_beats`/`max_beats`
      in the lecturer's config `extras`, default 7–12). Beats light up their
      papers and carry the papers' **real figures** inline — click to enlarge.
-     The four mode buttons are **cached show/hide toggles** that generate in
-     parallel: play one, then flip between them instantly (or start another, or
-     ask a question, while one still loads in the background).
+     The four mode buttons are **colour-coded to the graph nodes** they narrate
+     (blue references / green landmarks / light-green latest / gold seed) and are
+     **cached show/hide toggles** that generate in parallel: play one, then flip
+     between them instantly (or start another while one still loads). The panel
+     is **one surface with two views** — a playing lecture (its "Now playing"
+     header + beats) or the Q&A chat; asking a question tucks the lecture away
+     (still cached) so the two never pile up.
    - **Ask** — the research agent answers grounded in what it actually
      reads, streaming its tool steps live (read / expand / search / search
      your sources / show a figure). Answers render in full **Markdown + math**,

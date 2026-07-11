@@ -63,6 +63,19 @@ structure rule's nesting case (the `graph/hooks` precedent).
   `{message}`, no `discard` handler (the researcher's pre-answer narration is
   never streamed). Lectures stream beats only — they never expand the
   graph, so the lecture handler has no trace/discovery callbacks.
+- **Lecture buttons are colour-coded to their relation** (`MODES` in
+  `Teacher.tsx`): each mode narrates one graph relation, so its button is tinted
+  that relation's node colour (`REL_COLOR` via a `--c` custom property, the same
+  hex the filter chips and legend dots use) and shows only that relation's short
+  node-type word ("References" / "Landmarks" / "Latest" / "This paper"), centred
+  — the button visibly belongs to the nodes it lights up. The full lecture name
+  (`label`) lives in the button's tooltip/aria-label and in the **"Now playing"
+  header** above the transcript (`.lecture-now`, also tinted `--c`), so a long
+  name never clutters the button. The idle/hover tints are `color-mix` alphas of
+  `--c`; the shown (`.active`) button fills solid with it. The lecture section
+  itself is ruled off under the panel title with a divider and a one-line intro
+  (`.lecture-intro`). (The `--lecture` periwinkle triple now only tints the
+  beat/chat/trace surfaces, not the buttons.)
 - **Lecture buttons are cached toggles** (`toggleLecture` in `useConversation`):
   each of the four modes is a show/hide switch over its cached beats. First
   click on a mode streams and caches it (`lectureStarted`/`beatAdded` write the
@@ -79,6 +92,15 @@ structure rule's nesting case (the `graph/hooks` precedent).
   when you deselect it, ask a question, or start another mode — nothing
   interrupts anything else. `onBeat` only drives the graph highlight when its
   mode is the one on screen (`shownModeRef`); background lectures stay quiet.
+- **One panel, two views** (`Teacher.tsx`, gated on `activeMode`): a shown
+  lecture takes over the scroll — the "Now playing" header + its beats — while no
+  shown lecture means the Q&A chat. Selecting a lecture enters the lecture view;
+  **asking a question hides the lecture** (`ask` dispatches `lectureHidden`) to
+  drop into the Q&A view, so beats and chat never stack together. Neither is
+  lost across the switch: the lecture stays cached (its button lit-as-cached, its
+  background stream uninterrupted — re-select to return), the chat stays in the
+  store. This is why `selectVisibleBeats` keys off `activeMode` and the chat is
+  always the full list — the view is a pure render choice over persistent state.
 - **Clear is contextual** — a shown lecture → clear just that lecture (stop it
   if loading, `lectureDropped`, unlight the graph); no lecture shown → clear the
   Q&A chat (`chatCleared`) and mint a fresh session id. The button relabels
