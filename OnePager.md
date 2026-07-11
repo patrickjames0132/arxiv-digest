@@ -1166,6 +1166,15 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       a retrieved passage, and a `show_source_figure`-style tool + `figure` event
       reusing the existing answer-figure rendering. *(From the `todos.md` inbox,
       2026-07-03.)*
+- [ ] **Keep "frontier" out of the "landmark papers since" lecture** — the
+      evolution lecture ("The landmark papers since", narrating the landmark
+      citers) sometimes ends on a beat whose **title contains the word
+      "frontier"**, which is usually wrong for this mode and reads as a spillover
+      from the separate **"The current frontier"** lecture (the `latest` relation)
+      where that vocabulary belongs. Fix the lecturer's **EVOLUTION mode-intent**
+      so the closing beat doesn't reach for "frontier" language — this lecture is
+      about the giants that built on the seed, not the present frontier. *(From
+      the `todos.md` inbox, 2026-07-11.)*
 
 ### Citations & graph data
 
@@ -1265,6 +1274,22 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [ ] **Color-code the lecture buttons to their relation colors (+ a node-type
+      label, + a rename)** — each of the four lecture buttons narrates a specific
+      graph relation, but the buttons are all styled alike, so nothing ties a
+      button to the nodes it lights up. Color-code each button to its relation's
+      node color from `REL_COLOR` (`graph/theme.ts`): **"How we got here"** blue
+      (references, `#6ea8fe`), **"The landmark papers since"** green (landmark
+      citers, `#4ade80`), **"The current frontier"** light green (latest,
+      `#86efac`), **"This paper's intuition"** gold (seed, `#ffd166`). Once the
+      color carries the meaning, the wordy **"The landmark papers since"** can go
+      back to the shorter **"What's evolved since"** (its v2.7.0 name, before the
+      v4.8.0 rename). Also print the **node type in smaller text in each button's
+      top-right corner**, in the matching color — e.g. "References" in the same
+      blue as the filter chips on "How we got here", "Landmarks" / "Latest" /
+      "This paper" on the others. Frontend-only, in `teacher/Teacher.tsx` +
+      `teacher/teacher.css` (the `LECTURE_MODES` list and button styling). *(From
+      the `todos.md` inbox, 2026-07-11.)*
 - [ ] **Hide dateless papers in Timeline, keep them in Force** — a paper with no
       publication date has no honest position on a time axis. Today the Timeline
       layout parks a dateless node at the **seed's own x** (`nodeTimelineX` in
