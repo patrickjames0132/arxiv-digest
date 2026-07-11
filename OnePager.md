@@ -1196,7 +1196,23 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Citations & graph data
 
-- [ ] **Budget-cap the Similar nodes with a trained model** — the *Similar*
+- [ ] **Drop the Similar relation from the graph (keep the API for the
+      researcher)** — take the purple `similar` nodes (S2 SPECTER2
+      recommendations) **off the built graph entirely**: `build.py` stops adding
+      the `similar` relation and its edges, and the filter chip / legend / count
+      come out with it. The graph then shows only **verified** links (references +
+      the citation relations), not embedding guesses. **Keep the recommendations
+      API wired for the researcher**, though — `expand_node`'s similar hop and the
+      topic-search path still call S2 recommendations on demand, so the agent can
+      reach embedding-neighbors even though they no longer clutter the initial
+      map. Touches `build.py` (drop the recommendation loop + `_is_ghost_similar`
+      prune from the build), `graph/theme.ts` / controls / legend (remove the
+      `similar` chip), and the counts; the researcher's `traversal`/tools keep
+      `recommendations`. **Supersedes "Budget-cap the Similar nodes" below** —
+      no nodes on the graph means nothing to budget. *(From the `todos.md` inbox,
+      2026-07-11.)*
+- [ ] **Budget-cap the Similar nodes with a trained model** *(likely mooted — see
+      "Drop the Similar relation" above)* — the *Similar*
       relation ships a flat `similar_limit` count, the same one-size problem the
       landmark budget solved for citations (v4.5.0). Give it its own budget
       model: cap how many SPECTER2 neighbors to show per seed, trained the same
@@ -1292,6 +1308,22 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [ ] **Node selector tool that scopes the lectures and Q&A agents** — a way to
+      **hand-pick which nodes** the teacher works over, right on the graph:
+      **click-and-drag a marquee** (a selection rectangle) to grab every node
+      inside it, and **shift+click** to add/remove single nodes. The selection
+      then becomes the **visible/grounding set the agents see** — a lecture
+      narrates only the selected nodes (feeding `_story_nodes` / the lecture's
+      node set) and the researcher grounds its Q&A in them (the `nodes` list sent
+      to `/api/ask`) — so the user can scope the teacher to a cluster of interest
+      instead of the whole graph or a relation filter. Needs: a marquee overlay +
+      hit-testing against node positions on the canvas (`react-force-graph-2d`
+      exposes node screen coords), a selection set in the store, a visual
+      treatment for selected vs unselected nodes, and threading the selection
+      into the lecture/ask payloads (today they send the filtered-visible nodes).
+      Interplays with the existing relation filters and the year slider — decide
+      whether a manual selection replaces or intersects those. *(From the
+      `todos.md` inbox, 2026-07-11.)*
 - [ ] **Source-scope picker doesn't appear until a page refresh (+ note it above
       the ask bar)** — uploading sources through the 📚 Sources drawer doesn't make
       the assistant panel's **source-scope picker** show up until you manually
