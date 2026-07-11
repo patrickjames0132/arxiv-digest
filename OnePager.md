@@ -1,6 +1,6 @@
 # Atlas — One-Pager
 
-> **Status:** v1.23 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v4.11.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -16,7 +16,8 @@
 > 105-test offline suite (v1.21.1–.3), inline answer figures (v1.22.0), code &
 > artifact links via Hugging Face Papers (v1.23.0), per-seed cache-clear Refresh
 > button (v2.5.0), Semantic Scholar field-of-study tags in the detail panel
-> (v2.6.0), "What's evolved since" forward lecture mode (v2.7.0)
+> (v2.6.0), "What's evolved since" forward lecture mode (v2.7.0), colour-coded
+> lecture buttons + two-view assistant panel (v4.11.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -1274,22 +1275,30 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
-- [ ] **Color-code the lecture buttons to their relation colors (+ a node-type
-      label, + a rename)** — each of the four lecture buttons narrates a specific
-      graph relation, but the buttons are all styled alike, so nothing ties a
-      button to the nodes it lights up. Color-code each button to its relation's
-      node color from `REL_COLOR` (`graph/theme.ts`): **"How we got here"** blue
-      (references, `#6ea8fe`), **"The landmark papers since"** green (landmark
-      citers, `#4ade80`), **"The current frontier"** light green (latest,
-      `#86efac`), **"This paper's intuition"** gold (seed, `#ffd166`). Once the
-      color carries the meaning, the wordy **"The landmark papers since"** can go
-      back to the shorter **"What's evolved since"** (its v2.7.0 name, before the
-      v4.8.0 rename). Also print the **node type in smaller text in each button's
-      top-right corner**, in the matching color — e.g. "References" in the same
-      blue as the filter chips on "How we got here", "Landmarks" / "Latest" /
-      "This paper" on the others. Frontend-only, in `teacher/Teacher.tsx` +
-      `teacher/teacher.css` (the `LECTURE_MODES` list and button styling). *(From
-      the `todos.md` inbox, 2026-07-11.)*
+- [x] **Colour-coded lecture buttons + a two-view assistant panel** *(v4.11.0)* —
+      a full pass over the assistant panel, tying each lecture to the nodes it
+      narrates and de-cluttering the whole surface. **Buttons are colour-coded to
+      their relation** (`MODES` in `Teacher.tsx`, `--c` from `REL_COLOR`, the same
+      hex as the filter chips / legend dots): "How we got here" blue (references),
+      "What's evolved since" green (landmark citers — **renamed** back from the
+      v4.8.0 "The landmark papers since" now the colour carries it), "The current
+      frontier" light green (latest), "This paper's intuition" gold (seed). Each
+      button shows **only its short node-type word, centred** (References /
+      Landmarks / Latest / This paper); the full lecture name moved to the
+      tooltip + aria-label and to a **"Now playing" header** above the transcript
+      (tinted the relation's colour). The lecture section is ruled off under the
+      panel title with a divider + one-line intro. **Two views, one panel**
+      (gated on `activeMode`): a shown lecture takes over the scroll (header +
+      beats), otherwise it's the Q&A chat — asking a question hides the lecture
+      (kept cached) so beats and chat never stack. **The Landmarks green was
+      darkened** graph-wide (`REL_COLOR.citation` `#4ade80`→`#22c55e`) to separate
+      it from Latest's pale green, and the detail-panel badges gained
+      `BADGE_COLOR` / `BADGE_LABEL`: both citing relations (`citation` + `latest`)
+      now read as **one "citation" badge** in the original in-between `#4ade80`
+      (Latest Publications ARE citing papers), deduped so a node never shows it
+      twice. Shipped with a backend fix found while testing — concurrent lecture
+      streams hit "Event loop is closed" (see [Bugs](#bugs--notable-found--fixed)).
+      *(From the `todos.md` inbox, 2026-07-11; browser-tested.)*
 - [ ] **Hide dateless papers in Timeline, keep them in Force** — a paper with no
       publication date has no honest position on a time axis. Today the Timeline
       layout parks a dateless node at the **seed's own x** (`nodeTimelineX` in
@@ -1649,6 +1658,37 @@ changed, and where), and **Lesson / guard** (what keeps it from coming back — 
 test, an invariant). Small, obvious bugs don't need an entry — the commit
 message is enough. This section is for the ones you'd want to re-read a year
 later.
+
+### "Event loop is closed" when several lectures stream at once
+
+*Found & fixed on the `color-lecture-buttons` branch (2026-07-11).*
+
+- **Symptom.** Playing all four lectures at once (each button clicked before the
+  last finished) surfaced a red **`Event loop is closed`** error in the assistant
+  panel. The lectures still played — the error was cosmetic — but it looked
+  broken. It only ever appeared under **concurrency**; a single lecture at a time
+  never triggered it.
+- **Root cause.** The agents, and the one **shared Anthropic `AsyncClient`** they
+  hold, are module-level singletons — but `agents/streams.py::drive` opened a
+  **fresh `asyncio` event loop per call and closed it at the end**. Fine
+  sequentially. But Flask is threaded, so concurrent lectures each ran `drive` on
+  their **own** loop over that **one shared httpx connection pool** — and a pool
+  binds to the first loop that touches it. The first stream to finish closed
+  *its* loop, tearing the pool out from under the streams still running on it →
+  `Event loop is closed`.
+- **Fix.** `streams.py` now runs all agent async work on **one long-lived event
+  loop** (a daemon thread; request threads reach it via
+  `asyncio.run_coroutine_threadsafe`). The shared client stays bound to a single
+  loop for the process's life, and asyncio multiplexes the concurrent streams the
+  way it's meant to. `drive`'s external contract — a sync generator yielding one
+  event at a time, context manager always exited — is unchanged, so the lecturer
+  and researcher both benefit with no caller edits.
+- **Lesson / guard.** A shared async client and a per-call event loop are
+  incompatible the moment anything runs concurrently — the loop a pooled
+  connection was born on must outlive every stream using it. New test
+  `test/atlas/agents/test_streams.py` drives **8 streams concurrently** and
+  asserts they all complete cleanly (the prior suite only ever drove one at a
+  time, so it couldn't have caught this).
 
 ### The same paper as two (actually three) nodes — cross-source identity in the hybrid graph
 

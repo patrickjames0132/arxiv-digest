@@ -89,14 +89,19 @@ to anything in this folder.
   duplication; the backend stays authoritative.
 - `theme.ts` is the single source of visual truth (node/edge colors, dim
   states, `YEAR_SPACING`, filter labels) so the canvas painting and the DOM
-  chrome can never disagree about what "a reference" looks like.
+  chrome can never disagree about what "a reference" looks like. `REL_COLOR`
+  drives the graph, chips, legend, and lecture buttons; `BADGE_COLOR` /
+  `BADGE_LABEL` drive the detail-panel badges, where both citing relations
+  (`citation` and `latest`) read as one "citation" badge in a lighter green
+  (the graph's landmark green was darkened to separate it from `latest`, so the
+  badge keeps the original in-between shade).
 
 ## Who uses it, and how/why
 
 - **`Atlas.tsx`** (the shell) — renders `GraphExplorer` and passes its
   overlays as children; uses `ID_RE` for the pasted-id fast path.
 - **`detail/`** — `useSelection` types against `Base`/`VNode`;
-  `DetailPanel` uses `formatPubDate` + `REL_COLOR`.
+  `DetailPanel` uses `formatPubDate` + `BADGE_COLOR`.
 - **`search/HitList`** — `formatPubDate`.
 - **`store/workspace`** — `cleanNode`/`countRels` for session save/restore.
 

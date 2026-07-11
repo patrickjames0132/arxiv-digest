@@ -115,9 +115,16 @@ for why nothing streams without it.
 
 ## `streams.py` — consuming a run synchronously, event by event
 
-`drive(agent, ...)` runs `run_stream_events` (async-only) on a private loop
-and yields each event as it arrives, so workflows stay plain sync
-generators. Two hard-won lessons live around it, both frame-timestamped
+`drive(agent, ...)` runs `run_stream_events` (async-only) on **one shared,
+long-lived event loop** (a daemon thread; request threads reach it via
+`run_coroutine_threadsafe`) and yields each event as it arrives, so workflows
+stay plain sync generators. It used to open a *fresh* loop per call and close
+it at the end — fine sequentially, but the agents (and their one shared
+Anthropic client) are singletons, so several streams at once (concurrent
+lectures) each ran on their own loop over the one httpx pool, and the first
+loop to close surfaced `Event loop is closed` in the others. One persistent
+loop fixes it: httpx multiplexes concurrent requests on a single loop safely.
+Three hard-won lessons live around it, the streaming two frame-timestamped
 against the live API: the sync convenience wrapper
 (`run_stream_sync().stream_output()`) delivers structured output in one
 burst at the end — drive the raw events instead; and Anthropic buffers a

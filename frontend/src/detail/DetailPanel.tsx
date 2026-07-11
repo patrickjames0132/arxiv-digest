@@ -9,7 +9,7 @@
 import type { AnswerFigure, CategoriesResponse, CodeLinksResponse, FiguresResponse } from '../api'
 import type { VNode } from '../graph/model'
 import { formatPubDate } from '../graph/model'
-import { REL_COLOR } from '../graph/theme'
+import { BADGE_COLOR, BADGE_LABEL } from '../graph/theme'
 import MathText from '../notation/MathText'
 import { useResizablePanel } from '../ui/useResizablePanel'
 import './detail.css'
@@ -197,6 +197,15 @@ export default function DetailPanel({
   onExplore,
 }: DetailPanelProps) {
   const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.detailWidth', 340)
+  // Both citing relations show one "citation" badge (BADGE_LABEL), so dedupe by
+  // displayed label — a node that's somehow both a landmark and latest never
+  // renders "CITATION" twice. Map keeps the first relation seen for each label
+  // (its colour), in node.rels order.
+  const badges = new Map<string, string>()
+  for (const rel of node.rels) {
+    const label = BADGE_LABEL[rel] ?? rel
+    if (!badges.has(label)) badges.set(label, rel)
+  }
   return (
     <aside className="detail" style={{ width }}>
       <div
@@ -210,9 +219,9 @@ export default function DetailPanel({
         ✕
       </button>
       <div className="detail-badges">
-        {node.rels.map((rel) => (
-          <span key={rel} className="badge" style={{ color: REL_COLOR[rel] }}>
-            {rel}
+        {[...badges].map(([label, rel]) => (
+          <span key={label} className="badge" style={{ color: BADGE_COLOR[rel] }}>
+            {label}
           </span>
         ))}
       </div>
