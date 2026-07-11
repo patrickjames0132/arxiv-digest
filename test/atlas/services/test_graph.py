@@ -79,6 +79,36 @@ def test_build_graph_shape(fake_s2):
     assert graph.counts == Counts(references=1, citations=1, similar=2, latest=1, nodes=5)
 
 
+def test_is_ghost_similar_needs_both_conditions():
+    """A ghost is zero citations AND no date — either one present rescues it."""
+    ghost = {"citation_count": 0, "year": None, "pub_date": None}
+    assert build._is_ghost_similar(ghost) is True
+    assert build._is_ghost_similar({**ghost, "citation_count": None}) is True  # None == no citations
+    assert build._is_ghost_similar({**ghost, "citation_count": 3}) is False  # has citations
+    assert build._is_ghost_similar({**ghost, "year": 2018}) is False  # has a year
+    assert build._is_ghost_similar({**ghost, "pub_date": "2018-05-01"}) is False  # has a date
+
+
+def test_ghost_similar_recommendations_are_pruned(fake_s2, monkeypatch):
+    """A recommendation with no citations AND no date is dropped from `similar`;
+    ones with either a citation or a date stay, and the count follows."""
+    monkeypatch.setattr(
+        build.s2,
+        "recommendations",
+        lambda pid, limit: [
+            {"node": make_node("ghost", citation_count=0, year=None, pub_date=None)},
+            {"node": make_node("cited_nodate", citation_count=7, year=None, pub_date=None)},
+            {"node": make_node("dated_nocite", citation_count=0, year=2019)},
+        ],
+    )
+    graph = build.build_graph("1706.03762")
+    ids = {node.id for node in graph.nodes}
+    assert "ghost" not in ids  # pruned — unverifiable noise
+    assert {"cited_nodate", "dated_nocite"} <= ids  # kept
+    # The count reflects only the survivors, so the slider's pool stays honest.
+    assert graph.counts.similar == 2
+
+
 def test_citations_come_from_openalex_when_seed_resolves(fake_s2, monkeypatch):
     """The hybrid: when OpenAlex resolves the seed, its citer nodes populate the
     citation/latest relations instead of S2's (references + similar stay S2)."""
