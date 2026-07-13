@@ -7,6 +7,12 @@ the `services` package (Phase 3) composes them into domain logic.
 - **`semantic_scholar/`** — the S2 Academic Graph + Recommendations client
   (the paper-data backbone); also holds S2's fields-of-study vocabulary
   (`vocab`). Its own package; see its own README.
+- **`openalex/`** — the OpenAlex client: seed resolution, references,
+  citations, and the Latest-Publications banding — the second data source the
+  hybrid graph is built from. Its own package; see its own README. Why *both*
+  S2 and OpenAlex, what "citation completeness" means, and how they compare
+  (with measured numbers) lives in
+  [`docs/citation-coverage.md`](../../../docs/citation-coverage.md).
 - **`arxiv/`** — arXiv-derived content: arXiv-id detection (`ID_RE`), a paper's
   figures/captions and full body text from ar5iv (arXiv's LaTeX→HTML renderer),
   and the arXiv category taxonomy (`vocab` + bundled `taxonomy.json`). Its own
