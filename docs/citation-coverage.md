@@ -194,14 +194,27 @@ to a reference on the same graph.)
 - **(a) S2-hydrate OA's citers' counts.** OA gives the citer *set*; batch-look
   each up in S2 (`POST /paper/batch`, the 429-safe bulk endpoint) via its
   `DOI:`/`ARXIV:` id (`openalex.nodes.resolvable_id` — nearly every citer has
-  one) and take `max(OA, S2)`. Fixes node **sizes** and unifies the graph's
-  count scale; fetching a *larger* OA candidate pool and re-ranking it by S2
-  counts also recovers landmarks OA *has but undercounts*. It does **not**
-  recover landmarks OA lacks the citation edge for (the missing-set problem),
-  and it re-adds a bounded (one batch/build) S2 dependency.
+  one) and take `max(OA, S2)`. Two sizes:
+  - **(a1) counts-only** — relabel the sizes of the citers OA already chose.
+    Fixes node **sizes** and unifies the graph's count scale; ~20 lines and one
+    cached batch call, degrades to OA counts if S2 is down (never worse).
+  - **(a2) bigger pool + re-rank** — fetch a *larger* OA candidate pool,
+    S2-hydrate all, re-rank by the hydrated counts. Additionally recovers
+    landmarks OA *has but undercounts* (ranked too low to make the cut).
+
+  Neither recovers landmarks OA lacks the citation *edge* for (the missing-set
+  problem — the bulk of the ML gap, per §4), and both re-add a bounded (one
+  batch/build) S2 dependency.
 - **(b) Ingest S2's bulk citations dataset offline.** The only way to get S2's
   full, sortable ML citation graph — but a whole ingestion pipeline, not a live
   call.
+
+> **Parked (revisit here).** **(a1)** is the cheap, self-contained candidate —
+> deliberately **not** filed as an OnePager ticket yet. It only improves how big
+> the ML landmarks *look*, not *which* landmarks appear (that ceiling is OA's
+> citation graph — only **(b)** lifts it), so it waits until ML landmark
+> fidelity is worth acting on. Reconsider it from this note rather than
+> re-deriving the analysis.
 
 ## Implications for "drop S2, go OpenAlex-only"
 
