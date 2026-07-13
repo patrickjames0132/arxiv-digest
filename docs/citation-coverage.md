@@ -206,8 +206,20 @@ to a reference on the same graph.)
   problem — the bulk of the ML gap, per §4), and both re-add a bounded (one
   batch/build) S2 dependency.
 - **(b) Ingest S2's bulk citations dataset offline.** The only way to get S2's
-  full, sortable ML citation graph — but a whole ingestion pipeline, not a live
-  call.
+  full, sortable ML citation graph. There is **no per-paper bulk endpoint**: the
+  live REST `/paper/{id}/citations` is offset-only, capped at `offset + limit ≤
+  ~10k` (our `_MAX_OFFSET = 9000`), newest-first with no server-side sort — so a
+  hyper-cited paper's citers past ~10k (possibly including its most-cited
+  landmarks) are unreachable live, and the token-paged bulk *search* endpoint is
+  query-based with no `cites:{id}` filter. The complete data exists only as the
+  Datasets API **`citations` release** — every citation edge for the *entire*
+  corpus (~200M papers → billions of edges, gzipped JSONL, refreshed monthly).
+  So (b) means: download that whole dataset, store/index it locally
+  (SQLite/parquet), and query your own copy for a seed's citers — which finally
+  gives the citation-count sort the live API never offered. A real ingestion
+  pipeline (+ periodic refresh + storage), not a live call. (Check the release's
+  current size/schema against the [Datasets
+  API](https://api.semanticscholar.org/api-docs/datasets) before scoping.)
 
 > **Parked (revisit here).** **(a1)** is the cheap, self-contained candidate —
 > deliberately **not** filed as an OnePager ticket yet. It only improves how big
