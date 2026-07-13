@@ -1780,7 +1780,7 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       retyped across modules. A whole-codebase sweep, not a targeted one; keep the
       wire format identical so snapshots, saved sessions, and the SSE protocol are
       unaffected. *(From the `todos.md` inbox, 2026-07-13.)*
-- [ ] **Tie `docs/citation-coverage.md` to its research notebook** — the
+- [x] **Tie `docs/citation-coverage.md` to its research notebook** — the
       citation-coverage write-up (`docs/citation-coverage.md`) and the experiment
       that backs it (`research/citation_coverage/analyze.ipynb` + its README) live
       apart and can drift. Cross-link them: the doc should point at the notebook as

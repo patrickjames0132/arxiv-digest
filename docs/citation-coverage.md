@@ -63,7 +63,10 @@ than S2, and (see below) provides no link from the preprint record to its VoR.
 
 ## Findings (measured against the live APIs, 2026-07-12)
 
-Counts drift over time; the *patterns* are the point.
+All numbers below come from the companion notebook,
+[`research/citation_coverage/analyze.ipynb`](../research/citation_coverage/analyze.ipynb)
+(its [README](../research/citation_coverage/README.md) covers the caveats and
+how to re-run). Counts drift over time; the *patterns* are the point.
 
 ### 1. Coverage: OA undercounts ML, not physics
 
@@ -261,6 +264,9 @@ frontier — where OA lag bites hardest), it's a visible regression.
   papers — the preprint-native worst case. Vision/NLP giants are too large to
   pull cleanly, though their coverage numbers (§1) undercount similarly.
 
-The raw comparisons were produced by throwaway scripts against the live APIs;
-see also the OpenAlex-single-source tradeoff notes and the "drop Similar
-relation" ticket in [`../OnePager.md`](../OnePager.md).
+The raw comparisons live in
+[`research/citation_coverage/analyze.ipynb`](../research/citation_coverage/analyze.ipynb) —
+re-runnable against the live APIs (slowly; see the study's
+[README](../research/citation_coverage/README.md)). See also the
+OpenAlex-single-source tradeoff notes and the "drop Similar relation" ticket
+in [`../OnePager.md`](../OnePager.md).
