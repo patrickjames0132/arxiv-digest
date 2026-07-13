@@ -1193,6 +1193,20 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       so the closing beat doesn't reach for "frontier" language — this lecture is
       about the giants that built on the seed, not the present frontier. *(From
       the `todos.md` inbox, 2026-07-11.)*
+- [ ] **Should display filters scope the agents? Researcher yes, lecturer maybe
+      not** — today filtering the graph (relation chips, year / citation sliders)
+      narrows what **both** the researcher and the lecturer are grounded in:
+      grounding is `(selected ∩ visible) ∪ discoveries` (v4.13.0), both
+      `streamAsk` and `streamLecture` send `nodes: groundingNodes`, and the v4.9.0
+      caption tells the user "filtering the graph scopes the lecture."
+      Reconsider whether that's right **per agent**. A **researcher** answering a
+      question probably *should* respect the visible/filtered set — the user
+      narrowed the map on purpose. But a **lecture** is a complete story over its
+      relation (`_story_nodes`); hiding a few nodes to declutter the *view*
+      shouldn't silently drop them from the *narration*. Likely split: the
+      lecturer narrates its full relation regardless of display filters, while the
+      researcher stays scoped to what's shown. *(From the `todos.md` inbox,
+      2026-07-13.)*
 
 ### Citations & graph data
 
@@ -1305,6 +1319,18 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       a refresh/override button to the search surface, mirroring the graph's
       per-seed **Refresh** button (v2.5.0) that busts the snapshot cache.
       *(From the `todos.md` inbox, 2026-07-08.)*
+- [ ] **Distinguish survey/review papers from primary-contribution papers** — a
+      graph today treats a review or survey the same as a paper that introduces a
+      new idea, but they play very different roles in a field's story (a survey
+      *summarizes* the field; an innovation *advances* it). Classify the two per
+      node so the app can act on the difference: a **badge / distinct styling** in
+      the detail panel or on the node, and — more usefully — letting the
+      lecturer/researcher **weight primary contributions over surveys** when
+      narrating "how we got here." Decide the signal during the work: title
+      keywords ("survey" / "review" / "a comprehensive …"), the citations-vs-
+      references shape (surveys cite widely, get cited broadly, rarely introduce
+      method), or S2/OpenAlex type metadata — heuristic first, a small classifier
+      only if it needs one. *(From the `todos.md` inbox, 2026-07-13.)*
 
 ### UI & rendering polish
 
@@ -1516,6 +1542,14 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       2026-07-08.)*
 - [ ] **Remove the "Powered by Claude Code" attribution** from the UI. *(From the
       `todos.md` inbox, 2026-07-08.)*
+- [ ] **Lexical search over the nodes on screen** — a quick keyword box that finds
+      a paper among the ones **currently on the graph** (matching titles/authors),
+      distinct from the seed search that fetches new papers from S2. Purely
+      **lexical and local** — no API call — filtering to or spotlighting the hits
+      (reusing the `highlightIds` glow/dim machinery) so a specific paper is easy
+      to pick out of a busy neighborhood. Separate from the pink `search`-relation
+      researcher hits and from the seed-search surface entirely. *(From the
+      `todos.md` inbox, 2026-07-13.)*
 
 
 ### Enhancements & tech debt
@@ -1665,6 +1699,24 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       **dismissible** and the graph currently on screen restored (it must not stay
       greyed out). Frontend error handling around `fetchGraph`/`GraphExplorer`.
       *(From the `todos.md` inbox, 2026-07-08.)*
+- [ ] **Replace every string `Literal` type with an `Enum`** — the backend leans
+      on string `Literal[...]` unions in ~8 modules (relation types, event kinds,
+      lecture modes, config choices — `agents/events.py`, `services/graph/model.py`,
+      `agents/traversal.py`, `researcher/tools.py`, and others; ~30 occurrences).
+      Convert **all** of them to proper `Enum`s — likely `StrEnum` so the JSON/wire
+      values stay exactly the strings they are today — for one named source of
+      truth, exhaustiveness, and refactor safety instead of the same literals
+      retyped across modules. A whole-codebase sweep, not a targeted one; keep the
+      wire format identical so snapshots, saved sessions, and the SSE protocol are
+      unaffected. *(From the `todos.md` inbox, 2026-07-13.)*
+- [ ] **Tie `docs/citation-coverage.md` to its research notebook** — the
+      citation-coverage write-up (`docs/citation-coverage.md`) and the experiment
+      that backs it (`research/citation_coverage/analyze.ipynb` + its README) live
+      apart and can drift. Cross-link them: the doc should point at the notebook as
+      the source of its numbers/plots, and the notebook/README should point back at
+      the doc — the same doc↔notebook pairing `cite_budget` and `latest_gap`
+      already have (each `analyze.ipynb` is referenced from its ship note). *(From
+      the `todos.md` inbox, 2026-07-13.)*
 
 
 ### Larger phases
