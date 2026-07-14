@@ -165,9 +165,9 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
   return (
     <>
       <div className="drawer-backdrop" onClick={onClose} />
-      <aside className="sources-drawer" role="dialog" aria-label="Your sources">
+      <aside className="sources-drawer" role="dialog" aria-label="Your library">
         <header className="sources-head">
-          <span>Your sources</span>
+          <span>Your library</span>
           <button className="link-btn" onClick={onClose} aria-label="Close">
             ✕
           </button>

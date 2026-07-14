@@ -14,9 +14,8 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
 ├─ header bar                      header/AtlasHeader.tsx
 │  ├─ brand ("Atlas" — click = Home: clears the workspace)
 │  ├─ search box + filter popover  search/Search.tsx (year slider, field picker)
-│  ├─ seed title · drawer toggles  (📚 Sources · 🎓 Assistant · 🗂 Sessions)
-│  └─ "Powered by Claude" credit
-├─ Sources drawer (📚)             library/Sources.tsx
+│  └─ seed title · drawer toggles  (📚 Library · 🎓 Assistant · 🗂 Sessions)
+├─ Library drawer (📚)             library/Sources.tsx
 ├─ Sessions drawer (🗂)            sessions/Sessions.tsx
 └─ body
    ├─ graph area                   graph/GraphExplorer.tsx

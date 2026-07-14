@@ -1,7 +1,9 @@
 # `src/library`
 
-The Sources drawer: manage the local semantic library the teacher searches —
-upload PDFs (several at once), paste a URL, list, remove.
+The Sources drawer (user-facing label "Library" / "Your library" since
+2026-07-14; the component keeps its original name): manage the local semantic
+library the teacher searches — upload PDFs (several at once), paste a URL,
+list, remove.
 
 ## Design decisions worth knowing
 

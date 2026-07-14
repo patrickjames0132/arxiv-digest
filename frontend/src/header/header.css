@@ -1,4 +1,4 @@
-/* The top bar (AtlasHeader): brand, seed info, drawer toggles, Claude credit.
+/* The top bar (AtlasHeader): brand, seed info, drawer toggles.
    The seed-search form itself is styled in search/search.css. */
 
 .atlas-top {
@@ -46,9 +46,9 @@
   color: var(--accent);
   background: rgba(255, 209, 102, 0.08);
 }
-/* Anchor the whole right-hand cluster (Sources, Ask library, credit) to the
-   right: only the FIRST item absorbs the free space. Putting margin-left:auto on
-   every button would split the gap and strand them mid-header on wide screens. */
+/* Anchor the whole right-hand cluster (provider dropdown + drawer toggles) to
+   the right: only the FIRST item absorbs the free space. Putting margin-left:auto
+   on every button would split the gap and strand them mid-header on wide screens. */
 .top-right-start {
   margin-left: auto;
 }
@@ -84,29 +84,6 @@
 .provider-select select:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.cc-credit {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
-  text-decoration: none;
-  white-space: nowrap;
-  opacity: 0.8;
-  transition:
-    opacity 0.15s ease,
-    color 0.15s ease;
-}
-.cc-credit:hover {
-  opacity: 1;
-  color: var(--accent);
-}
-.cc-credit-mark {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
 }
 
 /* The brand is a button now (it's the Home action) — strip button chrome. */

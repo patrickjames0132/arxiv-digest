@@ -3,7 +3,7 @@
 The top bar: brand, the seed-search form (composed from `search/Search` —
 the search *concern* stays a root feature per the hybrid rule; the header
 just renders its form), the current seed's title, the **provider dropdown**,
-the three drawer toggles, and the "Powered by Claude" credit.
+and the three drawer toggles (📚 Library / 🎓 Assistant / 🗂 Sessions).
 
 ## Design decisions worth knowing
 
@@ -18,7 +18,10 @@ the three drawer toggles, and the "Powered by Claude" credit.
   the page-load default (no graph, no results, no panel) without a reload.
 - **The Assistant toggle hides until there's something to assist with** (a
   graph is open or a library exists) — no dead buttons.
-- The Claude credit's starburst is inline SVG, no asset fetch.
+- **The Library button opens the `library/Sources` drawer** — the user-facing
+  label was renamed from "Sources" (2026-07-14); the component, the
+  `onOpenSources` prop, and the `sources-toggle` CSS class keep the original
+  name.
 
 ## Who uses it / verified
 

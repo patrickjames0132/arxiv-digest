@@ -1,6 +1,6 @@
 # Atlas — One-Pager
 
-> **Status:** v5.3.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v5.3.1 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -541,6 +541,7 @@ optional, behind a key.
 - [x] **"Powered by Claude"** *(v1.11.0)* — subtle top-bar credit (Anthropic
       sunburst mark + "Powered by Claude", linking to anthropic.com/claude);
       names the model the AI teacher actually runs on, not the build tool.
+      **Removed in v5.3.1** (see "UI & rendering polish").
 
 ### Bring-your-own sources
 
@@ -1502,14 +1503,16 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
-- [ ] **Rename the "Sources" button to "Library"** — relabel the top-bar
-      **📚 Sources** toggle to **📚 Library** (user-facing copy only). Note the
-      tension to resolve: the feature was **deliberately named `sources`** in code
-      (`SourcesConfig`, `/api/sources`, the Sources drawer) to avoid the
-      "library" ambiguity with Python packages — so decide whether this is a
-      button-label-only change (cheapest, but "Library" button opens a "Sources"
-      drawer) or a fuller copy pass. Backend/route names stay. *(From the
-      `todos.md` inbox, 2026-07-14.)*
+- [x] **Rename the "Sources" button to "Library"** *(v5.3.1)* — the top-bar
+      toggle reads **📚 Library**, and the drawer's own heading/aria-label
+      followed ("Your sources" → "Your library") so the button and what it
+      opens agree. **User-facing copy only**: the noted naming tension resolved
+      as label-over-rename — the feature stays `sources` in code
+      (`SourcesConfig`, `/api/sources`, the `Sources` component,
+      `onOpenSources`, `sources-toggle`) to keep the "library"-vs-Python-
+      packages ambiguity out of identifiers; the header and library READMEs
+      document the label↔name mapping. *(From the `todos.md` inbox,
+      2026-07-14.)*
 - [ ] **One fast "unhighlight everything" action** — clearing what's lit on the
       graph is currently piecemeal: the hand-picked selection has its own Clear,
       and a lit lecture beat / chat answer / inline `[n]` ref clears by clicking
@@ -1751,8 +1754,10 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       (a restored save rebuilds locally, so it needs no bar). The blocking
       `GET /api/graph` stays for compatibility. *(From the `todos.md` inbox,
       2026-07-08.)*
-- [ ] **Remove the "Powered by Claude Code" attribution** from the UI. *(From the
-      `todos.md` inbox, 2026-07-08.)*
+- [x] **Remove the "Powered by Claude" attribution** *(v5.3.1)* — the v1.11.0
+      top-bar credit (starburst SVG + anthropic.com link) removed, with its
+      `.cc-credit` CSS and README/comment mentions. *(From the `todos.md`
+      inbox, 2026-07-08.)*
 - [ ] **Lexical search over the nodes on screen** — a quick keyword box that finds
       a paper among the ones **currently on the graph** (matching titles/authors),
       distinct from the seed search that fetches new papers from S2. Purely
