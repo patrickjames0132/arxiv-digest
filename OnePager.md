@@ -1154,6 +1154,15 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Teacher & agent reach
 
+- [ ] **Reconcile when the researcher should search vs. expand** — the agent has
+      two "reach beyond the graph" tools with fuzzy boundaries: `expand_node`
+      (a lineage hop — references/citations/similar of a paper *on* the graph) and
+      `search_papers` (free-text, off-graph). Their prompt guidance overlaps, so
+      the model sometimes searches when a hop would be tighter (or vice versa),
+      wasting budget and pulling noisier nodes. Sharpen the tool descriptions /
+      skill prompt on the decision rule (expand = "trace a known paper's
+      neighbors"; search = "reach recent/topical work no hop can"), and consider a
+      cheap heuristic nudge. *(From the `todos.md` inbox, 2026-07-14.)*
 - [ ] **Graph-less research mode** — let the researcher run with no graph
       open: agentic research from scratch (search S2 + the local library, no
       seed required). Would retire the librarian in its favor — today's
@@ -1472,6 +1481,32 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [ ] **Thicker dashed ring for "Discovered by teacher" nodes** — the dashed
+      "discovered" ring on agent-pulled nodes is hard to see; thicken it (and/or
+      up the contrast) so a discovery reads at a glance. *(From the `todos.md`
+      inbox, 2026-07-14.)*
+- [ ] **Cleaner layout for expanded nodes** — nodes/edges the researcher pulls in
+      via `expand_node` land right on top of the seed's own edges and nodes, so a
+      dense neighborhood turns to spaghetti around the seed. Give discoveries more
+      breathing room — a wider initial scatter, a local repel/anchor tweak in
+      `useDiscovery`, or a post-merge settle — so the new cluster reads as
+      distinct from the existing graph. *(From the `todos.md` inbox, 2026-07-14.)*
+- [ ] **A filter chip for teacher-discovered nodes** — discovered papers
+      (dashed ring, from `expand_node`/`search_papers`) have no filter control;
+      add a chip (like the relation chips) to show/hide the whole discovered set
+      at once, so a busy post-Q&A graph can collapse back to the built
+      neighborhood. *(From the `todos.md` inbox, 2026-07-14.)*
+- [ ] **Rework the `search` node treatment (overlap → grounded, dual-relation
+      detail)** — the parked "do we even want a distinct pink `search` relation?"
+      question, shaped: when a topic-search hit is **also** a citation/reference
+      already reachable on the graph, it shouldn't render as an **isolated pink
+      node** — it should merge onto the green/blue node **with its edge**, and the
+      detail panel should show **both** relations (e.g. "Search + Reference").
+      Only genuinely off-graph hits stay pink-and-floating. Needs the search
+      discovery to check for an existing edge/overlap before emitting an
+      edge-less node, plus multi-relation detail badges (the panel already dedupes
+      badges by label). *(From the `todos.md` inbox, 2026-07-14; relates to the
+      v5.2.0 edge-less-node filter fix.)*
 - [x] **Node selector tool that scopes the lectures and Q&A agents** *(v4.13.0)* —
       **hand-pick which nodes** the teacher works over, right on the graph. An
       **alt-drag marquee** (a transparent overlay that arms only while Alt is
