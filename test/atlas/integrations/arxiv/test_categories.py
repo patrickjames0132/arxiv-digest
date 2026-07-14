@@ -140,3 +140,45 @@ def test_fetch_categories_returns_none_for_an_empty_feed(monkeypatch):
     monkeypatch.setattr("urllib.request.urlopen", lambda request, timeout: FakeResponse())
 
     assert categories.fetch_categories("9999.99999") is None
+
+
+def _fake_feed(monkeypatch, body: bytes) -> None:
+    """Point urlopen at a canned Atom feed body."""
+
+    class FakeResponse:
+        def read(self):
+            return body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda request, timeout: FakeResponse())
+
+
+def test_get_title_reads_and_collapses_the_entry_title(monkeypatch):
+    # arXiv titles often carry newlines / doubled spaces from line wrapping.
+    _fake_feed(
+        monkeypatch,
+        b"""<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry><title>Attention Is All\n  You Need</title></entry>
+</feed>""",
+    )
+    assert categories.get_title("1706.03762") == "Attention Is All You Need"
+
+
+def test_get_title_none_for_empty_feed(monkeypatch):
+    _fake_feed(
+        monkeypatch,
+        b"""<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns="http://www.w3.org/2005/Atom"></feed>""",
+    )
+    assert categories.get_title("9999.99999") is None
+
+
+def test_get_title_blank_id_short_circuits():
+    assert categories.get_title("") is None
+    assert categories.get_title("   ") is None

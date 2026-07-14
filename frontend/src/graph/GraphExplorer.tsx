@@ -195,7 +195,7 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     codeLinks,
     categories,
     onNodeClick,
-  } = useSelection({ base, graph, loadGraph: doLoadGraph })
+  } = useSelection({ base, graph, provider, loadGraph: doLoadGraph })
 
   /**
    * Canvas click, split by modifier: a shift-click toggles the node in the
@@ -434,6 +434,7 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
       {selected && (
         <DetailPanel
           node={selected}
+          fieldsLabel={provider === 'openalex' ? 'OpenAlex tags' : 'Semantic Scholar tags'}
           figures={selected.arxiv_id ? figures[selected.arxiv_id] : undefined}
           figuresLoading={figLoading === selected.arxiv_id}
           codeLinks={selected.arxiv_id ? codeLinks[selected.arxiv_id] : undefined}

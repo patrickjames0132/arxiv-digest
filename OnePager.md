@@ -1,6 +1,6 @@
 # Atlas — One-Pager
 
-> **Status:** v5.0.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v5.1.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -19,7 +19,9 @@
 > (v2.6.0), "What's evolved since" forward lecture mode (v2.7.0), colour-coded
 > lecture buttons + two-view assistant panel (v4.11.0), researcher reuses
 > played lectures + lecture-scope picker (v4.12.0), **single-source provider
-> selector — S2 or OpenAlex per graph, the hybrid retired (v5.0.0)**
+> selector — S2 or OpenAlex per graph, the hybrid retired (v5.0.0), provider
+> reach extended to seed search + detail hydration + a per-provider field
+> taxonomy (v5.1.0)**
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -1238,18 +1240,36 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Citations & graph data
 
-- [ ] **Phase 2 — extend the provider choice to search + detail** — v5.0.0's
-      provider selector governs the *graph build only*; seed **search** and the
-      **detail panel** still hydrate via S2 for both providers. Close the gap so
-      picking **OpenAlex** is coherent end-to-end: an OpenAlex seed-search path
-      (its own relevance search) with **provider-aware copy** — the hit-list note
-      reads **"Searching OpenAlex…"** in flight and **"From OpenAlex"** once
-      results land (mirroring the current S2 wording) — and detail-panel
-      hydration from OpenAlex (abstract via the inverted index; TL;DR absent, so
-      show the abstract; OA `concepts`/`topics` for the field tags). Also worth
-      folding in: make the researcher's `expand_node`/`search_papers` tools
-      provider-aware (they're S2-only today). *(Deferred from the v5.0.0 provider
-      work, 2026-07-13.)*
+- [x] **Phase 2 — provider choice extended to search + detail** *(v5.1.0)* —
+      v5.0.0's selector governed the *graph build only*; now picking **OpenAlex**
+      is coherent end-to-end. **Seed search** has an OpenAlex path
+      (`openalex.search_papers` — `search=` relevance over title/abstract/fulltext,
+      year window as `from/to_publication_date`), with **provider-aware copy**
+      (the hit list reads "Searching **OpenAlex**…" / "From **OpenAlex**"), and the
+      local cache search already scoped per provider (v5.0.0). **Detail hydration**
+      comes from the graph's provider (`openalex.get_paper` — abstract from the
+      inverted index, **topic tags** from `topics`, no TL;DR so the panel shows the
+      abstract; the panel's field-tag heading is provider-aware); OpenAlex nodes
+      hydrate **by their node id** (the reliable `DOI:`/`W…` form — a bare arXiv id
+      can miss a published paper's canonical OA record). **Field filter** is now a
+      real, per-provider control: a new **OpenAlex field taxonomy** (`openalex.vocab`,
+      the 26 top-level fields) served by `/api/taxonomy/openalex` in a unified
+      `{id, name}` shape (S2's picker adopts it too), the picker refetches per
+      provider, and OA search filters by `topics.field.id`. **The `arxiv` taxonomy
+      provider was retired** (dead — it fed the long-gone arXiv-category search
+      filter; `arxiv.vocab.groups()`/`valid_codes()` deleted, `name_for` kept for
+      the detail-panel tags). *Deferred (its own ticket below): making the
+      researcher's `expand_node`/`search_papers` tools provider-aware — still
+      S2-only.* *(Patrick's asks incl. the OA field taxonomy + arxiv-taxonomy
+      removal; browser-tested 2026-07-13.)*
+- [ ] **Provider-aware researcher tools** — the Q&A researcher's `expand_node`
+      (references/citations/similar hops) and `search_papers` tool call S2
+      directly regardless of the selected graph provider. Under an OpenAlex graph
+      they should traverse/search OpenAlex too (its `references`/`citations`/
+      `search_papers` already exist; `recommendations`/similar has no OA analogue —
+      degrade or use `related_works`). Touches `agents/traversal.py` + the
+      researcher tools; thread the provider through the agent context. *(Deferred
+      from Phase 2, 2026-07-13.)*
 - [ ] **Phase 3 — S2 citations corpus (the real Field-Landmarks fix for S2)** —
       the S2 provider's Field Landmarks are drawn from the recent ~10k citer tip
       (live-API offset ceiling, no citation sort), not the full history. The only
@@ -1910,6 +1930,65 @@ changed, and where), and **Lesson / guard** (what keeps it from coming back — 
 test, an invariant). Small, obvious bugs don't need an entry — the commit
 message is enough. This section is for the ones you'd want to re-read a year
 later.
+
+### OpenAlex detail hydration nulled out a known arXiv id — arXiv tags vanished
+
+*Found & fixed on the `provider-reach` branch (Patrick's browser test, 2026-07-13).*
+
+- **Symptom.** Under the **OpenAlex** provider, a paper's detail panel showed its
+  **OpenAlex tags** but not its **arXiv tags** — even for papers plainly on arXiv
+  (e.g. Prioritized Experience Replay, `1511.05952`, whose arXiv id OpenAlex
+  *does* expose). The arXiv-tags section just never appeared.
+- **Root cause.** The arXiv category tags are fetched by the node's `arxiv_id`.
+  `openalex.node()` *always* emits an `arxiv_id` key — a value **or `null`**.
+  Clicking a node hydrates its detail from the **exact** OpenAlex record (by DOI);
+  for a paper whose canonical OA record is the *published* version, that record
+  carries **no arXiv location**, so hydration returns `arxiv_id: null`. The
+  detail-panel merge `{...node, ...details}` then let that present-but-null key
+  **overwrite** the `arxiv_id` the graph build had already extracted (from the
+  neighbor traversal's `locations`) → `selected.arxiv_id` went null → the tags
+  fetch was skipped. So we *had* the id and threw it away.
+- **Fix.** The merge now coalesces: `arxiv_id: detail.arxiv_id ?? node.arxiv_id`
+  (`detail/useSelection.ts`), preserving a known id when hydration doesn't supply
+  one. arXiv tags now show whenever OpenAlex exposes the id at build time.
+- **Lesson / guard.** **A spread-merge of a partial record is dangerous when the
+  patch emits keys with `null` values** — `{...a, ...b}` lets `b`'s explicit
+  `null` clobber `a`'s good value, unlike an "only fill what's missing" merge.
+  When a normalizer always includes a field (even as null), coalesce the ones
+  that shouldn't regress. (The genuine OA gap remains: a published-only record
+  with no arXiv location has no id to show — that's data, not this bug.)
+
+### OpenAlex couldn't find "Attention Is All You Need" — a hard seed-resolve failure
+
+*Found & fixed on the `provider-reach` branch (Patrick's browser test, 2026-07-13).*
+
+- **Symptom.** With the **OpenAlex** provider selected, re-seeding (or loading)
+  the transformer paper by its arXiv id failed outright — a red **"No paper found
+  on OpenAlex for 1706.03762"** — even though the paper is obviously in OpenAlex
+  (it's the top hit for a title search). Other papers resolved fine.
+- **Root cause.** `openalex.resolve_seed_work` resolves a bare arXiv id
+  cheapest-first through the **arXiv-minted DOI** (`doi:10.48550/arXiv.<id>`).
+  For a famous *published* paper, OpenAlex's canonical record is the published
+  version and is **not aliased to the arXiv-minted DOI** — that DOI simply 404s
+  in OpenAlex. The resolver then tried a title search *fallback* but had **no
+  title** (it's only given the id), so `_clean_search("")` bailed and the whole
+  resolve returned `None` → the route's 404. The v4.x hybrid never hit this
+  because S2 resolved the seed; the v5.0.0 provider split unmasked it, and it was
+  a *hard failure*, not just the documented "lands on the lower-cited preprint
+  stub."
+- **Fix.** When the arXiv-DOI path misses, fetch the paper's **title from arXiv**
+  (`arxiv.get_title`, a new lookup sharing `categories.py`'s export-API fetch) and
+  title-search OpenAlex — which lands the canonical, most-cited record.
+  `integrations/openalex` already depends on `integrations/arxiv` (for
+  `extract_id`), so the direction is clean. Verified live: 1706.03762 now
+  resolves.
+- **Lesson / guard.** A "cheapest-first, fall back to title" resolver is only as
+  good as its fallback's *inputs* — the title fallback existed but was reachable
+  only when a title was already in hand. When you drop a masking layer (the S2
+  seed resolve), re-check that every downstream fallback still has what it needs.
+  (Separately: the resolved OpenAlex record still carries OA's known ML-undercount
+  and the 2025-misdate — a *data* tradeoff, documented in
+  `docs/citation-coverage.md`, not this bug.)
 
 ### Alt+Shift+drag never added to the node selection (Windows)
 

@@ -152,6 +152,55 @@ def test_a_pasted_id_s2_does_not_know_returns_nothing(monkeypatch):
     assert discovery.live_search("2406.99999") == []
 
 
+# --- live_search: OpenAlex provider branch ---------------------------------------
+
+
+def test_live_search_openalex_branch_uses_openalex_not_s2(monkeypatch):
+    """provider='openalex' routes to openalex.search_papers (bare node dicts,
+    no unwrap) and never touches S2; the analyst-expanded query still flows."""
+    monkeypatch.setattr(discovery, "_analyze", lambda query: analysis("EXPANDED"))
+    captured = {}
+
+    def fake_oa_search(query, limit, year_from=None, year_to=None, fields=None):
+        captured["query"] = query
+        return [{"id": "DOI:10/a", "title": "A"}, {"id": "DOI:10/b", "title": "B"}]
+
+    def s2_forbidden(*args, **kwargs):
+        raise AssertionError("S2 must not be called under the OpenAlex provider")
+
+    monkeypatch.setattr(discovery.openalex, "search_papers", fake_oa_search)
+    monkeypatch.setattr(discovery.s2, "search_papers", s2_forbidden)
+    out = discovery.live_search("gnn", provider="openalex")
+    assert captured["query"] == "EXPANDED"
+    assert [node["id"] for node in out] == ["DOI:10/a", "DOI:10/b"]
+
+
+def test_live_search_openalex_pasted_id_resolves_via_openalex(monkeypatch):
+    """A pasted arXiv id under OpenAlex resolves through openalex.get_paper."""
+    seen = {}
+
+    def fake_get_paper(ref):
+        seen["ref"] = ref
+        return {"id": "DOI:10/x", "title": "Resolved"}
+
+    monkeypatch.setattr(discovery.openalex, "get_paper", fake_get_paper)
+    out = discovery.live_search("2101.00001", provider="openalex")
+    assert seen["ref"] == "2101.00001"  # bare id, un-prefixed
+    assert out == [{"id": "DOI:10/x", "title": "Resolved"}]
+
+
+def test_live_search_cache_is_provider_scoped(monkeypatch):
+    """An S2 search and an OpenAlex search for the same query are cached under
+    different keys — neither is served the other's results."""
+    monkeypatch.setattr(discovery, "_analyze", lambda query: analysis("EXP"))
+    monkeypatch.setattr(discovery.s2, "search_papers", lambda query, **kw: [{"node": {"id": "s2hit"}}])
+    monkeypatch.setattr(discovery.openalex, "search_papers", lambda query, **kw: [{"id": "oahit"}])
+    s2_out = discovery.live_search("q", provider="s2")
+    oa_out = discovery.live_search("q", provider="openalex")
+    assert [node["id"] for node in s2_out] == ["s2hit"]
+    assert [node["id"] for node in oa_out] == ["oahit"]  # not the cached S2 result
+
+
 # --- local_search (cache-first) --------------------------------------------------
 
 

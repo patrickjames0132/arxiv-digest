@@ -15,9 +15,11 @@ def test_search_passes_parsed_filters_to_the_service(client, monkeypatch):
         return [{"id": "s2id01", "title": "Playing Atari"}]
 
     monkeypatch.setattr(search_routes.search_service, "live_search", fake_live_search)
+    # Under OpenAlex the field filter is validated against OpenAlex field IDS —
+    # "17" (Computer Science) survives, "999" is dropped as unknown.
     response = client.get(
         "/api/search?q=DQN&limit=5&year_from=2010&year_to=junk"
-        "&fields=Computer Science,Bogus Field"
+        "&fields=17,999&provider=openalex"
     )
     assert response.status_code == 200
     assert response.json == {
@@ -30,8 +32,23 @@ def test_search_passes_parsed_filters_to_the_service(client, monkeypatch):
         "limit": 5,
         "year_from": 2010,
         "year_to": None,  # garbage degrades to no-filter
-        "fields_of_study": ["Computer Science"],  # unknown fields silently dropped
+        "fields_of_study": ["17"],  # valid OpenAlex field id kept, unknown dropped
+        "provider": "openalex",  # threaded through to the service
     }
+
+
+def test_search_field_filter_validates_against_the_provider_vocab(client, monkeypatch):
+    """An S2 field name is invalid under OpenAlex (different vocab), so it's
+    dropped; the same name is valid under S2."""
+    seen = {}
+    monkeypatch.setattr(
+        search_routes.search_service, "live_search",
+        lambda query, **kwargs: seen.update(kwargs) or [],
+    )
+    client.get("/api/search?q=x&fields=Computer Science&provider=s2")
+    assert seen["fields_of_study"] == ["Computer Science"]  # S2 name valid under S2
+    client.get("/api/search?q=x&fields=Computer Science&provider=openalex")
+    assert seen["fields_of_study"] is None  # not a valid OpenAlex field id
 
 
 def test_blank_query_returns_empty_without_touching_the_service(client, monkeypatch):
@@ -77,14 +94,18 @@ def test_local_search_never_errors(client, monkeypatch):
     assert response.json == {"q": "atari", "count": 0, "papers": []}
 
 
-def test_taxonomy_providers_return_their_natural_shapes(client):
-    s2_response = client.get("/api/taxonomy/s2")
-    assert s2_response.status_code == 200
-    assert "Computer Science" in s2_response.json["fields"]
+def test_taxonomy_returns_unified_id_name_shape_per_provider(client):
+    """Both providers return {fields: [{id, name}]}. For S2 the id IS the name
+    (S2 filters on the name); for OpenAlex the id is the numeric field id."""
+    s2_fields = client.get("/api/taxonomy/s2").json["fields"]
+    cs = next(field for field in s2_fields if field["name"] == "Computer Science")
+    assert cs == {"id": "Computer Science", "name": "Computer Science"}  # id == name for S2
 
-    arxiv_response = client.get("/api/taxonomy/arxiv")
-    assert arxiv_response.status_code == 200
-    group_names = [group["group"] for group in arxiv_response.json["groups"]]
-    assert any("Computer" in name for name in group_names)
+    oa_fields = client.get("/api/taxonomy/openalex").json["fields"]
+    oa_cs = next(field for field in oa_fields if field["name"] == "Computer Science")
+    assert oa_cs == {"id": "17", "name": "Computer Science"}  # numeric OpenAlex field id
+    assert len(oa_fields) == 26  # OpenAlex's 26 top-level fields
 
+    # arxiv is retired as a taxonomy provider; an unknown provider is a 404.
+    assert client.get("/api/taxonomy/arxiv").status_code == 404
     assert client.get("/api/taxonomy/gopher").status_code == 404

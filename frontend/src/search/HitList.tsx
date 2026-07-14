@@ -1,8 +1,10 @@
 /**
  * The seed-search results panel: cache-first local hits render immediately,
- * live Semantic Scholar hits stream in under them (deduped against the local
- * ones), and clicking any hit loads its graph. When the query named a paper
- * the analyst recognized, its verified match leads the live list.
+ * live hits from the selected provider (Semantic Scholar / OpenAlex) stream in
+ * under them (deduped against the local ones), and clicking any hit loads its
+ * graph. Both the cache section and the live section are labeled with the active
+ * provider, so it's clear which backend the results come from. When the query
+ * named a paper the analyst recognized, its verified match leads the live list.
  */
 
 import type { GraphNode, LocalHit } from '../api'
@@ -12,7 +14,7 @@ import './search.css'
 
 /** Props for {@link HitList}. */
 export interface HitListProps {
-  /** Live S2 results (null until the search lands / when dismissed). */
+  /** Live results from the selected provider (null until the search lands). */
   hits: GraphNode[] | null
   /** Cache-first results from previously seen graphs (null when none). */
   localHits: LocalHit[] | null
@@ -20,7 +22,10 @@ export interface HitListProps {
   searching: boolean
   /** The live search failed (rate limit / outage) — cache-only mode. */
   liveFailed: boolean
-  /** Load a graph for the picked seed (an arXiv id or S2 paperId). */
+  /** Display name of the active provider ("Semantic Scholar" / "OpenAlex") —
+   *  the live-search section is labeled with it. */
+  providerLabel: string
+  /** Load a graph for the picked seed (a provider node id / arXiv id). */
   onPick: (seed: string) => void
   /** Dismiss the panel. */
   onClose: () => void
@@ -53,6 +58,7 @@ export default function HitList({
   localHits,
   searching,
   liveFailed,
+  providerLabel,
   onPick,
   onClose,
 }: HitListProps) {
@@ -67,7 +73,7 @@ export default function HitList({
       </div>
       {localHits && (
         <>
-          <div className="hit-sub">From your cache</div>
+          <div className="hit-sub">From your {providerLabel} cache</div>
           {localHits.map((hit) => (
             <button key={hit.id} className="hit" onClick={() => onPick(hit.arxiv_id ?? hit.id)}>
               <div className="hit-title">
@@ -90,18 +96,18 @@ export default function HitList({
         </>
       )}
       {localHits && (searching || hits || liveFailed) && (
-        <div className="hit-sub">From Semantic Scholar</div>
+        <div className="hit-sub">From {providerLabel}</div>
       )}
       {searching && (
         <div className="hit-note">
-          <span className="spin" /> Searching Semantic Scholar…
+          <span className="spin" /> Searching {providerLabel}…
         </div>
       )}
       {liveFailed && (
         <div className="hit-note">Live search unavailable — showing cached papers only.</div>
       )}
       {hits && hits.length === 0 && !searching && (
-        <div className="hit-note">No results from Semantic Scholar.</div>
+        <div className="hit-note">No results from {providerLabel}.</div>
       )}
       {hits
         ?.filter((hit) => !localHits?.some((local) => local.id === hit.id))

@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { listSources } from './api'
+import { listSources, PROVIDER_LABEL } from './api'
 import { ID_RE } from './graph/model'
 import { useAppDispatch, useAppSelector } from './store'
 import {
@@ -168,6 +168,7 @@ export default function Atlas() {
             localHits={localHits}
             searching={searching}
             liveFailed={liveFailed}
+            providerLabel={PROVIDER_LABEL[provider]}
             onPick={pickSeed}
             onClose={clearHits}
           />

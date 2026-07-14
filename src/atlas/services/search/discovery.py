@@ -19,7 +19,7 @@ import time
 
 from ...agents import query_analyst
 from ...config import config
-from ...integrations import arxiv
+from ...integrations import arxiv, openalex
 from ...integrations import semantic_scholar as s2
 from ...storage import cache
 from ..graph import Provider
@@ -45,6 +45,34 @@ def _analyze(query: str) -> query_analyst.Expansion:
         because the LLM hiccuped.
     """
     return query_analyst.analyze(query)
+
+
+def _verified_titles_openalex(titles: list[str]) -> list[dict]:
+    """Resolve analyst-suggested titles against OpenAlex — the OpenAlex twin of
+    :func:`_verified_titles`.
+
+    Each title is resolved with ``openalex.resolve_work`` (title search,
+    most-cited first), so a confidently-recalled paper leads the OpenAlex results
+    the same way it does the S2 ones. Failures skip the title, never the search.
+
+    Args:
+        titles: Exact-title suggestions, most relevant first.
+
+    Returns:
+        The matched papers' normalized node dicts, deduped, in suggestion order.
+    """
+    verified: list[dict] = []
+    seen: set[str] = set()
+    for title in titles:
+        try:
+            work = openalex.resolve_work(arxiv_id=None, title=title)
+        except openalex.OpenAlexError:
+            continue
+        node = openalex.node(work) if work else None
+        if node and node["id"] not in seen:
+            seen.add(node["id"])
+            verified.append(node)
+    return verified
 
 
 def _verified_titles(titles: list[str]) -> list[dict]:
@@ -76,59 +104,29 @@ def _verified_titles(titles: list[str]) -> list[dict]:
     return verified
 
 
-def live_search(
+def _s2_live(
     query: str,
-    limit: int = 25,
-    year_from: int | None = None,
-    year_to: int | None = None,
-    fields_of_study: list[str] | None = None,
+    limit: int,
+    year_from: int | None,
+    year_to: int | None,
+    fields_of_study: list[str] | None,
 ) -> list[dict]:
-    """Relevance-search Semantic Scholar to find a seed paper.
+    """The Semantic Scholar live-search body: analyst expansion + verified
+    titles + lexical search, merged.
 
     Args:
-        query: Free-text search terms (keywords, a title, an author).
+        query: The raw user query (already non-blank, non-pasted-id).
         limit: Maximum papers to return.
         year_from: Earliest publication year (inclusive), or None.
         year_to: Latest publication year (inclusive), or None.
         fields_of_study: S2 fields of study to restrict to (any-of), or None.
-            Values are S2's own field names (see ``semantic_scholar.vocab``).
 
     Returns:
-        Relevance-ranked node dicts (S2's node shape — the same shape a graph
-        neighbor has). Empty list for a blank query. A pasted arXiv id/URL
-        returns exactly that paper (or nothing when S2 doesn't know it).
-        Results are cached for a day (same TTL as a graph snapshot), so a
-        repeated search answers instantly — no analyst call, no S2.
+        Relevance-ranked node dicts, verified title matches leading.
 
     Raises:
         s2.S2Error: When the Semantic Scholar request fails after retries.
     """
-    query = (query or "").strip()
-    if not query:
-        return []
-    # A pasted arXiv id/URL is a statement of intent, not a query: skip
-    # expansion (nothing to expand — an "improved" id could only be a wrong
-    # one) and filters (they never apply to an explicit lookup), and land on
-    # that exact paper. An id S2 doesn't know returns nothing — falling
-    # through to a lexical search of the id text could only produce junk.
-    pasted_id = arxiv.extract_id(query)
-    if pasted_id:
-        paper = s2.get_paper(f"ARXIV:{pasted_id}")
-        return [paper] if paper else []
-
-    # Whole-result cache: the expensive part of a live search is the analyst
-    # call plus two-ish throttled S2 requests, and re-typing a recent query
-    # is a common move — searching "DQN" a second time should be instant.
-    # The key carries the filters (a filtered search is a different search);
-    # the analyst's view is frozen for the TTL, which is fine for a day.
-    fields_key = ",".join(fields_of_study) if fields_of_study else ""
-    cache_key = (
-        f"livesearch:{query.lower()}:{limit}:{year_from or ''}:{year_to or ''}:{fields_key}"
-    )
-    cached = cache.get(cache_key, config.graph.cache_ttl)
-    if cached is not None:
-        return cached
-
     analysis = _analyze(query)
     # Confidently recalled papers, verified via S2 title match, lead the
     # results — like the id path, an exact resolution outranks lexical hits
@@ -145,7 +143,111 @@ def live_search(
     # bare node dicts so live and local search return the same thing.
     verified_ids = {node["id"] for node in verified}
     lexical = [hit["node"] for hit in hits if hit["node"]["id"] not in verified_ids]
-    results = (verified + lexical)[:limit]
+    return (verified + lexical)[:limit]
+
+
+def _openalex_live(
+    query: str,
+    limit: int,
+    year_from: int | None,
+    year_to: int | None,
+    fields: list[str] | None,
+) -> list[dict]:
+    """The OpenAlex live-search body — the twin of :func:`_s2_live`.
+
+    Same shape (analyst expansion + verified titles lead + lexical search), but
+    resolved through OpenAlex, with the field filter expressed in OpenAlex's own
+    field ids (``openalex.vocab``) rather than S2's field names.
+
+    Args:
+        query: The raw user query (already non-blank, non-pasted-id).
+        limit: Maximum papers to return.
+        year_from: Earliest publication year (inclusive), or None.
+        year_to: Latest publication year (inclusive), or None.
+        fields: OpenAlex field ids to restrict to (any-of), or None.
+
+    Returns:
+        Relevance-ranked node dicts, verified title matches leading.
+
+    Raises:
+        openalex.OpenAlexError: When an OpenAlex request fails after retries.
+    """
+    analysis = _analyze(query)
+    verified = _verified_titles_openalex(analysis.known_titles)
+    hits = openalex.search_papers(
+        analysis.expanded_query, limit=limit, year_from=year_from, year_to=year_to, fields=fields
+    )
+    # openalex.search_papers already returns bare node dicts (unlike S2's
+    # ``[{"node": ...}]``), so no unwrap is needed.
+    verified_ids = {node["id"] for node in verified}
+    lexical = [hit for hit in hits if hit["id"] not in verified_ids]
+    return (verified + lexical)[:limit]
+
+
+def live_search(
+    query: str,
+    limit: int = 25,
+    year_from: int | None = None,
+    year_to: int | None = None,
+    fields_of_study: list[str] | None = None,
+    provider: Provider = "s2",
+) -> list[dict]:
+    """Relevance-search the selected provider to find a seed paper.
+
+    Args:
+        query: Free-text search terms (keywords, a title, an author).
+        limit: Maximum papers to return.
+        year_from: Earliest publication year (inclusive), or None.
+        year_to: Latest publication year (inclusive), or None.
+        fields_of_study: Field filter values to restrict to (any-of), or None.
+            **Provider-specific:** S2 field names on the S2 path
+            (``semantic_scholar.vocab``), OpenAlex field ids on the OpenAlex path
+            (``openalex.vocab``). The route validates against the right vocabulary.
+        provider: Which backend to search (``s2`` / ``openalex``) — matches the
+            graph provider so a hit explores under the backend that found it.
+
+    Returns:
+        Relevance-ranked node dicts (the shared node shape — the same a graph
+        neighbor has). Empty list for a blank query. A pasted arXiv id/URL
+        returns exactly that paper (or nothing when the provider can't resolve
+        it). Results are cached for a day (keyed by provider), so a repeated
+        search answers instantly — no analyst call, no live request.
+
+    Raises:
+        s2.S2Error: When a Semantic Scholar request fails (the ``s2`` path).
+        openalex.OpenAlexError: When an OpenAlex request fails (the ``openalex``
+            path).
+    """
+    query = (query or "").strip()
+    if not query:
+        return []
+    # A pasted arXiv id/URL is a statement of intent, not a query: skip
+    # expansion and filters and land on that exact paper, resolved through the
+    # active provider. An id the provider doesn't know returns nothing.
+    pasted_id = arxiv.extract_id(query)
+    if pasted_id:
+        if provider == "openalex":
+            node = openalex.get_paper(pasted_id)
+            return [node] if node else []
+        paper = s2.get_paper(f"ARXIV:{pasted_id}")
+        return [paper] if paper else []
+
+    # Whole-result cache, keyed by provider (an S2 search and an OpenAlex search
+    # for the same query are different searches). The key also carries the
+    # filters; the analyst's view is frozen for the TTL, fine for a day.
+    fields_key = ",".join(fields_of_study) if fields_of_study else ""
+    cache_key = (
+        f"livesearch:{provider}:{query.lower()}:{limit}:"
+        f"{year_from or ''}:{year_to or ''}:{fields_key}"
+    )
+    cached = cache.get(cache_key, config.graph.cache_ttl)
+    if cached is not None:
+        return cached
+
+    if provider == "openalex":
+        results = _openalex_live(query, limit, year_from, year_to, fields_of_study)
+    else:
+        results = _s2_live(query, limit, year_from, year_to, fields_of_study)
     cache.set(cache_key, results)
     return results
 

@@ -39,7 +39,17 @@
 .detail-meta div {
   margin-bottom: 3px;
 }
+/* The Abstract / TL;DR block: a muted section header (matching the tag / code
+   section heads) over the body text. */
+.detail-summary-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 14px 0 6px;
+}
 .detail-summary {
+  margin: 0;
   font-size: 14px;
   line-height: 1.55;
   color: var(--text);

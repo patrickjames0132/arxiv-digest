@@ -18,6 +18,9 @@ import './detail.css'
 export interface DetailPanelProps {
   /** The selected node, already merged with any hydrated detail fields. */
   node: VNode
+  /** Heading for the provider field-of-study tag section ("Semantic Scholar
+   *  tags" / "OpenAlex tags"), naming who classified the paper. */
+  fieldsLabel: string
   /** The node's figures, once fetched (undefined while not yet requested). */
   figures?: FiguresResponse
   /** The figure fetch for THIS node is still in flight. */
@@ -78,19 +81,21 @@ function CodeRow({
 /**
  * A paper's category tags, split into **provider-labeled sections** so it's
  * clear who tagged what: an **arXiv tags** section (its own `cs.LG` →
- * "Machine Learning" categories) and a **Semantic Scholar tags** section
- * (S2's coarser field-of-study classification, e.g. "Computer Science").
- * Each section renders only when it has tags — a non-arXiv paper shows the
- * S2 section alone.
+ * "Machine Learning" categories) and a **provider tags** section — the graph
+ * provider's own field classification (S2's coarse fields of study, e.g.
+ * "Computer Science", or OpenAlex's finer topic labels). Each section renders
+ * only when it has tags — a non-arXiv paper shows the provider section alone.
  *
  * @returns The rendered tag sections, or null when there are no tags at all.
  */
 function CategoryTags({
   categories,
   fieldsOfStudy,
+  fieldsLabel,
 }: {
   categories?: CategoriesResponse
   fieldsOfStudy: string[]
+  fieldsLabel: string
 }) {
   const arxivCats = categories?.available ? categories.categories : []
   if (arxivCats.length === 0 && fieldsOfStudy.length === 0) return null
@@ -110,7 +115,7 @@ function CategoryTags({
       )}
       {fieldsOfStudy.length > 0 && (
         <div className="detail-cat-group">
-          <div className="detail-cat-head">Semantic Scholar tags</div>
+          <div className="detail-cat-head">{fieldsLabel}</div>
           <div className="detail-cats">
             {fieldsOfStudy.map((field) => (
               <span key={field} className="detail-cat s2">
@@ -186,6 +191,7 @@ function CodeSection({ code }: { code: CodeLinksResponse }) {
  */
 export default function DetailPanel({
   node,
+  fieldsLabel,
   figures,
   figuresLoading,
   codeLinks,
@@ -235,18 +241,18 @@ export default function DetailPanel({
           citations
         </div>
       </div>
-      <CategoryTags categories={categories} fieldsOfStudy={node.fields_of_study ?? []} />
+      <CategoryTags
+        categories={categories}
+        fieldsOfStudy={node.fields_of_study ?? []}
+        fieldsLabel={fieldsLabel}
+      />
       {(node.tldr || node.abstract) && (
-        <p className="detail-summary">
-          {node.tldr ? (
-            <>
-              <strong>TL;DR </strong>
-              <MathText>{node.tldr}</MathText>
-            </>
-          ) : (
-            <MathText>{node.abstract}</MathText>
-          )}
-        </p>
+        <div className="detail-summary-group">
+          <div className="detail-summary-head">{node.tldr ? 'TL;DR' : 'Abstract'}</div>
+          <p className="detail-summary">
+            <MathText>{node.tldr || node.abstract || ''}</MathText>
+          </p>
+        </div>
       )}
       <div className="detail-actions">
         {node.url && (

@@ -30,6 +30,69 @@ def test_bare_openalex_id_from_url():
     assert nodes.bare_openalex_id(None) is None
 
 
+def _arxiv_work(**overrides) -> dict:
+    """A raw OpenAlex work carrying an arXiv location (so arxiv_id resolves)."""
+    return {
+        "id": "https://openalex.org/W1",
+        "doi": "https://doi.org/10/x",
+        "title": "T",
+        "authorships": [],
+        "locations": [
+            {
+                "landing_page_url": "https://arxiv.org/abs/1706.03762",
+                "source": {"display_name": "arXiv"},
+            }
+        ],
+        **overrides,
+    }
+
+
+def test_arxiv_date_parses_only_new_format_ids():
+    assert nodes._arxiv_date("1706.03762") == (2017, 6)
+    assert nodes._arxiv_date("2412.00001") == (2024, 12)
+    assert nodes._arxiv_date("hep-th/9901001") is None  # old-format → OpenAlex's date
+    assert nodes._arxiv_date("1799.00001") is None  # month 99 invalid
+    assert nodes._arxiv_date(None) is None
+
+
+def test_node_prefers_arxiv_date_when_openalex_year_disagrees():
+    """OpenAlex's misdated year (AIAYN → 2025) is corrected from the new-format
+    arXiv id's encoded year+month."""
+    node = nodes.node(_arxiv_work(publication_year=2025, publication_date="2025-08-23"))
+    assert node["year"] == 2017 and node["month"] == 6 and node["pub_date"] == "2017-06"
+
+
+def test_node_keeps_openalex_date_when_year_matches():
+    """When the arXiv year agrees with OpenAlex's, keep OpenAlex's fuller date."""
+    node = nodes.node(_arxiv_work(publication_year=2017, publication_date="2017-06-12"))
+    assert node["year"] == 2017 and node["pub_date"] == "2017-06-12"  # day preserved
+
+
+def test_fields_of_study_from_topics_deduped_and_capped():
+    """OpenAlex topics become the node's field tags: deduped, order-preserving,
+    capped at _MAX_TOPICS. Absent topics (light neighbor nodes) → []."""
+    work = {
+        "id": "https://openalex.org/W1",
+        "doi": "https://doi.org/10/x",
+        "title": "T",
+        "topics": [
+            {"display_name": "Machine Learning"},
+            {"display_name": "Machine Learning"},  # dupe dropped
+            {"display_name": "Reinforcement Learning"},
+            *[{"display_name": f"Topic {index}"} for index in range(10)],  # over the cap
+        ],
+        "authorships": [],
+        "locations": [],
+    }
+    node = nodes.node(work)
+    assert node is not None
+    assert node["fields_of_study"][:2] == ["Machine Learning", "Reinforcement Learning"]
+    assert len(node["fields_of_study"]) == nodes._MAX_TOPICS  # capped
+    # A work without topics (a neighbor traversal) carries no field tags.
+    assert nodes.node({"id": "https://openalex.org/W2", "doi": "https://doi.org/10/y",
+                       "title": "N", "authorships": [], "locations": []})["fields_of_study"] == []
+
+
 def test_arxiv_id_from_locations_landing_url():
     work = {
         "locations": [

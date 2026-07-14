@@ -8,7 +8,7 @@
  * rate-limited).
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { EMPTY_FILTERS, searchLive, searchLocal } from '../api'
 import type { GraphNode, LocalHit, SearchFilters } from '../api'
 import { useAppSelector } from '../store'
@@ -53,6 +53,14 @@ export function useSeedSearch(onError: (message: string | null) => void): SeedSe
   const [liveFailed, setLiveFailed] = useState(false)
   const [searching, setSearching] = useState(false)
 
+  // The field filter's values are provider-specific (S2 field names vs OpenAlex
+  // field ids), so drop them when the provider changes — keep the year window,
+  // which is provider-agnostic. A stale S2 field would otherwise show a nameless
+  // chip and be silently ignored by the OpenAlex path.
+  useEffect(() => {
+    setFilters((prev) => (prev.fields.length ? { ...prev, fields: [] } : prev))
+  }, [provider])
+
   const clearHits = useCallback(() => {
     setHits(null)
     setLocalHits(null)
@@ -77,7 +85,7 @@ export function useSeedSearch(onError: (message: string | null) => void): SeedSe
       const localPromise = searchLocal(text, 10, filters, provider)
       localPromise.then((local) => setLocalHits(local.length ? local : null))
       try {
-        const res = await searchLive(text, 12, filters)
+        const res = await searchLive(text, 12, filters, provider)
         setHits(res.papers)
         if (res.papers.length === 0 && (await localPromise).length === 0)
           onError(`Nothing matched "${text}" — not on Semantic Scholar, not in your cache.`)

@@ -55,9 +55,11 @@ function applyFilters(params: URLSearchParams, filters?: SearchFilters): void {
  * expands free-text queries through the query analyst before the lexical
  * search runs.
  *
- * @param q       The search query.
- * @param limit   Maximum hits to return (default 25).
- * @param filters Optional date/field filters (see {@link SearchFilters}).
+ * @param q        The search query.
+ * @param limit    Maximum hits to return (default 25).
+ * @param filters  Optional date/field filters (see {@link SearchFilters}).
+ * @param provider Which backend to search ('s2' / 'openalex') — matches the
+ *                 graph provider so a hit explores under the backend that found it.
  * @returns The echoed query plus its hits, best matches first.
  * @throws When the request fails — seed search has no graceful fallback; the
  *         caller surfaces the error in the search UI.
@@ -66,8 +68,9 @@ export async function searchLive(
   q: string,
   limit = 25,
   filters?: SearchFilters,
+  provider: Provider = 's2',
 ): Promise<LiveSearchResponse> {
-  const params = new URLSearchParams({ q, limit: String(limit) })
+  const params = new URLSearchParams({ q, limit: String(limit), provider })
   applyFilters(params, filters)
   const res = await fetch(`/api/search?${params.toString()}`)
   if (!res.ok) throw new Error(`Search failed (${res.status})`)
@@ -129,25 +132,31 @@ export async function searchLocal(
   }
 }
 
+/** One field-of-study option for the search filter picker: `id` is the filter
+ *  value sent to the backend, `name` the label shown. For S2 the id is the field
+ *  name itself; for OpenAlex it's the numeric field id (`topics.field.id`). */
+export interface Field {
+  id: string
+  name: string
+}
+
 /**
- * Fetch S2's fields of study (`/api/taxonomy/s2`) for the search filter's
- * field picker — ~20 coarse subjects like "Computer Science".
+ * Fetch the selected provider's field vocabulary (`/api/taxonomy/<provider>`)
+ * for the search filter's field picker — S2's ~20 fields of study or OpenAlex's
+ * 26 top-level fields. Both come back as `{id, name}` pairs, so the picker is
+ * provider-agnostic (show `name`, send `id`).
  *
  * Never throws — failures degrade to an empty list, which simply renders the
- * picker without options. (The backend also serves the ~155 arXiv categories
- * at `/api/taxonomy/arxiv` — still no client function for it: the
- * detail-panel category-tags feature that was the planned consumer landed
- * server-labelled instead, via `graph.ts`'s `fetchCategories`, so the full
- * taxonomy still has no frontend caller. Reserved for an arXiv-category
- * search filter, mirroring this one, if that ever lands.)
+ * picker without options.
  *
- * @returns The field names (empty on any failure).
+ * @param provider Which backend's vocabulary to fetch ('s2' / 'openalex').
+ * @returns The field options (empty on any failure).
  */
-export async function getFields(): Promise<string[]> {
+export async function getFields(provider: Provider): Promise<Field[]> {
   try {
-    const res = await fetch('/api/taxonomy/s2')
+    const res = await fetch(`/api/taxonomy/${provider}`)
     if (!res.ok) return []
-    return ((await res.json()) as { fields: string[] }).fields ?? []
+    return ((await res.json()) as { fields: Field[] }).fields ?? []
   } catch {
     return []
   }

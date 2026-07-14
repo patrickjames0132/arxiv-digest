@@ -94,20 +94,22 @@ window at all), each robust to the Jan-1 default by construction.
 client.py     — talks to OpenAlex over HTTP: URL+credential building, throttle,
      ↓          429/5xx retries, the OpenAlexError type
 nodes.py      — translates a raw OpenAlex "work" into the app's node shape
-     ↓                (id, title, abstract, year, citation count, url, ...)
-traversal.py  — resolve_seed_work / resolve_work (seed → OpenAlex work),
-                references (cited_by:), citation_relations / citations (cites:)
+     ↓                (id, title, abstract, year, citation count, topic tags, ...)
+traversal.py  — resolve_seed_work / resolve_work (seed → work), get_paper (detail
+     ↓          hydration), references (cited_by:), citation_relations/citations (cites:)
+search.py     — search_papers: free-text relevance search (ungrounded seed discovery)
+vocab.py      — the 26 top-level OpenAlex fields (id + name), for the search filter
 ```
 
 Mirrors `semantic_scholar/`'s package split by concern. `__init__.py` re-exports
-the public API (`OpenAlexError`, `resolve_seed_work`, `resolve_work`,
-`bare_work_id`, `references`, `citation_relations`, `citations`,
+the public API (`OpenAlexError`, `resolve_seed_work`, `resolve_work`, `get_paper`,
+`bare_work_id`, `references`, `citation_relations`, `citations`, `search_papers`,
 `landmark_max_year`, `node`, `bare_openalex_id`) so callers read
 `from ..integrations import openalex; openalex.references(...)`.
 
-## Standing alone as a provider (v5.0.0)
+## Standing alone as a provider (v5.0.0 graph, v5.1.0 search + detail)
 
-The v5.0.0 provider split needed OpenAlex to own three things per graph:
+Selecting OpenAlex makes it own the *entire* provider surface:
 
 1. **Seed resolve + hydrate** — `resolve_seed_work(seed_ref)` accepts every id
    form a seed arrives as: a bare **arXiv id** (a fresh search) or one of the
@@ -117,37 +119,53 @@ The v5.0.0 provider split needed OpenAlex to own three things per graph:
    requesting `DETAIL_SELECT` so the seed carries its abstract. Its **known
    limit**, no longer masked by the hybrid: a famous *published* paper resolves
    cheapest-first through the arXiv-minted DOI to its **preprint** record, which
-   is lower-cited than the canonical version — so an OpenAlex-built seed reads the
-   preprint's count. A canonical-record heuristic is deferred (see
-   `docs/citation-coverage.md`).
+   is lower-cited than the canonical version. A canonical-record heuristic is
+   deferred (see `docs/citation-coverage.md`).
 2. **References** — `references(work_id, limit)` is a `cited_by:<work_id>` filter
-   (the seed's outbound bibliography), server-sorted by `cited_by_count:desc`. No
-   local over-fetch-and-rank is needed (unlike the S2 path, whose endpoint has no
-   `sort`).
-3. **Citations** — `citation_relations` / `citations`, unchanged from v4.0.0
-   (above).
+   (the seed's outbound bibliography), server-sorted by `cited_by_count:desc`.
+3. **Citations** — `citation_relations` / `citations`, unchanged from v4.0.0.
+4. **Seed search** *(v5.1.0)* — `search_papers(query, limit, year_from, year_to,
+   fields)` (in `search.py`) runs OpenAlex's `search=` relevance query over title
+   + abstract + fulltext, with a year window (`from/to_publication_date`) and an
+   optional field filter (`topics.field.id:fields/<id>`, OR-joined). The field
+   ids come from `vocab.py` — OpenAlex's own 26 top-level fields, a *different*
+   vocabulary from S2's field-of-study names (the search filter picker fetches
+   the right one per provider). Used by `services/search` when OpenAlex is
+   selected.
+5. **Detail hydration** *(v5.1.0)* — `get_paper(ref)` fills a clicked node's
+   detail panel from OpenAlex: it resolves the ref to a work (via
+   `resolve_seed_work`, `DETAIL_SELECT`) and returns a node with its abstract and
+   **topic tags** (`fields_of_study`, from the work's `topics`). No TL;DR
+   (OpenAlex has none — the panel shows the abstract).
 
-There is **no Similar relation** — it was retired from the graph build in
-v5.0.0, and OpenAlex's `related_works` (concept/citation overlap, weaker than
-embeddings) is a possible future addition, not built.
+There is **no Similar relation** — retired from the graph build in v5.0.0, and
+OpenAlex's `related_works` (concept/citation overlap, weaker than embeddings) is
+a possible future addition, not built.
 
 ## Node identity — why OpenAlex nodes use S2-resolvable ids
 
-Even in an OpenAlex-only graph, the **detail panel still hydrates through S2** in
-this phase (`/api/paper/<id>` → `s2.get_paper`), so an OpenAlex node must be
-addressable by an id S2 understands. `nodes.node()` sets each node's `id` to an
-S2-resolvable form, in priority order:
+`nodes.node()` sets each node's `id` to an S2-resolvable form, in priority order:
 
 1. `DOI:<doi>` — nearly every landmark citer has a DOI (universal, cross-field).
 2. `ARXIV:<id>` — when the work is on arXiv but has no DOI.
-3. bare OpenAlex `W…` — last resort (rare; re-seed/hydration degrade for these).
+3. bare OpenAlex `W…` — last resort (rare).
 
-So clicking an OpenAlex citer hits `/api/paper/DOI:…` → `s2.get_paper` → S2
-returns the abstract *and* TL;DR OpenAlex itself can't supply. (`arxiv_id` is also
-filled from the work's arXiv location so arXiv links/figures still work.) The same
-id also lets `build.py` dedupe an OpenAlex **duplicate work** (OpenAlex sometimes
-holds two works for one paper — verified live: two QMIX works) into a single node
-via its shared arXiv id.
+Two reasons this id scheme still matters even though detail now hydrates via
+OpenAlex:
+
+- **Re-seed + detail resolve through it.** `get_paper`/`resolve_seed_work` resolve
+  a `DOI:`/`W…` id via the free entity path (reliable) and an `ARXIV:` id via the
+  arXiv-DOI path. So detail hydration and re-seeding pass the **node id** — *not*
+  the bare `arxiv_id`, which can miss (a published paper's canonical OA record
+  isn't aliased to the arXiv-minted DOI; the frontend's `useSelection` sends the
+  node id under OpenAlex for exactly this reason).
+- **Dedupe.** The shared `arxiv_id` lets `build.py` collapse an OpenAlex
+  **duplicate work** (OpenAlex sometimes holds two works for one paper — verified
+  live: two QMIX works) into one node.
+
+(`arxiv_id` is filled from the work's arXiv location so arXiv links/figures still
+work.) An S2-built graph is unaffected — its nodes are S2 paperIds and hydrate via
+S2.
 
 ## `resolve_work` — arXiv resolution is awkward, so it tries cheapest-first
 
@@ -190,14 +208,20 @@ generous limits are why it's the more rate-limit-resilient provider of the two.)
   then pulls `references` + `citation_relations`. No S2 fallback — under an
   OpenAlex build, an OpenAlex failure surfaces to the route as a 502 (the graph is
   purely one provider).
+- **`services/search/discovery.py`** — `_openalex_live()` (seed search under the
+  OpenAlex provider) calls `search_papers`, with confidently-recalled titles
+  verified via `resolve_work`.
+- **`routes/graph.py`** — `/api/paper/<ref>?provider=openalex` calls `get_paper`
+  to hydrate a clicked node's detail panel.
 
 ## Testing
 
 Mirrors the source: `test_client.py` (credential params, 429/5xx backoff, the
 404-as-data path), `test_nodes.py` (inverted-index abstracts, arXiv-id
-extraction, id priority, shape parity), `test_traversal.py` (arXiv-DOI vs.
-title-search resolution; `resolve_seed_work` across the `W…`/`DOI:`/`ARXIV:`/bare
-forms; `references` via `cited_by:`; the two disjoint sorted citer queries, cursor
-paging, caps, and the `band_start` chooser widening the span vs. `None` keeping the
-fixed one). No network — HTTP is faked at `client.request` (or `urlopen` for the
-client itself).
+extraction, id priority, topic→field-tag mapping, shape parity), `test_traversal.py`
+(arXiv-DOI vs. title-search resolution; `resolve_seed_work` across the
+`W…`/`DOI:`/`ARXIV:`/bare forms; `get_paper` hydration; `references` via
+`cited_by:`; the two disjoint sorted citer queries, cursor paging, caps, and the
+`band_start` chooser), and `test_search.py` (the `search=` relevance query, its
+year-window date filter, unresolvable-work skipping). No network — HTTP is faked
+at `client.request` (or `urlopen` for the client itself).

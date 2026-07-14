@@ -86,6 +86,7 @@ export default function AtlasHeader({
         loadingGraph={loadingGraph}
         filters={filters}
         onFilters={onFilters}
+        provider={provider}
       />
       {seedTitle && (
         <div className="seed-info" title={seedTitle}>

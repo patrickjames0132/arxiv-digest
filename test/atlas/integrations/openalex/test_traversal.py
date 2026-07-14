@@ -351,6 +351,49 @@ def test_resolve_seed_work_by_arxiv_id_and_arxiv_node_id(monkeypatch):
     assert all("10.48550/arXiv.2101.00001" in urllib.parse.unquote(url) for url in calls)
 
 
+def test_resolve_seed_work_falls_back_to_arxiv_title(monkeypatch):
+    """A bare arXiv id that misses the arXiv-DOI path (a published paper's
+    canonical OpenAlex record isn't aliased to it — the AIAYN bug) resolves via
+    the arXiv title → an OpenAlex title search."""
+    def fake_request(url):
+        if "/works/doi:" in url:  # the arXiv-DOI entity lookup misses
+            raise client.OpenAlexError("nope", status=404)
+        params = _query(url)  # the title search
+        assert params["filter"] == "title.search:Attention Is All You Need"
+        return {"results": [_work("W123", doi="10/aiayn", title="Attention Is All You Need")]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    monkeypatch.setattr(traversal.arxiv, "get_title", lambda arxiv_id: "Attention Is All You Need")
+    work = traversal.resolve_seed_work("1706.03762")
+    assert traversal.bare_work_id(work) == "W123"
+
+
+def test_resolve_seed_work_none_when_arxiv_title_also_missing(monkeypatch):
+    """The arXiv-DOI misses AND arXiv has no title → None (no infinite fallback)."""
+    monkeypatch.setattr(
+        client, "request",
+        lambda url: (_ for _ in ()).throw(client.OpenAlexError("nope", status=404)),
+    )
+    monkeypatch.setattr(traversal.arxiv, "get_title", lambda arxiv_id: None)
+    assert traversal.resolve_seed_work("1706.03762") is None
+
+
 def test_resolve_seed_work_blank_is_none():
     assert traversal.resolve_seed_work("") is None
     assert traversal.resolve_seed_work("   ") is None
+
+
+def test_get_paper_hydrates_a_node(monkeypatch):
+    """get_paper resolves a ref to a work and normalizes it to a detail node."""
+    monkeypatch.setattr(client, "request", lambda url: _work("W7", doi="10/x", title="Hi"))
+    node = traversal.get_paper("W7")
+    assert node is not None and node["id"] == "DOI:10/x" and node["title"] == "Hi"
+
+
+def test_get_paper_none_when_unresolvable(monkeypatch):
+    """An unresolvable ref (404) yields None, not an error."""
+    def not_found(url):
+        raise client.OpenAlexError("nope", status=404)
+
+    monkeypatch.setattr(client, "request", not_found)
+    assert traversal.get_paper("W404") is None

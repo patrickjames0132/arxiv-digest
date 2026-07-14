@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { getFields } from '../api'
-import type { SearchFilters } from '../api'
+import type { Field, Provider, SearchFilters } from '../api'
 import './search.css'
 
 /** Props for {@link Search}. */
@@ -29,6 +29,9 @@ export interface SearchProps {
   /** The active filters (all optional; empty = search everything). */
   filters: SearchFilters
   onFilters: (next: SearchFilters) => void
+  /** The selected provider — the field picker fetches its vocabulary and the
+   *  filter values (field ids) are provider-specific. */
+  provider: Provider
 }
 
 /**
@@ -134,36 +137,42 @@ export default function Search({
   loadingGraph,
   filters,
   onFilters,
+  provider,
 }: SearchProps) {
   const [open, setOpen] = useState(false)
-  // The field vocabulary loads lazily the first time the filter popover
-  // opens, so the common no-filter path never pays the fetch. null = not
-  // yet loaded.
-  const [fieldOptions, setFieldOptions] = useState<string[] | null>(null)
+  // The field vocabulary loads lazily the first time the filter popover opens,
+  // so the common no-filter path never pays the fetch. null = not yet loaded.
+  const [fieldOptions, setFieldOptions] = useState<Field[] | null>(null)
+  // Each provider has its own field vocabulary — drop the cached options when
+  // the provider changes so the next open refetches the right one.
   useEffect(() => {
-    if (open && fieldOptions === null) getFields().then(setFieldOptions)
-  }, [open, fieldOptions])
+    setFieldOptions(null)
+  }, [provider])
+  useEffect(() => {
+    if (open && fieldOptions === null) getFields(provider).then(setFieldOptions)
+  }, [open, fieldOptions, provider])
 
   const activeCount =
     (filters.yearFrom != null ? 1 : 0) + (filters.yearTo != null ? 1 : 0) + filters.fields.length
 
   /**
-   * Add a field of study to the filter (deduped).
+   * Add a field to the filter (deduped).
    *
-   * @param field The field-of-study name to add.
+   * @param fieldId The provider field id to add (an S2 field name / an OpenAlex
+   *                numeric field id).
    */
-  const addField = (field: string) => {
-    if (!field || filters.fields.includes(field)) return
-    onFilters({ ...filters, fields: [...filters.fields, field] })
+  const addField = (fieldId: string) => {
+    if (!fieldId || filters.fields.includes(fieldId)) return
+    onFilters({ ...filters, fields: [...filters.fields, fieldId] })
   }
 
   /**
-   * Remove one field of study from the filter.
+   * Remove one field from the filter.
    *
-   * @param field The field-of-study name to drop.
+   * @param fieldId The field id to drop.
    */
-  const removeField = (field: string) => {
-    onFilters({ ...filters, fields: filters.fields.filter((other) => other !== field) })
+  const removeField = (fieldId: string) => {
+    onFilters({ ...filters, fields: filters.fields.filter((other) => other !== fieldId) })
   }
 
   return (
@@ -207,22 +216,22 @@ export default function Search({
             >
               <option value="">{fieldOptions === null ? 'Loading fields…' : 'Add a field…'}</option>
               {fieldOptions?.map((field) => (
-                <option key={field} value={field}>
-                  {field}
+                <option key={field.id} value={field.id}>
+                  {field.name}
                 </option>
               ))}
             </select>
           </div>
           {filters.fields.length > 0 && (
             <div className="filter-cats">
-              {filters.fields.map((field) => (
+              {filters.fields.map((fieldId) => (
                 <button
-                  key={field}
+                  key={fieldId}
                   className="cat-chip"
-                  onClick={() => removeField(field)}
+                  onClick={() => removeField(fieldId)}
                   title="Remove this field filter"
                 >
-                  {field} ✕
+                  {fieldOptions?.find((field) => field.id === fieldId)?.name ?? fieldId} ✕
                 </button>
               ))}
             </div>
