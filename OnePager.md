@@ -1481,6 +1481,23 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [ ] **Rename the "Sources" button to "Library"** — relabel the top-bar
+      **📚 Sources** toggle to **📚 Library** (user-facing copy only). Note the
+      tension to resolve: the feature was **deliberately named `sources`** in code
+      (`SourcesConfig`, `/api/sources`, the Sources drawer) to avoid the
+      "library" ambiguity with Python packages — so decide whether this is a
+      button-label-only change (cheapest, but "Library" button opens a "Sources"
+      drawer) or a fuller copy pass. Backend/route names stay. *(From the
+      `todos.md` inbox, 2026-07-14.)*
+- [ ] **One fast "unhighlight everything" action** — clearing what's lit on the
+      graph is currently piecemeal: the hand-picked selection has its own Clear,
+      and a lit lecture beat / chat answer / inline `[n]` ref clears by clicking
+      it again. Add a single fast gesture (an **Esc** key and/or one visible
+      Clear) that drops **any** active highlight or selection at once — regardless
+      of whether it came from a marquee/drag pick or from clicking a
+      bubble/chapter/ref in the lecturer/researcher. Unifies `highlightSet` +
+      `nodeSelectionCleared` + the panel's active-beat/chat/ref state behind one
+      reset. *(From the `todos.md` inbox, 2026-07-14.)*
 - [ ] **Thicker dashed ring for "Discovered by teacher" nodes** — the dashed
       "discovered" ring on agent-pulled nodes is hard to see; thicken it (and/or
       up the contrast) so a discovery reads at a glance. *(From the `todos.md`
