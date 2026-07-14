@@ -146,6 +146,26 @@ def test_paper_prefixes_arxiv_ids_but_not_raw_paperids(client, monkeypatch):
     ]
 
 
+def test_paper_hydrates_from_openalex_when_provider_is_openalex(client, monkeypatch):
+    """Under provider=openalex the detail route hydrates via openalex.get_paper
+    (by the node id, not an ARXIV: prefix), not S2."""
+    seen = {}
+
+    def fake_oa_get(ref):
+        seen["ref"] = ref
+        return {"id": ref, "title": "From OpenAlex", "fields_of_study": ["Topic Modeling"]}
+
+    def s2_forbidden(ref):
+        raise AssertionError("S2 must not be called under the OpenAlex provider")
+
+    monkeypatch.setattr(graph_routes.openalex, "get_paper", fake_oa_get)
+    monkeypatch.setattr(graph_routes.semantic_scholar, "get_paper", s2_forbidden)
+    response = client.get("/api/paper/DOI:10.65/abc?provider=openalex")
+    assert response.status_code == 200
+    assert seen["ref"] == "DOI:10.65/abc"  # node id passed through untouched
+    assert response.json["title"] == "From OpenAlex"
+
+
 def test_figures_rewrites_images_to_the_proxy_and_degrades(client, monkeypatch):
     figures = {"available": True, "figures": [{"image": "https://ar5iv.org/f1.png", "caption": "c"}]}
     monkeypatch.setattr(graph_routes.arxiv, "get_figures", lambda ref: figures)

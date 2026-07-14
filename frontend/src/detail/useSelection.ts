@@ -13,6 +13,7 @@ import type {
   FiguresResponse,
   GraphNode,
   GraphResponse,
+  Provider,
 } from '../api'
 import type { Base, VNode } from '../graph/model'
 
@@ -22,6 +23,9 @@ export interface UseSelectionArgs {
   base: Base | null
   /** The loaded graph — selection resets to its seed whenever it changes. */
   graph: GraphResponse | null
+  /** The active provider — detail hydration comes from the backend the graph
+   *  was built with. */
+  provider: Provider
   /** Re-seed the whole graph on a paper (fired by a quick double-click). */
   loadGraph: (seed: string) => void
 }
@@ -55,7 +59,7 @@ export interface SelectionApi {
  *
  * @returns The selection state + handlers (see {@link SelectionApi}).
  */
-export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): SelectionApi {
+export function useSelection({ base, graph, provider, loadGraph }: UseSelectionArgs): SelectionApi {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, Partial<GraphNode>>>({})
   // Figures (ar5iv) per arXiv id, lazily fetched when a node is opened.
@@ -84,7 +88,14 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
     if (!base || !selectedId) return null
     const node = base.nodes.find((candidate) => candidate.id === selectedId)
     if (!node) return null
-    return details[selectedId] ? ({ ...node, ...details[selectedId] } as VNode) : node
+    const detail = details[selectedId]
+    if (!detail) return node
+    // Preserve a known arxiv_id through hydration. Under OpenAlex, hydrating the
+    // exact record by its DOI can return arxiv_id: null (a published-only OA
+    // record carries no arXiv location, even when the paper is on arXiv) — don't
+    // let that null out the id the graph build already extracted, or the arXiv
+    // category tags (fetched by arxiv_id) would vanish for a paper that has one.
+    return { ...node, ...detail, arxiv_id: detail.arxiv_id ?? node.arxiv_id } as VNode
   }, [base, selectedId, details])
 
   // Lazily fetch the selected paper's figures (ar5iv) the first time it's
@@ -131,17 +142,20 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
       }
       lastClick.current = { id: node.id, time: now }
       setSelectedId(node.id)
-      // Neighbor nodes arrive summary-light — hydrate the panel on first open.
-      // By arXiv id when there is one, else the raw S2 paperId: journal papers
-      // hydrate too (the old code's arxiv_id gate left them abstract-less,
-      // the client half of the hydration bug fixed server-side in Phase 5).
+      // Neighbor nodes arrive summary-light — hydrate the panel on first open,
+      // from the same backend the graph was built with. Under S2, hydrate by
+      // arXiv id when there is one (else the paperId) — S2 resolves both. Under
+      // OpenAlex, hydrate by the node id (the reliable DOI:/W… form): a bare
+      // arXiv id can miss (a published paper's canonical OA record isn't aliased
+      // to the arXiv-minted DOI), but the node's own id always resolves.
+      const detailRef = provider === 'openalex' ? node.id : (node.arxiv_id ?? node.id)
       if (!node.tldr && !node.abstract && !details[node.id]) {
-        fetchPaperDetail(node.arxiv_id ?? node.id)
+        fetchPaperDetail(detailRef, provider)
           .then((full) => setDetails((prev) => ({ ...prev, [node.id]: full })))
           .catch(() => {})
       }
     },
-    [details, loadGraph],
+    [details, provider, loadGraph],
   )
 
   return {

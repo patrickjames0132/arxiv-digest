@@ -135,17 +135,16 @@ it's arXiv-specific, the same reason `ID_RE` and ar5iv do — each provider owns
 its own controlled vocabulary. Semantic Scholar's parallel (coarser) one is
 `semantic_scholar.vocab`.
 
-- **`vocab.groups()`** — the areas-with-categories tree, for the seed-search
-  filter picker (`/api/taxonomy/arxiv`).
-- **`vocab.valid_codes()`** — an `@lru_cache`'d `frozenset` of every code, for
-  validating a submitted filter.
 - **`vocab.name_for(code)`** — the code → display-name lookup
   (`cs.LG` → "Machine Learning"), for labelling a paper's *own* tags. Returns
   `None` for a code arXiv has since retired/renamed out of the taxonomy;
   `categories.get_categories()` falls back to the bare code rather than
-  dropping it.
-- All three read a private `@lru_cache`'d `_data()` that parses
+  dropping it. Reads a private `@lru_cache`'d `_data()` that parses
   `taxonomy.json` once.
+
+  (The `groups()` area-tree and `valid_codes()` accessors were removed in
+  v5.1.0 — they fed the retired arXiv-category *search filter* and its
+  `/api/taxonomy/arxiv` endpoint; only per-paper tag labelling remains.)
 
 `vocab` only answers "what categories exist" and "what's this code called" —
 it has no idea what any *specific paper* is tagged with. That's

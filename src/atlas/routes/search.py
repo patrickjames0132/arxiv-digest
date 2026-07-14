@@ -1,12 +1,12 @@
-"""Seed-search routes: a live relevance search across Semantic Scholar (with
+"""Seed-search routes: a live relevance search across the selected provider (with
 optional date/field filters), an instant search over the local snapshot
-cache, and the subject vocabularies that power the search filter pickers.
+cache, and the field vocabularies that power the search filter picker.
 
-GET /api/search?q=&limit=&year_from=&year_to=&fields=
-                                 -> live seed search across Semantic Scholar
-GET /api/local_search?q=&limit=&year_from=&year_to=
+GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=
+                                 -> live seed search (s2 / openalex)
+GET /api/local_search?q=&provider=&limit=&year_from=&year_to=
                                  -> instant seed search over the local cache
-GET /api/taxonomy/<provider>     -> a provider's subject vocabulary
+GET /api/taxonomy/<provider>     -> a provider's field vocabulary (s2 / openalex)
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from __future__ import annotations
 from flask import Blueprint, Response, current_app, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from ..integrations import arxiv, semantic_scholar
+from ..integrations import openalex, semantic_scholar
 from ..services import search as search_service
 from ..services.graph import resolve_provider
 
@@ -41,18 +41,28 @@ def _opt_year(name: str) -> int | None:
         return None
 
 
-def _opt_fields() -> list[str] | None:
-    """Parse and validate the optional ``fields`` query arg.
+def _opt_fields(provider: str) -> list[str] | None:
+    """Parse and validate the optional ``fields`` query arg for a provider.
+
+    The field-filter values are provider-specific: S2 fields are their own
+    names, OpenAlex fields are numeric ids (``topics.field.id``). Each is
+    validated against that provider's vocabulary; unknown values are silently
+    dropped (they can only come from a stale/forged client — e.g. S2 field names
+    left over after switching to OpenAlex).
+
+    Args:
+        provider: ``s2`` or ``openalex`` — which vocabulary to validate against.
 
     Returns:
-        The comma-separated S2 fields of study that exist in the S2
-        vocabulary (unknown values are silently dropped — they can only come
-        from a stale/forged client), or None when none survive.
+        The surviving field values, or None when none survive.
     """
     raw = (request.args.get("fields") or "").strip()
     if not raw:
         return None
-    valid = semantic_scholar.vocab.valid_fields()
+    if provider == "openalex":
+        valid: frozenset[str] = openalex.vocab.valid_field_ids()
+    else:
+        valid = semantic_scholar.vocab.valid_fields()
     fields = [field.strip() for field in raw.split(",") if field.strip() in valid]
     return fields or None
 
@@ -65,18 +75,21 @@ def api_search() -> ResponseReturnValue:
         q: Keywords, a title, an author, or an arXiv id/URL (a pasted id
             resolves to exactly that paper; filters don't apply to it).
             Blank returns an empty result rather than an error.
+        provider: ``s2`` or ``openalex`` — which backend to search (matches the
+            graph provider; defaults to ``config.graph.default_provider``).
         limit: Maximum papers (default 25, clamped to 1–100).
         year_from: Earliest publication year (inclusive; optional).
         year_to: Latest publication year (inclusive; optional).
-        fields: Comma-separated S2 fields of study (optional; a paper
-            matches when it carries any of them).
+        fields: Comma-separated S2 fields of study (optional; a paper matches
+            when it carries any of them). Applied only on the S2 path.
 
     Returns:
-        JSON ``{q, count, papers}`` on success (papers are S2 node dicts —
-        the same shape as graph nodes); ``{error}`` with HTTP 502 when
-        Semantic Scholar is unavailable. Saves nothing.
+        JSON ``{q, count, papers}`` on success (papers are node dicts — the
+        same shape as graph nodes); ``{error}`` with HTTP 502 when the provider
+        is unavailable. Saves nothing.
     """
     query = (request.args.get("q") or "").strip()
+    provider = resolve_provider(request.args.get("provider"))
     try:
         limit = max(1, min(int(request.args.get("limit", "25")), 100))
     except ValueError:
@@ -89,11 +102,13 @@ def api_search() -> ResponseReturnValue:
             limit=limit,
             year_from=_opt_year("year_from"),
             year_to=_opt_year("year_to"),
-            fields_of_study=_opt_fields(),
+            fields_of_study=_opt_fields(provider),
+            provider=provider,
         )
-    except semantic_scholar.S2Error as exc:
-        current_app.logger.warning("live search failed for %r: %s", query, exc)
-        return jsonify({"error": "Semantic Scholar is unavailable — try again."}), 502
+    except (semantic_scholar.S2Error, openalex.OpenAlexError) as exc:
+        name = "OpenAlex" if provider == "openalex" else "Semantic Scholar"
+        current_app.logger.warning("live search failed for %r (%s): %s", query, provider, exc)
+        return jsonify({"error": f"{name} is unavailable — try again."}), 502
     return jsonify({"q": query, "count": len(papers), "papers": papers})
 
 
@@ -143,21 +158,26 @@ def local_search_route() -> Response:
 
 @bp.get("/api/taxonomy/<provider>")
 def api_taxonomy(provider: str) -> ResponseReturnValue:
-    """A provider's subject vocabulary, for the search filter pickers.
+    """A search provider's field vocabulary, for the seed-search filter picker.
 
-    Each provider returns its natural shape rather than a forced common
-    envelope — the pickers they feed are different controls.
+    Both graph providers return the **same** shape — ``{"fields": [{id, name}]}``
+    — so the frontend picker is provider-agnostic: it shows ``name`` and sends
+    ``id`` as the filter value. For S2 the id *is* the field name (S2 filters on
+    the name itself); for OpenAlex the id is the numeric field id
+    (``topics.field.id``) and the name its label.
 
     Args:
-        provider: ``s2`` (the ~20 fields of study filtering live search) or
-            ``arxiv`` (the ~155 arXiv categories, grouped by area).
+        provider: ``s2`` (the ~20 fields of study) or ``openalex`` (the 26
+            top-level fields).
 
     Returns:
-        ``{"fields": [...]}`` for s2; ``{"groups": [{group, categories}]}``
-        for arxiv; ``{error}`` with HTTP 404 for an unknown provider.
+        ``{"fields": [{"id": ..., "name": ...}]}``; ``{error}`` with HTTP 404
+        for an unknown provider.
     """
     if provider == "s2":
-        return jsonify({"fields": semantic_scholar.vocab.fields()})
-    if provider == "arxiv":
-        return jsonify({"groups": arxiv.vocab.groups()})
+        return jsonify(
+            {"fields": [{"id": name, "name": name} for name in semantic_scholar.vocab.fields()]}
+        )
+    if provider == "openalex":
+        return jsonify({"fields": openalex.vocab.fields()})
     return jsonify({"error": f"unknown taxonomy provider {provider!r}"}), 404

@@ -31,6 +31,7 @@ import re
 from typing import Callable
 
 from ...config import config
+from .. import arxiv
 from . import client, nodes
 
 log = logging.getLogger(__name__)
@@ -158,12 +159,14 @@ def resolve_seed_work(seed_ref: str) -> dict | None:
     carries its abstract — the seed node is grounding context, unlike the light
     neighbor traversals.
 
-    Known limit (the spike's resolution friction, now unmasked): a bare arXiv id
-    resolves cheapest-first through the arXiv-minted DOI, which lands on the
-    **preprint** record — for a paper with a separate published version of
-    record, that stub is lower-cited than the canonical record. The old hybrid
-    hid this behind S2's seed count; an OpenAlex-only build reads the preprint's
-    count. A canonical-record heuristic is deferred (see docs/citation-coverage.md).
+    Resolution friction (the spike's, handled here): a bare arXiv id resolves
+    cheapest-first through the arXiv-minted DOI. That misses entirely for a paper
+    whose canonical OpenAlex record is a *published* version not aliased to the
+    arXiv DOI (e.g. "Attention Is All You Need" — ``doi:10.48550/arXiv.1706.03762``
+    is a 404 in OpenAlex). So on that miss we fetch the paper's **title from
+    arXiv** and title-search OpenAlex, which lands the canonical (most-cited)
+    record. If a paper genuinely resolves to its preprint stub instead, its count
+    reads lower than S2's — an accepted OpenAlex-provider tradeoff.
 
     Args:
         seed_ref: A bare arXiv id, ``DOI:…``, ``ARXIV:…``, or a bare ``W…`` id.
@@ -186,7 +189,38 @@ def resolve_seed_work(seed_ref: str) -> dict | None:
         return _try_entity(f"doi:{ref[4:]}", nodes.DETAIL_SELECT)
     # A bare arXiv id, or an ``ARXIV:`` node id → the arXiv-DOI/title path.
     arxiv_id = ref[6:] if ref[:6].upper() == "ARXIV:" else ref
-    return resolve_work(arxiv_id=arxiv_id, title=None, select=nodes.DETAIL_SELECT)
+    work = resolve_work(arxiv_id=arxiv_id, title=None, select=nodes.DETAIL_SELECT)
+    if work:
+        return work
+    # The arXiv-DOI missed (published paper's canonical record not aliased to it).
+    # Fall back to the arXiv title → an OpenAlex title search finds the canonical
+    # record. arXiv is the arXiv id's home, and openalex already depends on it.
+    title = arxiv.get_title(arxiv_id)
+    if title:
+        return resolve_work(arxiv_id=None, title=title, select=nodes.DETAIL_SELECT)
+    return None
+
+
+def get_paper(ref: str) -> dict | None:
+    """Hydrate a single paper's full detail node from OpenAlex.
+
+    The OpenAlex twin of ``s2.get_paper``, used to fill a clicked node's detail
+    panel when the graph was built with the OpenAlex provider. Resolves any ref
+    form (arXiv id / ``DOI:`` / ``ARXIV:`` / ``W…``) via ``resolve_seed_work``
+    (which requests ``DETAIL_SELECT``), so the node carries its abstract and
+    OpenAlex topic tags.
+
+    Args:
+        ref: The paper's arXiv id or an OpenAlex node id.
+
+    Returns:
+        The normalized detail node, or None when OpenAlex can't resolve the ref.
+
+    Raises:
+        client.OpenAlexError: When a non-404 request fails after retries.
+    """
+    work = resolve_seed_work(ref)
+    return nodes.node(work) if work else None
 
 
 def references(work_id: str, limit: int | None) -> list[dict]:

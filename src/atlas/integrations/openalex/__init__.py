@@ -18,13 +18,16 @@ Public API mirrors ``semantic_scholar``'s shape so a caller reads the same:
 
 from __future__ import annotations
 
+from . import vocab
 from .client import OpenAlexError
 from .nodes import bare_openalex_id, node
+from .search import search_papers
 from .traversal import (
     UNBOUNDED_LANDMARK_CAP,
     bare_work_id,
     citation_relations,
     citations,
+    get_paper,
     landmark_max_year,
     references,
     resolve_seed_work,
@@ -38,9 +41,12 @@ __all__ = [
     "bare_work_id",
     "citation_relations",
     "citations",
+    "get_paper",
     "landmark_max_year",
     "node",
     "references",
     "resolve_seed_work",
     "resolve_work",
+    "search_papers",
+    "vocab",
 ]

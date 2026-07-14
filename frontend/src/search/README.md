@@ -13,11 +13,16 @@ search/
 
 ## Design decisions worth knowing
 
+- **Both searches follow the selected provider** (v5.1.0). `searchLive` and
+  `searchLocal` both take the header "Data source" provider from the store, so a
+  hit — and its "instant" badge — reflects the backend that would actually build
+  it. `HitList`'s copy is provider-aware ("Searching **OpenAlex**…" / "From
+  **OpenAlex**"), driven by `PROVIDER_LABEL[provider]` from `Atlas`.
 - **The two searches race on purpose.** `searchLocal` (SQLite cache, no
-  network) resolves near-instantly and renders while `searchLive` (S2) is
-  still in flight — and when S2 is rate-limiting us, the cache is the only
-  search there is. "Nothing matched" is an error only when BOTH come back
-  empty; a live failure with local hits present degrades silently to
+  network) resolves near-instantly and renders while `searchLive` (the provider's
+  live search) is still in flight — and when the provider is rate-limiting us, the
+  cache is the only search there is. "Nothing matched" is an error only when BOTH
+  come back empty; a live failure with local hits present degrades silently to
   cache-only mode (`liveFailed` renders a note, not an error).
 - **Live hits are `GraphNode`s** — the same type as graph neighbors, so the
   meta line shows what matters across venues (date · authors · citations)
@@ -46,9 +51,13 @@ search/
   `services/search/README.md`). The local snapshot search can't serve
   acronym queries ("DQN" appears in no cached *title*), so repeat-query
   caching is what makes the second search immediate.
-- **The field picker lazy-loads.** S2's ~20 fields of study fetch only when
-  the popover first opens — the common no-filter path never pays it. (The
-  old ~155-category arXiv picker with optgroups died with arXiv search.)
+- **The field picker lazy-loads and follows the provider.** The selected
+  provider's field vocabulary (`getFields(provider)` → `/api/taxonomy/<provider>`
+  → `{id, name}[]`) fetches only when the popover first opens; the options are
+  refetched when the provider changes. The picker shows `name` and stores the
+  `id` as the filter value (S2 field name / OpenAlex numeric field id), and
+  switching provider clears the now-incompatible field selection (the year window
+  stays). (The old ~155-category arXiv picker died with arXiv search.)
 - **Filters never apply to a pasted id/URL** (the hint says so) — the
   backend resolves ids directly; the id fast path itself lives in Atlas via
   `graph/model.ts`'s `ID_RE`.

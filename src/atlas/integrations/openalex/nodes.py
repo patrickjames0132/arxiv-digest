@@ -20,6 +20,8 @@ Two OpenAlex-specific translations happen here, both flagged by the spike:
 
 from __future__ import annotations
 
+import re
+
 from ..arxiv import extract_id
 
 # OpenAlex ``select`` field lists — the analogue of S2's three field tiers,
@@ -30,8 +32,13 @@ NEIGHBOR_SELECT = (
     "id,ids,doi,title,display_name,publication_year,publication_date,"
     "cited_by_count,authorships,locations"
 )
-# Detail adds the inverted-index abstract (heavy — only for a focused node).
-DETAIL_SELECT = NEIGHBOR_SELECT + ",abstract_inverted_index"
+# Detail adds the inverted-index abstract and the topic classification (both
+# heavy — only for a focused node: the seed or a clicked detail panel).
+DETAIL_SELECT = NEIGHBOR_SELECT + ",abstract_inverted_index,topics"
+
+# How many topic labels to surface as a paper's field tags (topics come
+# score-ranked, so this keeps the most salient few).
+_MAX_TOPICS = 6
 
 
 def bare_openalex_id(work_url: str | None) -> str | None:
@@ -145,6 +152,56 @@ def reconstruct_abstract(inverted_index: dict | None) -> str | None:
     return " ".join(word for _position, word in placed)
 
 
+def _arxiv_date(arxiv_id: str | None) -> tuple[int, int] | None:
+    """The submission year+month encoded in a new-format arXiv id.
+
+    New-style arXiv ids (``YYMM.NNNNN``, used since April 2007) carry the
+    submission year and month in their first four digits — a reliable appearance
+    date when OpenAlex's own is wrong (it sometimes stamps an arXiv paper with a
+    re-publication year — "Attention Is All You Need" → 2025). Old-style ids
+    (``hep-th/9901001``) return None, leaving OpenAlex's date in place.
+
+    Args:
+        arxiv_id: A bare arXiv id, or None.
+
+    Returns:
+        ``(year, month)`` for a new-format id with a valid month, else None.
+    """
+    match = re.fullmatch(r"(\d{2})(\d{2})\.\d{4,5}", arxiv_id or "")
+    if not match:
+        return None
+    month = int(match.group(2))
+    if not 1 <= month <= 12:
+        return None
+    return 2000 + int(match.group(1)), month
+
+
+def _fields_of_study(work: dict) -> list[str]:
+    """OpenAlex topic labels for a work, as the app's field-of-study tags.
+
+    OpenAlex's ``topics`` are its hierarchical subject classification (the
+    successor to ``concepts``), returned score-ranked. We surface the top few
+    topic display names as the detail panel's field tags — the OpenAlex
+    counterpart of S2's ``fieldsOfStudy``. Only present when ``topics`` was
+    selected (``DETAIL_SELECT``), so neighbor traversals return ``[]``.
+
+    Args:
+        work: A raw OpenAlex work object.
+
+    Returns:
+        Deduped, order-preserving topic labels (at most ``_MAX_TOPICS``); empty
+        when the work has no topics or they weren't requested.
+    """
+    labels: list[str] = []
+    for topic in work.get("topics") or []:
+        name = (topic or {}).get("display_name")
+        if name and name not in labels:
+            labels.append(name)
+        if len(labels) >= _MAX_TOPICS:
+            break
+    return labels
+
+
 def _authors(work: dict) -> str | None:
     """Comma-joined author display names from ``authorships`` (None when empty)."""
     names = [
@@ -161,9 +218,10 @@ def node(work: dict | None) -> dict | None:
     Produces the identical key set to ``semantic_scholar.nodes.node`` so both
     sources are interchangeable downstream: ``id, arxiv_id, title, abstract,
     tldr, year, month, pub_date, citation_count, authors, url,
-    fields_of_study``. ``tldr`` is always None (OpenAlex has none — S2 supplies
-    it on click via the DOI-resolvable id); ``fields_of_study`` is ``[]`` for
-    the graph render (it hydrates through S2, same as an S2 neighbor node).
+    fields_of_study``. ``tldr`` is always None (OpenAlex has none — the detail
+    panel shows the abstract instead); ``fields_of_study`` carries OpenAlex
+    topic labels when ``topics`` was selected (``DETAIL_SELECT`` — the seed or a
+    clicked detail node), and is ``[]`` for the light neighbor traversals.
 
     Args:
         work: A raw OpenAlex work object, or None.
@@ -177,14 +235,24 @@ def node(work: dict | None) -> dict | None:
     node_id = resolvable_id(work, arxiv_id)
     if not node_id:
         return None
-    pub_date = work.get("publication_date")
+    pub_date_raw = work.get("publication_date")
+    year = work.get("publication_year")
     month: int | None = None
-    if isinstance(pub_date, str) and len(pub_date) >= 7:
+    if isinstance(pub_date_raw, str) and len(pub_date_raw) >= 7:
         try:
-            parsed_month = int(pub_date[5:7])
+            parsed_month = int(pub_date_raw[5:7])
             month = parsed_month if 1 <= parsed_month <= 12 else None
         except ValueError:
             month = None
+    pub_date = pub_date_raw if isinstance(pub_date_raw, str) and pub_date_raw else None
+    # Prefer the arXiv submission date when OpenAlex's year disagrees: OpenAlex
+    # sometimes misdates an arXiv paper to a re-publication year (AIAYN → 2025),
+    # throwing its node to the wrong end of the timeline. The new-format id
+    # encodes the true year+month; a matching year keeps OpenAlex's fuller date.
+    arxiv_date = _arxiv_date(arxiv_id)
+    if arxiv_date and arxiv_date[0] != year:
+        year, month = arxiv_date
+        pub_date = f"{year:04d}-{month:02d}"
     if arxiv_id:
         url = f"https://arxiv.org/abs/{arxiv_id}"
     else:
@@ -196,11 +264,11 @@ def node(work: dict | None) -> dict | None:
         "title": work.get("title") or work.get("display_name") or "(untitled)",
         "abstract": reconstruct_abstract(work.get("abstract_inverted_index")),
         "tldr": None,
-        "year": work.get("publication_year"),
+        "year": year,
         "month": month,
-        "pub_date": pub_date if isinstance(pub_date, str) and pub_date else None,
+        "pub_date": pub_date,
         "citation_count": work.get("cited_by_count"),
         "authors": _authors(work),
         "url": url,
-        "fields_of_study": [],
+        "fields_of_study": _fields_of_study(work),
     }

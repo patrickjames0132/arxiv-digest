@@ -191,30 +191,38 @@ def api_graph_stream() -> ResponseReturnValue:
 
 @bp.get("/api/paper/<path:paper_ref>")
 def api_paper(paper_ref: str) -> ResponseReturnValue:
-    """Fetch full details for one paper.
+    """Fetch full details for one paper, from the selected provider.
 
     Used to hydrate a node's detail panel on click — graph neighbors arrive
-    without abstract/tldr.
+    without abstract/tldr. Hydration comes from the same backend the graph was
+    built with, so an OpenAlex node fills in from OpenAlex (abstract + topic
+    tags; no TL;DR) and an S2 node from S2.
 
     Args:
-        paper_ref: The paper's arXiv id, a pasted abs/pdf URL, or a raw S2
-            paperId (papers without an arXiv id hydrate by paperId).
+        paper_ref: The paper's arXiv id, a pasted abs/pdf URL, or a raw provider
+            node id (papers without an arXiv id hydrate by that id).
+
+    Query args:
+        provider: ``s2`` or ``openalex`` (defaults to
+            ``config.graph.default_provider``).
 
     Returns:
-        The JSON node details on success; ``{error}`` with HTTP 404 when S2
-        has no such paper, or 502 when Semantic Scholar is unavailable.
+        The JSON node details on success; ``{error}`` with HTTP 404 when the
+        provider has no such paper, or 502 when it's unavailable.
     """
     ref = normalize_arxiv_id(paper_ref)
-    # Same discrimination as build_graph's seed lookup: only an actual arXiv
-    # id gets the ARXIV: prefix — a raw S2 paperId passes through untouched.
-    # (The old route prefixed unconditionally, which broke hydration for
-    # papers that exist on S2 but not on arXiv.)
-    lookup = f"ARXIV:{ref}" if arxiv.looks_arxiv(ref) else ref
+    provider = _requested_provider()
     try:
-        node = semantic_scholar.get_paper(lookup)
-    except semantic_scholar.S2Error as exc:
-        current_app.logger.warning("paper fetch failed for %s: %s", ref, exc)
-        return jsonify({"error": "Semantic Scholar is unavailable — try again."}), 502
+        if provider == "openalex":
+            node = openalex.get_paper(ref)
+        else:
+            # Same discrimination as build_graph's seed lookup: only an actual
+            # arXiv id gets the ARXIV: prefix — a raw S2 paperId passes through.
+            lookup = f"ARXIV:{ref}" if arxiv.looks_arxiv(ref) else ref
+            node = semantic_scholar.get_paper(lookup)
+    except _BUILD_ERRORS as exc:
+        current_app.logger.warning("paper fetch failed for %s (%s): %s", ref, provider, exc)
+        return jsonify({"error": f"{_provider_name(provider)} is unavailable — try again."}), 502
     if not node:
         return jsonify({"error": f"No paper found for {ref}."}), 404
     return jsonify(node)

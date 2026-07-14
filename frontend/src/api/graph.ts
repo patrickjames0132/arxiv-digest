@@ -171,14 +171,19 @@ export async function fetchGraphStream(
  * Full details (abstract, tldr, authors) for one paper — used to hydrate a
  * node's detail panel on click, since graph nodes arrive summary-light.
  *
- * @param paperRef The paper's arXiv id, a pasted abs/pdf URL, or a raw S2
- *                 paperId (papers that exist on S2 but not arXiv hydrate by
- *                 paperId).
+ * @param paperRef The paper's arXiv id, a pasted abs/pdf URL, or a raw provider
+ *                 node id (papers without an arXiv id hydrate by that id; under
+ *                 OpenAlex, pass the node id — the reliable DOI:/W… form).
+ * @param provider Which backend to hydrate from ('s2' / 'openalex').
  * @returns The hydrated node (abstract, tldr, authors filled in).
  * @throws With the server's error message when the paper can't be fetched.
  */
-export async function fetchPaperDetail(paperRef: string): Promise<GraphNode> {
-  const res = await fetch(`/api/paper/${encodeURIComponent(paperRef)}`)
+export async function fetchPaperDetail(
+  paperRef: string,
+  provider: Provider = 's2',
+): Promise<GraphNode> {
+  const params = new URLSearchParams({ provider })
+  const res = await fetch(`/api/paper/${encodeURIComponent(paperRef)}?${params.toString()}`)
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
     throw new Error(data.error || `Failed to load paper (${res.status})`)

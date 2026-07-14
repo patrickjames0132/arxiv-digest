@@ -82,9 +82,9 @@ Design decisions worth knowing:
 
 | Endpoint | Job |
 | --- | --- |
-| `GET /api/search?q=&limit=&year_from=&year_to=&fields=` | live seed search across Semantic Scholar |
-| `GET /api/local_search?q=&limit=&year_from=&year_to=` | instant search over the local snapshot cache |
-| `GET /api/taxonomy/<provider>` | a provider's subject vocabulary (`s2` fields / `arxiv` categories) |
+| `GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=` | live seed search (s2 / openalex) |
+| `GET /api/local_search?q=&provider=&limit=&year_from=&year_to=` | instant search over the local snapshot cache |
+| `GET /api/taxonomy/<provider>` | a provider's field vocabulary (`s2` / `openalex`) |
 
 Design decisions worth knowing:
 
@@ -102,21 +102,23 @@ Design decisions worth knowing:
   whole for a day (query + filters keyed), so re-typing a recent query
   skips the analyst and S2 entirely (see `services/search/README.md`).
 - **Filters degrade, never error.** A non-numeric year becomes "no filter";
-  unknown `fields` values are silently dropped against
-  `semantic_scholar.vocab.valid_fields()` (they can only come from a
-  stale/forged client). Blank queries return an empty 200 — the box starts
-  empty; that's not an error.
+  unknown `fields` values are silently dropped against the **selected
+  provider's** vocabulary (`semantic_scholar.vocab.valid_fields()` for s2,
+  `openalex.vocab.valid_field_ids()` for openalex) — so an S2 field name left
+  over after switching to OpenAlex is simply ignored. Blank queries return an
+  empty 200 — the box starts empty; that's not an error.
 - **Two error philosophies again:** `/api/search` maps S2 failure to a
   canned 502 (details in the log, matching `graph.py` — the old route
   leaked `str(exc)` to the client); `/api/local_search` **never errors** —
   it degrades to zero hits, because the instant local results must not
   block the live search running alongside them.
-- **`/api/taxonomy/<provider>` returns each provider's natural shape** —
-  `{fields: [...]}` for s2 (~20 fields of study, the live-search filter),
-  `{groups: [...]}` for arxiv (~155 categories in 8 areas — the same
-  taxonomy the detail panel's tags are labelled from, via
-  `arxiv.vocab.name_for`) — rather than forcing a common envelope; the
-  pickers they feed are different controls. Unknown provider → 404.
+- **`/api/taxonomy/<provider>` returns one unified shape** —
+  `{fields: [{id, name}]}` for both `s2` (~20 fields of study; id == name) and
+  `openalex` (26 top-level fields; id == the numeric `topics.field.id`) — so the
+  frontend field picker is provider-agnostic (show `name`, send `id`). Unknown
+  provider → 404. (The `arxiv` taxonomy provider was retired in v5.1.0 — it fed
+  the long-dead arXiv-category search filter; the detail panel's per-paper tag
+  labels come from `arxiv.vocab.name_for`, not this endpoint.)
 
 ### LLM title resolution
 

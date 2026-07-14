@@ -61,12 +61,13 @@ api/
   expanded (and famous papers title-resolved) server-side; a pasted arXiv
   id/URL resolves to exactly that paper with filters skipped. The client
   just sees better-ordered `papers`.
-- **The detail-panel category tags landed server-labelled, not via
-  `/api/taxonomy/arxiv`.** That endpoint (the full ~155-code taxonomy, for a
-  future search filter) still has no client function — the planned consumer
-  turned out not to need it. `fetchCategories` instead hits a dedicated
-  per-paper endpoint (`/api/paper/<ref>/categories`) that returns each tag
-  already labelled, so the client does no code→name lookups of its own.
+- **The detail-panel category tags are server-labelled.** `fetchCategories`
+  hits a dedicated per-paper endpoint (`/api/paper/<ref>/categories`) that
+  returns each arXiv tag already labelled, so the client does no code→name
+  lookups of its own. (`getFields` — the *search* filter's vocabulary — is a
+  separate concern: it fetches `/api/taxonomy/<provider>` for the selected
+  provider's `{id, name}` fields. The `/api/taxonomy/arxiv` provider was retired
+  in v5.1.0.)
 
 ## Who uses it, and how/why (traced from the old app; components port next)
 
