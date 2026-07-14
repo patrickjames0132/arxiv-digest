@@ -1,6 +1,6 @@
 # Atlas — One-Pager
 
-> **Status:** v5.3.1 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v5.3.2 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -1513,17 +1513,19 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       packages ambiguity out of identifiers; the header and library READMEs
       document the label↔name mapping. *(From the `todos.md` inbox,
       2026-07-14.)*
-- [ ] **The assistant's two scope popovers shouldn't overlap** *(bug)* — the
-      AI-teacher header's two `ScopePicker`s ("🎓 All lectures" and "📚 All
-      sources") can both be open at once, and their popovers overlap
-      illegibly (screenshotted 2026-07-14). Each picker holds its own `open`
-      in component-local `useState`, so nothing coordinates them: **opening
-      one should close the other** (lift the open state to `Teacher.tsx` —
-      e.g. one `openScope: 'lectures' | 'sources' | null` — or have the
-      picker take open/onOpen as props). While in there, add a small **✕
-      close button** inside the popover (header row, next to
-      "Deselect all") — re-clicking the trigger still closes it, but both
-      affordances beat one. *(Patrick's browser find, 2026-07-14.)*
+- [x] **The assistant's two scope popovers shouldn't overlap** *(v5.3.2, bug)* —
+      the AI-teacher header's two `ScopePicker`s ("🎓 All lectures" and "📚 All
+      sources") could both be open at once, their popovers overlapping
+      illegibly (screenshotted 2026-07-14); each picker held its own `open` in
+      component-local `useState`, so nothing coordinated them. Fixed by making
+      the picker **controlled** (`open`/`onOpenChange` props) with `Teacher.tsx`
+      owning one shared slot (`openScope: 'lectures' | 'sources' | null`) —
+      opening either closes the other. Also added a **✕ close button** in the
+      popover header next to "Deselect all" (re-clicking the trigger still
+      closes too). The controlled contract is pinned by 3 new RTL tests
+      (`test/teacher/ScopePicker.test.tsx`, the suite's third jsdom file —
+      with the explicit `afterEach(cleanup)` the no-globals setup needs).
+      *(Patrick's browser find, 2026-07-14.)*
 - [ ] **One fast "unhighlight everything" action** — clearing what's lit on the
       graph is currently piecemeal: the hand-picked selection has its own Clear,
       and a lit lecture beat / chat answer / inline `[n]` ref clears by clicking

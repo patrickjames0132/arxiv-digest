@@ -96,6 +96,9 @@ export default function Teacher({
   // Lectures the researcher may NOT use as context, tracked by EXCLUSION so a
   // lecture played after the user last touched the picker is fed by default.
   const [excludedLectures, setExcludedLectures] = useState<LectureMode[]>([])
+  // Which scope picker's popover is open — one shared slot, so opening either
+  // picker closes the other (their popovers overlap when both are open).
+  const [openScope, setOpenScope] = useState<'lectures' | 'sources' | null>(null)
   // The answer figure opened full-screen (null = closed).
   const [lightbox, setLightbox] = useState<AnswerFigure | null>(null)
   const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.teacherWidth', 340)
@@ -147,6 +150,8 @@ export default function Teacher({
               <ScopePicker
                 items={lectureItems}
                 checkedIds={lectureScope}
+                open={openScope === 'lectures'}
+                onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'lectures' : null)}
                 onToggle={(id) =>
                   setExcludedLectures((prev) =>
                     prev.includes(id as LectureMode)
@@ -171,6 +176,8 @@ export default function Teacher({
               <ScopePicker
                 items={libraryItems}
                 checkedIds={scopeIds}
+                open={openScope === 'sources'}
+                onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'sources' : null)}
                 onToggle={(id) =>
                   setScopeIds((prev) =>
                     prev.includes(id) ? prev.filter((other) => other !== id) : [...prev, id],

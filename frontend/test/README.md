@@ -14,6 +14,9 @@ test/
     splitMath.test.ts         — math vs. currency vs. mid-stream tolerance
     latexToUnicode.test.ts    — the canvas-label LaTeX approximation
   teacher/
+    ScopePicker.test.tsx      — the controlled open/close contract (popover
+                                only when `open`; trigger and ✕ report via
+                                `onOpenChange`)
     figures/split.test.ts     — the <<FIG n>> interleaver's edge cases
     transcript/remarkCite.test.ts — [n] markers → citeref nodes, on mdast
   ui/
@@ -29,7 +32,7 @@ test/
 - **Environment: node by default, jsdom by opt-in.** Config lives in
   `vite.config.ts`'s `test` block (`test/**/*.test.{ts,tsx}`). Pure-logic
   tests run in node; component/hook tests declare
-  `// @vitest-environment jsdom` as their first line (both RTL files do).
+  `// @vitest-environment jsdom` as their first line (all the RTL files do).
 - **No globals** — `describe`/`it`/`expect` are imported from `vitest`
   explicitly, so the tests type-check without ambient type wiring.
 

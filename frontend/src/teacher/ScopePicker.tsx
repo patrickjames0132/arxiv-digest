@@ -6,9 +6,12 @@
  * already-played **lectures** the researcher folds into its context. The copy
  * (icon, noun, hints) comes in via `labels`; the item shape is just
  * `{id, title}`, so both scopes fit.
+ *
+ * The popover's open state is CONTROLLED (`open`/`onOpenChange`) so the
+ * parent can keep the two pickers mutually exclusive — with it component-local
+ * both popovers could be open at once and overlapped illegibly. Closes via
+ * the ✕ in the popover header or by re-clicking the trigger.
  */
-
-import { useState } from 'react'
 
 /** One selectable item — a source or a lecture, reduced to what the picker shows. */
 export interface ScopeItem {
@@ -40,6 +43,9 @@ export interface ScopeLabels {
  *
  * @param items The selectable items (`{id, title}`).
  * @param checkedIds The ids currently checked.
+ * @param open Whether the popover is shown (state lives in the parent, which
+ *             keeps sibling pickers mutually exclusive).
+ * @param onOpenChange Report the popover's next open state (trigger click, ✕).
  * @param onToggle Flip one item's checked state.
  * @param onSelectAll Check every item.
  * @param onDeselectAll Uncheck every item.
@@ -50,6 +56,8 @@ export interface ScopeLabels {
 export default function ScopePicker({
   items,
   checkedIds,
+  open,
+  onOpenChange,
   onToggle,
   onSelectAll,
   onDeselectAll,
@@ -57,12 +65,13 @@ export default function ScopePicker({
 }: {
   items: ScopeItem[]
   checkedIds: string[]
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onToggle: (id: string) => void
   onSelectAll: () => void
   onDeselectAll: () => void
   labels: ScopeLabels
 }) {
-  const [open, setOpen] = useState(false)
   const all = checkedIds.length === items.length
   const buttonLabel = all
     ? `All ${labels.unit}s`
@@ -74,7 +83,7 @@ export default function ScopePicker({
       <button
         type="button"
         className={`scope-btn ${all ? '' : 'on'}`}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => onOpenChange(!open)}
         title={labels.buttonTitle}
       >
         {labels.icon} {buttonLabel}
@@ -94,6 +103,13 @@ export default function ScopePicker({
                   Deselect all
                 </button>
               )}
+              <button
+                className="link-btn"
+                onClick={() => onOpenChange(false)}
+                aria-label={`Close the ${labels.unit} picker`}
+              >
+                ✕
+              </button>
             </span>
           </div>
           {items.map((item) => (

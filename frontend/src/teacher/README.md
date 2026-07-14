@@ -12,6 +12,8 @@ teacher/
                        events into the store, owns panel run-state
   ScopePicker.tsx    — generic checkbox-scope popover: which sources the
                        assistant searches AND which lectures it uses as context
+                       (open state controlled by Teacher — the two popovers
+                       are mutually exclusive; ✕ or the trigger closes)
   figures/           ← sub-package: the inline-figure pipeline
     split.ts         — pairs <<FIG n>> markers with attached figures
     FigCard.tsx      — one figure card (click to enlarge)
@@ -37,7 +39,9 @@ structure rule's nesting case (the `graph/hooks` precedent).
   `loadingModes` set (which lectures are streaming), the
   stream error, activeBeat/activeChat (which entry is lit is panel UI —
   only the resulting ids are global), the scope picker's library list and
-  checked set, the lightbox, and the abort/session refs.
+  checked set plus which picker's popover is open (`openScope`, one shared
+  slot so the two popovers can't overlap), the lightbox, and the
+  abort/session refs.
 
 ## Design decisions worth knowing
 
