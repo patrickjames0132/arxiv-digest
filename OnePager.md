@@ -1513,6 +1513,17 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       packages ambiguity out of identifiers; the header and library READMEs
       document the label↔name mapping. *(From the `todos.md` inbox,
       2026-07-14.)*
+- [ ] **The assistant's two scope popovers shouldn't overlap** *(bug)* — the
+      AI-teacher header's two `ScopePicker`s ("🎓 All lectures" and "📚 All
+      sources") can both be open at once, and their popovers overlap
+      illegibly (screenshotted 2026-07-14). Each picker holds its own `open`
+      in component-local `useState`, so nothing coordinates them: **opening
+      one should close the other** (lift the open state to `Teacher.tsx` —
+      e.g. one `openScope: 'lectures' | 'sources' | null` — or have the
+      picker take open/onOpen as props). While in there, add a small **✕
+      close button** inside the popover (header row, next to
+      "Deselect all") — re-clicking the trigger still closes it, but both
+      affordances beat one. *(Patrick's browser find, 2026-07-14.)*
 - [ ] **One fast "unhighlight everything" action** — clearing what's lit on the
       graph is currently piecemeal: the hand-picked selection has its own Clear,
       and a lit lecture beat / chat answer / inline `[n]` ref clears by clicking
