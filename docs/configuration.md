@@ -201,6 +201,19 @@ vendors. Each entry:
   `BAAI/bge-small-en-v1.5`) needs a non-empty `query_prefix` *and*
   re-ingesting every existing source — their stored vectors were produced by
   the old model and aren't comparable to the new one's.
+- **`embedding.device: "auto"`** — the torch device the embedder runs on.
+  `auto` hands the choice to sentence-transformers, which already knows how to
+  find cuda / mps / xpu and falls back to cpu; we don't second-guess it. Set an
+  explicit device (`cpu`, `cuda`, `cuda:1`, `mps`) only to override — e.g. to
+  keep the GPU free for something else. An explicit device that won't load
+  falls back to cpu with a logged warning rather than taking search down.
+
+  This only pays off with a **GPU-enabled torch build**. On Windows that isn't
+  the default — PyPI ships a CPU-only wheel — so `pyproject.toml` routes torch
+  to PyTorch's `cu130` index for `sys_platform == 'win32'`; other platforms
+  resolve from PyPI unchanged. Measured on an RTX 3070 Ti, 2000 chunks
+  embedded at **1497/s on cuda vs 80/s on cpu (~19×)**; ingest is where that
+  lands, since a single query embedding is overhead-dominated either way.
 - **`chunking.chars: 900`, `chunking.overlap: 150`** — chunking is
   character-based (cheap, model-agnostic), but MiniLM truncates its input at
   ~256 word-pieces, roughly 1000 characters. A chunk longer than that has its

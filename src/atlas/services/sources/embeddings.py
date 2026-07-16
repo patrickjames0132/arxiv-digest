@@ -8,6 +8,12 @@ report that instead of crashing.
 
 Embeddings are L2-normalized, so a dot product equals cosine similarity — the
 distance metric configured on the sqlite-vec table (see ``store``).
+
+The model runs on whatever ``config.sources.embedding.device`` selects — by
+default "auto", i.e. sentence-transformers' own detection, which lands on the
+GPU when torch has a CUDA build. Ingest is where that matters: it embeds
+thousands of chunks in batches, while a single query embedding is dominated by
+overhead either way.
 """
 
 from __future__ import annotations
@@ -24,6 +30,25 @@ _model = None
 _load_failed = False
 
 
+def _resolve_device() -> str | None:
+    """Turn ``config.sources.embedding.device`` into a device for sentence-transformers.
+
+    "auto" (the default) deliberately resolves to None — which tells
+    sentence-transformers to run its own detection. That's better than a
+    hand-rolled ``torch.cuda.is_available()`` ladder here: it already knows
+    about cuda, mps, xpu and npu, and it stays right as torch grows new
+    backends. We only override when the config names a device explicitly.
+
+    Returns:
+        The configured torch device string, or None to let sentence-transformers
+        choose.
+    """
+    configured = config.sources.embedding.device.strip()
+    if not configured or configured.lower() == "auto":
+        return None
+    return configured
+
+
 def _load_model():
     """Load (or return the cached) sentence-transformers model.
 
@@ -31,6 +56,10 @@ def _load_model():
     singleton is returned. A failed load is remembered so subsequent calls don't
     retry (and re-log) on every query. Also warns when the model's embedding
     dimension disagrees with ``config.sources.embedding.dim``.
+
+    An explicitly configured device that won't load (a CUDA build without a GPU,
+    a typo, a busy device) falls back to CPU rather than taking semantic search
+    down with it — slow beats unavailable.
 
     Returns:
         The loaded ``SentenceTransformer``, or None when semantic search is
@@ -46,9 +75,22 @@ def _load_model():
     try:
         from sentence_transformers import SentenceTransformer
 
-        log.info("Loading embedding model %s …", model_id)
-        _model = SentenceTransformer(model_id)
-        dim = _model.get_sentence_embedding_dimension()
+        device = _resolve_device()
+        log.info("Loading embedding model %s (device=%s) …", model_id, device or "auto")
+        try:
+            _model = SentenceTransformer(model_id, device=device)
+        except Exception:
+            if device is None:
+                raise
+            log.exception(
+                "Could not load embedding model %s on configured device %r; "
+                "falling back to CPU. Set config.sources.embedding.device to a "
+                "valid torch device (or 'auto') to silence this.",
+                model_id, device,
+            )
+            _model = SentenceTransformer(model_id, device="cpu")
+        log.info("Embedding model %s ready on device %s", model_id, _model.device)
+        dim = _model.get_embedding_dimension()
         if dim != config.sources.embedding.dim:
             log.warning(
                 "Embedding model %s has dimension %d but config.sources.embedding.dim=%d. "

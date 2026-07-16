@@ -182,14 +182,6 @@ optional, behind a key.
       even when asked, so "show more often, unprompted" needs the tool-call
       compliance to be solid first (stronger `AGENT_MODEL` / sub-agent
       decomposition). *(From the `todos.md` inbox, 2026-07-07.)*
-- [ ] **GPU embedding on Windows without shared memory** — the local sentence-
-      transformer embedder (`library/embeddings.py`, all-MiniLM / bge-small)
-      runs on CPU. On Windows machines with a discrete GPU (no shared/unified
-      memory), moving the model + inference to **CUDA** would speed up ingest
-      embedding meaningfully. Detect an available device and use it when present,
-      falling back to CPU cleanly; keep it optional/degrading like the rest of
-      the library stack (`available()`). *(From the `todos.md` inbox,
-      2026-07-07.)*
 - [ ] **Figures from uploaded PDFs in answers** — extend the v1.20.0 figures
       feature to the user's **own library**: pull images out of an ingested PDF
       (via `pymupdf`, which we already use for text) and let the agent surface a

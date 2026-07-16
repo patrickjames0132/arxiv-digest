@@ -189,6 +189,17 @@ missing. `available()` reports the full-capability state up front.
 - **Local embeddings, on purpose.** Chunks are embedded with a local
   sentence-transformers model, never an API — the text (which may be a
   copyrighted book) never leaves the machine.
+- **The embedder uses the GPU when there is one**, via
+  `config.sources.embedding.device` (default `auto`). `auto` resolves to
+  `None` and lets sentence-transformers do the detection — it already handles
+  cuda/mps/xpu and keeps working as torch grows backends, so a hand-rolled
+  `torch.cuda.is_available()` ladder here would be strictly worse. An
+  explicitly configured device that fails to load degrades to CPU (slow beats
+  unavailable). Ingest is what benefits — thousands of chunks in batches
+  (~19× on an RTX 3070 Ti); a lone query embedding is overhead-dominated
+  either way. Note the *wheel* is what unlocks this: Windows PyPI torch is
+  CPU-only, so `pyproject.toml` points torch at PyTorch's `cu130` index for
+  `sys_platform == 'win32'` only. See [docs/configuration.md](../../../../docs/configuration.md).
 - **Its own connection helper**, not the shared `storage.connect`. This DB needs
   per-connection extension loading (sqlite-vec), capability probing, and
   conditional virtual-table creation that the generic helper doesn't do.
@@ -214,6 +225,9 @@ missing. `available()` reports the full-capability state up front.
 
 ## Testing
 
+`test_embeddings.py` — device resolution (`auto` → sentence-transformers'
+own pick; explicit strings passed through) and the degradation ladder, with a
+fake `sentence_transformers` injected into `sys.modules` so no torch loads.
 `test_extract.py` — `chunk_text` (overlap, space-breaking, whitespace) and
 `extract_pdf` against **real in-memory PDFs** built with pymupdf (including the
 scanned/image-only rejection). `test_ingest.py` — the full ingest→search

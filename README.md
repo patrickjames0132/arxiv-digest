@@ -38,7 +38,8 @@ you upload (embedded locally; nothing leaves your machine).
 >   traces, discoveries.
 > - **Bring-your-own sources** with hybrid retrieval (sqlite-vec semantic +
 >   FTS5 lexical, fused with RRF), parallel PDF uploads with **live
->   embedding progress bars**, and a per-source scope picker for the agents.
+>   embedding progress bars** (**GPU-accelerated** when there's a GPU to use),
+>   and a per-source scope picker for the agents.
 > - **Sessions** save the whole workspace — graph, discovered papers, chat —
 >   and restore with zero API calls.
 >
@@ -100,6 +101,13 @@ the asdf-format file and works on Windows and macOS alike). With mise in
 place, `bin/setup.bat` (Windows) or `bin/setup.sh` (macOS/Linux) does the full
 bootstrap: pinned tools, `uv sync`, and the frontend install + build. Without
 mise, `uv` and `Node.js` installed any other way work fine too.
+
+> **Windows pulls a CUDA build of torch** (~1.8GB, from PyTorch's `cu130`
+> index) so the local embedder can use a GPU if you have one — PyPI's Windows
+> wheel is CPU-only, and that's the whole difference between ~80 and ~1500
+> chunks/s at ingest. It falls back to CPU on a machine without a GPU, and
+> macOS/Linux resolve torch from PyPI as usual. See
+> [`sources.embedding.device`](docs/configuration.md).
 
 ### 1. Configure
 
