@@ -225,6 +225,10 @@ The Vite dev server proxies `/api/*` to Flask.
 5. **Your sources** (📚) — drop in PDFs (parallel, with live embedding
    progress) or paste URLs; scope any conversation to a subset of them.
 6. **Sessions** (🗂) — save the workspace, reopen it later free of charge.
+7. **Lost?** Hit the header's **?** for a guided coach-mark tour — it auto-runs
+   once on first launch (the search surface) and once more on your first graph
+   (the graph tools), spotlighting one control at a time; a jump select in the
+   bubble skips straight to whichever tip you came back for.
 
 ---
 
