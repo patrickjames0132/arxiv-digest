@@ -558,6 +558,35 @@
 - [x] **Windows PDF upload fix** *(v1.10.1)* — source ingest used a
       `NamedTemporaryFile` whose exclusive lock on Windows made the reopen fail
       with `[Errno 13] Permission denied`; switched to `mkstemp` + manual cleanup.
+- [x] **GPU embedding on Windows without shared memory** *(v5.8.0)* — the local
+      embedder ran on CPU; on a Windows box with a discrete GPU (dedicated VRAM,
+      no shared/unified memory) CUDA should make ingest much faster. It did:
+      **~19×**, 80 → 1497 chunks/s on an RTX 3070 Ti (2000×900-char chunks,
+      25.1s → 1.34s); a real 40-page PDF ingests in 0.33s.
+
+      The ticket assumed the fix was device-detection code. It wasn't — that was
+      the **wheel**. sentence-transformers *already* auto-selects CUDA; PyPI's
+      Windows torch is simply a CPU-only build, so there was no CUDA runtime to
+      find. `pyproject.toml` now declares torch directly (uv sources only apply
+      to direct deps) and routes it to PyTorch's `cu130` index behind a
+      `sys_platform == 'win32'` marker, keeping the 1.8GB wheel off macOS/Linux,
+      where this repo is also worked on. `explicit = true` stops that index
+      shadowing anything but torch. Detection code alone would have shipped a
+      no-op that *looked* like a feature.
+
+      What the code adds is control and visibility, not detection:
+      `config.sources.embedding.device` (default `auto`) resolves to `None` and
+      lets sentence-transformers choose — it already handles cuda/mps/xpu and
+      stays right as torch grows backends, so a hand-rolled
+      `torch.cuda.is_available()` ladder would be strictly worse. An explicit
+      device overrides; one that won't load falls back to CPU with a logged
+      warning (slow beats unavailable), verified against the real library with a
+      bogus `cuda:7`. The load logs the device it landed on. Also folded in the
+      sentence-transformers 5.x `get_sentence_embedding_dimension` →
+      `get_embedding_dimension` rename (the old name emitted a `FutureWarning`
+      and will eventually go), raising the nominal `>=3.0` floor to the `>=5.6`
+      we actually lock. *(Shipped 2026-07-16; browser-tested on a real PDF
+      upload. From the `todos.md` inbox, 2026-07-07.)*
 
 ### Citation graph — landmark/latest & mega-papers
 

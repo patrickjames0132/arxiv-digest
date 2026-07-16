@@ -40,7 +40,8 @@
     "embedding": {
       "model": "sentence-transformers/all-MiniLM-L6-v2",
       "dim": 384,
-      "query_prefix": ""
+      "query_prefix": "",
+      "device": "auto"
     },
     "chunking": {
       "chars": 900,

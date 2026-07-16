@@ -431,6 +431,14 @@ class Embedding(ConfigModel):
         "passages). Asymmetric-retrieval models want one; symmetric models like the "
         "default MiniLM leave it empty."
     )
+    device: str = Field(
+        default="auto",
+        description="Torch device the embedder runs on. 'auto' delegates to "
+        "sentence-transformers, which picks the best available (cuda on a Windows/Linux "
+        "box with a CUDA torch build, mps on Apple silicon, else cpu). Set an explicit "
+        "torch device string ('cpu', 'cuda', 'cuda:1', 'mps') to override — a bad or "
+        "unavailable device falls back to cpu rather than breaking search.",
+    )
 
 
 class Chunking(ConfigModel):
