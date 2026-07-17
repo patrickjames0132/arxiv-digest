@@ -15,6 +15,6 @@ if %errorlevel%==0 (
   echo warning: mise not found -- skipping pinned-tool install (https://mise.jdx.dev)
 )
 
-call uv sync || exit /b 1
+call uv sync --all-groups || exit /b 1
 call npm install --prefix frontend || exit /b 1
 call npm run build --prefix frontend || exit /b 1

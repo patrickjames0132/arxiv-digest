@@ -101,7 +101,8 @@ The toolchain (python, uv, nodejs, trivy) is pinned in `.tool-versions` —
 [mise](https://mise.jdx.dev) installs it all with `mise install` (mise reads
 the asdf-format file and works on Windows and macOS alike). With mise in
 place, `bin/setup.bat` (Windows) or `bin/setup.sh` (macOS/Linux) does the full
-bootstrap: pinned tools, `uv sync`, and the frontend install + build. Without
+bootstrap: pinned tools, `uv sync --all-groups` (dev tooling and the notebook
+`research` group alike), and the frontend install + build. Without
 mise, `uv` and `Node.js` installed any other way work fine too.
 
 > **Windows pulls a CUDA build of torch** (~1.8GB, from PyTorch's `cu130`

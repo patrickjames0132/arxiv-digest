@@ -14,6 +14,6 @@ else
   echo "warning: mise not found — skipping pinned-tool install (https://mise.jdx.dev)" >&2
 fi
 
-uv sync
+uv sync --all-groups
 npm install --prefix frontend
 npm run build --prefix frontend

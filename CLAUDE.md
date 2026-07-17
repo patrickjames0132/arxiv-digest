@@ -31,8 +31,9 @@ steps below see the current `main`.
 **Then run the setup script**: `bin\setup.bat` on
 Windows, `bin/setup.sh` on macOS/Linux. It installs the toolchain pinned in
 `.tool-versions` via **mise** (python, uv, nodejs, trivy — mise reads the
-asdf-format file but, unlike asdf, works on Windows too), then `uv sync`s the
-backend and `npm install` + `npm run build`s the frontend. It's cheap when
+asdf-format file but, unlike asdf, works on Windows too), then
+`uv sync --all-groups`s the backend (all dependency groups, so the notebook
+`research` group survives the sync) and `npm install` + `npm run build`s the frontend. It's cheap when
 everything is already current, and it prevents a whole class of stale-env
 surprises (missing node modules, an out-of-date lockfile, nox silently
 skipping the Trivy scan).
