@@ -36,6 +36,12 @@ _RANK_POOL = 1000
 # price — only the offline citations corpus has it.
 _MAX_OFFSET = 8000
 
+#: The most citers a deep-paged live fetch can ever return: the last servable
+#: page's window end (``_MAX_OFFSET + _RANK_POOL``). Public because the
+#: ``live_pool_validation`` pipeline simulates this exact truncation against the
+#: offline corpus — the constant must be the pager's own, not a copied number.
+REACHABLE_CITERS = _MAX_OFFSET + _RANK_POOL
+
 # The "latest" citation window: a citer whose publication date falls within
 # this many months of today is the recent *frontier* (its own graph relation),
 # not a historic landmark. A rolling window, not a calendar year, so it stays
@@ -347,7 +353,7 @@ def citations(paper_id: str, limit: int) -> list[dict]:
 
 
 #: Injected landmark selector: ``(ranked citer years) -> indices to ship | None``.
-#: ``services/graph`` passes ``budget.density_selection``, which bands the ranking
+#: ``services/graph`` passes ``budget.select_landmarks``, which bands the ranking
 #: by year; None falls back to the flat ``landmark_limit``. It takes years and
 #: returns indices because the rule only reasons about *when* citers were
 #: published — the entries themselves stay here. A parameter, not an import, so
@@ -385,7 +391,7 @@ def citation_relations(
     *prefix* of the ranking, which on a seed like DQN is all one era — the top 29
     are 2019–2023 and 2024–2025 never appear, leaving a visible hole before the
     Latest frontier. A selector bands the ranking by year instead, so every year
-    from the ceiling to the window gets its slice. See ``budget.density_selection``.
+    from the ceiling to the window gets its slice. See ``budget.select_landmarks``.
 
     Args:
         paper_id: An S2 paperId or prefixed id.

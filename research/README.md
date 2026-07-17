@@ -38,7 +38,18 @@ research/
   citation_coverage/ — S2 vs OpenAlex citation-coverage comparison behind the
                        "could we go OpenAlex-only?" question (no pipeline — pure
                        decision-support; conclusions in docs/citation-coverage.md)
+  live_pool_validation/ — do the two trained models survive the live S2 path's
+                       truncation to the newest 9000 citers, and does moving the
+                       age feature's **age origin** fix the mismatch? (collector
+                       in ml_pipelines/live_pool_validation/ — a validation
+                       pipeline, no artifact; principle in
+                       docs/predict-vs-compute.md)
 ```
+
+The vocabulary these studies share — landmark, pool, truncated, label, the STOP
+and SKIP rules, **age origin**, **worked example** — is defined once in
+[`docs/landmark-vocabulary.md`](../docs/landmark-vocabulary.md); a notebook is
+allowed to be discursive, but not to redefine a term.
 
 Each study has its own README. Most point at the pipeline they justified, with
 corpora and trained artifacts living with the pipeline in `ml_pipelines/` (a
