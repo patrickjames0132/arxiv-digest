@@ -268,8 +268,47 @@ optional, behind a key.
       Landmarks") matter more than the selection rule? (3) Is there a defensible
       middle — e.g. SKIP with a citation floor, or a shorter band span — or
       should the truncated path simply mirror the complete path's shape and
-      accept the hole the 29-vs-84 measurement documented? Analysis only; no
-      code until the spike reports. *(Filed 2026-07-17.)*
+      accept the hole the 29-vs-84 measurement documented?
+      **The success criterion (Patrick, 2026-07-17):** whatever rule the
+      truncated pool ends up with should land **as close as possible to what the
+      STOP rule would ship if the seed's full citation history were reachable**
+      — full-history STOP is the ground truth, and SKIP-vs-alternatives is an
+      approximation contest, not a taste question. That makes the spike
+      *measurable* with machinery we already have: `live_pool_validation`
+      simulates the exact truncated pool from the offline corpus, so each
+      candidate rule can be scored against the full-history STOP band (overlap
+      on the reachable intersection, plus count agreement) across the 58-seed
+      corpus. A candidate can't ship what the ceiling hides, so the honest
+      ceiling on any rule's score is how much of the true band is reachable at
+      all — the study's median 1.8× budget gap says that ceiling is often low,
+      which feeds question (2): where no rule can score well, provenance
+      labelling is doing the real work. Analysis only; no code until the spike
+      reports. *(Filed 2026-07-17.)*
+- [ ] **Investigate forward references — references S2/OpenAlex date *after*
+      the seed's publication** — both providers sometimes list a reference (a
+      paper the seed *cites*) with a publication date later than the seed's
+      own, which should be impossible and currently just renders where the date
+      says (right of the seed on the timeline — an ancestor drawn in the
+      future). Likely upstream dating quirks — revised/journal versions dated
+      over the preprint the seed actually cited, or plain misdates — but
+      investigate per provider before deciding: how common, whose date is wrong
+      (the seed's or the reference's), and whether the graph should clamp,
+      flag, or trust. If it's genuinely upstream, the finding belongs in
+      `docs/bugs.md`'s Upstream half, justifying whatever guard ships. *(From
+      the `todos.md` inbox, 2026-07-17.)*
+- [ ] **Reevaluate how Latest Publications distribute across their bands — the
+      spread should read more uniform, without a recency-bias pattern** — the
+      per-year bands were built precisely so no single year dominates, but the
+      on-screen result still shows a recency-leaning density Patrick wants
+      flattened: each band ships its top `latest_per_year` by citations, and
+      how *full* each year's band actually comes back varies enough that the
+      frontier can still pile toward the newest years. Look at the shipped
+      band-size distribution across real seeds first (all three implementations
+      share the shape now — OpenAlex's per-year queries, the corpus's windowed
+      query, the live complete-pool bands — so one fix should land in all
+      three), then decide whether the answer is a per-band cap tweak, a
+      different within-band ranking, or something like sampling toward
+      uniformity. *(From the `todos.md` inbox, 2026-07-17.)*
 - [ ] **Corpus ingest degrades ~3x across a release — the partitioned write
       re-examines what's already on disk** — v5.6.0 fixed the *file explosion*
       (DuckDB's `partitioned_write_max_open_files` defaulting to 100 against our
@@ -483,7 +522,23 @@ optional, behind a key.
       model than mutating global config. The graph cache is keyed by
       `(provider, seed)` and **not** by citation source, so a toggle must bust or
       key around it or the old snapshot just comes back. *(From the `todos.md`
-      inbox, 2026-07-16.)*
+      inbox, 2026-07-16.)* **Scope grew 2026-07-17:** the modal is also the
+      landing place for whichever `config.json` knobs deserve to live **with the
+      user** rather than in a file nobody edits — the second half of the
+      constants-audit ticket (Enhancements & tech debt) feeds it a candidate
+      list. Placement: the settings button sits top-right **beside the
+      help/tutorials button**.
+- [ ] **A query-analyst toggle in the search bar — and rename "Filters"** — the
+      search surface gives no way to skip the query-analyst agent; sometimes you
+      want the raw keyword search without the LLM expansion round-trip (or its
+      spend). Fold it into the existing dropdown as a checkbox, which means the
+      "Filters" label no longer fits once it holds a behavior switch. Patrick
+      floated **"Options"** and asked for better names — candidates:
+      **"Search options"** (says where it applies), plain **"Options"**, or
+      keeping "Filters" and putting the toggle elsewhere (a small sparkle icon
+      button beside the search box, the pattern other AI-search UIs use for
+      "AI on/off"). Decide the name against the mock, not in the ticket. *(From
+      the `todos.md` inbox, 2026-07-17.)*
 
 - [ ] **One fast "unhighlight everything" action** — clearing what's lit on the
       graph is currently piecemeal: the hand-picked selection has its own Clear,
@@ -607,6 +662,25 @@ optional, behind a key.
       a mega seed's entire citer list"). That's a defensible payload guard rather
       than a legibility rule, but it should be *named* as one, since "data-driven
       over magic numbers" is the house line. *(Patrick, 2026-07-17.)*
+- [ ] **Audit every constant in `src/` for config-knob-worthiness — then decide
+      which knobs belong in the UI instead** — a systematic pass over the
+      module-level constants (`NBUCKETS`, `_RANK_POOL`, `_MAX_OFFSET`,
+      `PER_YEAR_CAP`, `_LATEST_WINDOW_MONTHS`, `UNBOUNDED_LANDMARK_CAP`, the
+      retrieval/chunking numbers, agent extras defaults, …) asking of each:
+      should this be a `config.json` knob? The audit needs the lesson of the
+      count-caps ticket above as its filter — that ticket exists because knobs
+      nobody turns are *deletion* candidates, so "could be configurable" is not
+      the bar; "someone would actually turn it, and turning it is safe" is.
+      Fitted constants (`PER_YEAR_CAP`, `tau`/`max_span`) and API-reality
+      constants (`_MAX_OFFSET` is what S2 serves, `NBUCKETS` is baked into the
+      ingested corpus layout) probably stay code. **Part two, a separate pass
+      once the knobs settle:** decide which config knobs graduate out of the
+      file entirely and live **with the user** — the settings modal (UI &
+      rendering polish ticket, which this feeds a candidate list; settings
+      button top-right beside help/tutorials). End state worth aiming at: config
+      holds operator concerns (paths, keys, ports), the modal holds user
+      preferences, and code holds fitted or structural constants. *(From the
+      `todos.md` inbox, 2026-07-17.)*
 - [ ] **Gate the research notebooks — nothing executes them, so they rot
       silently** — two of the three (`research/cite_budget`, `research/latest_gap`)
       had been un-executable since the src-layout migration and nobody noticed,
