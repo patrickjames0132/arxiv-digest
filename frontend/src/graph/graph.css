@@ -15,6 +15,46 @@
   border-radius: 10px;
   backdrop-filter: blur(4px);
 }
+/* Collapsed, the panel is just its header bar — width shrinks to the label so
+   the canvas gets the 272px box back (the find control's collapse-until-wanted
+   idea, panel-sized). The body stays in the DOM (`hidden`), so the tour's
+   existence checks still see the year/citation stops on graphs that have them. */
+.controls.collapsed {
+  width: auto;
+  padding: 8px 12px;
+}
+.ctrl-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.controls.collapsed .ctrl-head {
+  margin-bottom: 0;
+}
+.ctrl-head:hover {
+  color: var(--text-strong);
+}
+.ctrl-head-count {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: normal;
+}
+.ctrl-head-caret {
+  margin-left: auto;
+  font-size: 9px;
+  opacity: 0.8;
+}
 /* The floating find bar: a rounded pill pinned bottom-right of the graph area
  * (the controls panel was getting crowded), spotlighting matches among the
  * papers on screen — purely lexical, no API call (the header's seed search is

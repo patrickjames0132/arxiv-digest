@@ -2,12 +2,16 @@
  * The declutter panel over the graph: layout toggle (Force / Timeline),
  * relation filter chips, the dual-knob year range slider, the dual-knob
  * citation-count window slider, the visible-count readout, and the pin/fit
- * actions.
+ * actions — all under a header bar that collapses the whole panel to a slim
+ * strip (the find control's collapse-until-wanted idea, panel-sized), giving
+ * the canvas its ~272px back when the user isn't filtering.
  *
  * Purely presentational — all state lives in GraphExplorer; this just renders
- * it and fires the callbacks.
+ * it and fires the callbacks. The one exception is the collapsed flag, which
+ * is local like the find control's own open/closed: nothing else reads it.
  */
 
+import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { REL_COLOR, REL_LABEL, REL_TYPES } from '../theme'
 import { CITE_SLIDER_STEPS, citationThreshold } from '../model'
@@ -63,6 +67,9 @@ export interface GraphControlsProps {
   /** A provider-specific caveat to surface below the controls (e.g. S2's ~10k
    *  citer-offset limit), or null when the active provider has none. */
   providerNote?: string | null
+  /** The guided tour is walking the panel's stops — expand a collapsed panel
+   *  so its targets can be spotlighted (it never re-collapses; no tidy-up). */
+  stagedOpen?: boolean
 }
 
 /**
@@ -98,7 +105,18 @@ export default function GraphControls({
   onRefresh,
   refreshing,
   providerNote,
+  stagedOpen,
 }: GraphControlsProps) {
+  // Collapsed to the slim header bar? Local, like the find control's own
+  // open/closed — nothing else needs to know.
+  const [collapsed, setCollapsed] = useState(false)
+  // The tour staging 'controls' expands a collapsed panel so its stops have
+  // something to spotlight. It never re-collapses on the way out — the same
+  // no-tidy-up call as the detail panel's staged seed selection.
+  useEffect(() => {
+    if (stagedOpen) setCollapsed(false)
+  }, [stagedOpen])
+
   // The year slider only makes sense when the graph spans more than one year.
   const showYears = maxYear > minYear
   const yearSpan = maxYear - minYear
@@ -121,163 +139,193 @@ export default function GraphControls({
   const citePct = (position: number) => (position / CITE_SLIDER_STEPS) * 100
 
   return (
-    <div className="controls">
-      <div className="layout-toggle" data-tour="layout">
-        <button className={layout === 'force' ? 'on' : ''} onClick={() => onLayout('force')}>
-          Force
-        </button>
-        <button className={layout === 'timeline' ? 'on' : ''} onClick={() => onLayout('timeline')}>
-          Timeline
-        </button>
-      </div>
-      <div className="ctrl-rels" data-tour="relations">
-        {REL_TYPES.map((type) => {
-          const on = enabled.has(type)
-          return (
-            <button
-              key={type}
-              className={`rel-toggle ${on ? 'on' : ''}`}
-              onClick={() => onToggleType(type)}
-              style={{ '--c': REL_COLOR[type] } as CSSProperties}
-              title={on ? `Hide ${REL_LABEL[type]}` : `Show ${REL_LABEL[type]}`}
-            >
-              <i />
-              {REL_LABEL[type]}
-            </button>
-          )
-        })}
-      </div>
-
-      {showYears && (
-        <div className="years" data-tour="years">
-          <div className="years-label">
-            Years <b>{yearLo}</b> – <b>{yearHi}</b>
-          </div>
-          <div className="range-dual">
-            <div className="range-track" />
-            <div
-              className="range-fill"
-              style={{
-                left: `${yearPct(yearLo)}%`,
-                width: `${yearPct(yearHi) - yearPct(yearLo)}%`,
-              }}
-            />
-            <input
-              type="range"
-              min={minYear}
-              max={maxYear}
-              value={yearLo}
-              aria-label="Earliest year"
-              onChange={(event) => onYearLo(Math.min(Number(event.target.value), yearHi))}
-            />
-            <input
-              type="range"
-              min={minYear}
-              max={maxYear}
-              value={yearHi}
-              aria-label="Latest year"
-              onChange={(event) => onYearHi(Math.max(Number(event.target.value), yearLo))}
-            />
-          </div>
-        </div>
-      )}
-
-      {showCitations && (
-        <div className="cites" data-tour="citations">
-          <div className="cites-label">
-            Citations <b>{loCitations.toLocaleString()}</b> – <b>{hiCitations.toLocaleString()}</b>
-          </div>
-          <div className="range-dual">
-            <div className="range-track" />
-            <div
-              className="range-fill"
-              style={{
-                left: `${citePct(citeLo)}%`,
-                width: `${citePct(citeHi) - citePct(citeLo)}%`,
-              }}
-            />
-            <input
-              type="range"
-              min={0}
-              max={CITE_SLIDER_STEPS}
-              value={citeLo}
-              aria-label="Fewest citations"
-              onChange={(event) => onCiteLo(Math.min(Number(event.target.value), citeHi))}
-            />
-            <input
-              type="range"
-              min={0}
-              max={CITE_SLIDER_STEPS}
-              value={citeHi}
-              aria-label="Most citations"
-              onChange={(event) => onCiteHi(Math.max(Number(event.target.value), citeLo))}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="ctrl-foot">
-        <span className="count-readout">
-          {visibleCount} / {totalCount} papers
-        </span>
-        <div className="ctrl-btns" data-tour="actions">
-          <button
-            className="mini-btn"
-            onClick={onReleaseAll}
-            title="Unpin every node and re-settle the layout"
-          >
-            Release {pinnedCount || ''}
-          </button>
-          <button className="mini-btn" onClick={onFit} title="Re-center the graph">
-            Fit
-          </button>
-          <button
-            className="mini-btn"
-            onClick={onRefresh}
-            disabled={refreshing}
-            title="Bust this paper's cached snapshot and re-fetch from Semantic Scholar"
-          >
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
-        </div>
-      </div>
-      <div className="ctrl-select" data-tour="selector">
-        <span
-          className="select-hint"
-          title="Hand-pick papers to scope the AI teacher's lectures and answers to them"
-        >
-          ⌥ alt-drag to add papers to the teacher's scope · ⇧ shift-click one · esc clears all
-          highlights
-        </span>
-        {(selectedCount > 0 || litCount > 0) && (
-          <span className="select-status">
-            {selectedCount > 0 ? (
-              <>
-                <b>{selectedCount}</b> picked
-              </>
-            ) : (
-              <>
-                <b>{litCount}</b> lit
-              </>
-            )}
-            <button
-              className="link-btn"
-              onClick={onClearAll}
-              title="Clear every highlight and hand-picked selection (Esc does the same)"
-            >
-              clear
-            </button>
+    <div className={`controls${collapsed ? ' collapsed' : ''}`}>
+      <button
+        className="ctrl-head"
+        data-tour="controls-head"
+        aria-expanded={!collapsed}
+        onClick={() => setCollapsed((wasCollapsed) => !wasCollapsed)}
+        title={
+          collapsed
+            ? 'Reopen the graph controls'
+            : 'Collapse the controls to a slim bar and free up the canvas'
+        }
+      >
+        <span>Graph controls</span>
+        {collapsed && (
+          <span className="ctrl-head-count">
+            {selectedCount > 0
+              ? `${selectedCount} / ${visibleCount} papers selected`
+              : `${visibleCount} / ${totalCount} papers shown`}
           </span>
         )}
-      </div>
+        <span className="ctrl-head-caret" aria-hidden="true">
+          {collapsed ? '▾' : '▴'}
+        </span>
+      </button>
 
-      <div className="ctrl-hint" data-tour="hint">
-        {layout === 'timeline'
-          ? 'papers placed left→right by year · double-click to re-seed'
-          : 'drag to pin · double-click a node to re-seed'}
-      </div>
+      <div className="ctrl-body" hidden={collapsed}>
+        <div className="layout-toggle" data-tour="layout">
+          <button className={layout === 'force' ? 'on' : ''} onClick={() => onLayout('force')}>
+            Force
+          </button>
+          <button
+            className={layout === 'timeline' ? 'on' : ''}
+            onClick={() => onLayout('timeline')}
+          >
+            Timeline
+          </button>
+        </div>
+        <div className="ctrl-rels" data-tour="relations">
+          {REL_TYPES.map((type) => {
+            const on = enabled.has(type)
+            return (
+              <button
+                key={type}
+                className={`rel-toggle ${on ? 'on' : ''}`}
+                onClick={() => onToggleType(type)}
+                style={{ '--c': REL_COLOR[type] } as CSSProperties}
+                title={on ? `Hide ${REL_LABEL[type]}` : `Show ${REL_LABEL[type]}`}
+              >
+                <i />
+                {REL_LABEL[type]}
+              </button>
+            )
+          })}
+        </div>
 
-      {providerNote && <div className="provider-note">ⓘ {providerNote}</div>}
+        {showYears && (
+          <div className="years" data-tour="years">
+            <div className="years-label">
+              Years <b>{yearLo}</b> – <b>{yearHi}</b>
+            </div>
+            <div className="range-dual">
+              <div className="range-track" />
+              <div
+                className="range-fill"
+                style={{
+                  left: `${yearPct(yearLo)}%`,
+                  width: `${yearPct(yearHi) - yearPct(yearLo)}%`,
+                }}
+              />
+              <input
+                type="range"
+                min={minYear}
+                max={maxYear}
+                value={yearLo}
+                aria-label="Earliest year"
+                onChange={(event) => onYearLo(Math.min(Number(event.target.value), yearHi))}
+              />
+              <input
+                type="range"
+                min={minYear}
+                max={maxYear}
+                value={yearHi}
+                aria-label="Latest year"
+                onChange={(event) => onYearHi(Math.max(Number(event.target.value), yearLo))}
+              />
+            </div>
+          </div>
+        )}
+
+        {showCitations && (
+          <div className="cites" data-tour="citations">
+            <div className="cites-label">
+              Citations <b>{loCitations.toLocaleString()}</b> –{' '}
+              <b>{hiCitations.toLocaleString()}</b>
+            </div>
+            <div className="range-dual">
+              <div className="range-track" />
+              <div
+                className="range-fill"
+                style={{
+                  left: `${citePct(citeLo)}%`,
+                  width: `${citePct(citeHi) - citePct(citeLo)}%`,
+                }}
+              />
+              <input
+                type="range"
+                min={0}
+                max={CITE_SLIDER_STEPS}
+                value={citeLo}
+                aria-label="Fewest citations"
+                onChange={(event) => onCiteLo(Math.min(Number(event.target.value), citeHi))}
+              />
+              <input
+                type="range"
+                min={0}
+                max={CITE_SLIDER_STEPS}
+                value={citeHi}
+                aria-label="Most citations"
+                onChange={(event) => onCiteHi(Math.max(Number(event.target.value), citeLo))}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="ctrl-foot">
+          <span className="count-readout">
+            {visibleCount} / {totalCount} papers
+          </span>
+          <div className="ctrl-btns" data-tour="actions">
+            <button
+              className="mini-btn"
+              onClick={onReleaseAll}
+              title="Unpin every node and re-settle the layout"
+            >
+              Release {pinnedCount || ''}
+            </button>
+            <button className="mini-btn" onClick={onFit} title="Re-center the graph">
+              Fit
+            </button>
+            <button
+              className="mini-btn"
+              onClick={onRefresh}
+              disabled={refreshing}
+              title="Bust this paper's cached snapshot and re-fetch from Semantic Scholar"
+            >
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+        <div className="ctrl-select" data-tour="selector">
+          <span
+            className="select-hint"
+            title="Hand-pick papers to scope the AI teacher's lectures and answers to them"
+          >
+            ⌥ alt-drag to add papers to the teacher's scope · ⇧ shift-click one · esc clears all
+            highlights
+          </span>
+          {(selectedCount > 0 || litCount > 0) && (
+            <span className="select-status">
+              {selectedCount > 0 ? (
+                <>
+                  <b>{selectedCount}</b> picked
+                </>
+              ) : (
+                <>
+                  <b>{litCount}</b> lit
+                </>
+              )}
+              <button
+                className="link-btn"
+                onClick={onClearAll}
+                title="Clear every highlight and hand-picked selection (Esc does the same)"
+              >
+                clear
+              </button>
+            </span>
+          )}
+        </div>
+
+        <div className="ctrl-hint" data-tour="hint">
+          {layout === 'timeline'
+            ? 'papers placed left→right by year · double-click to re-seed'
+            : 'drag to pin · double-click a node to re-seed'}
+        </div>
+
+        {providerNote && <div className="provider-note">ⓘ {providerNote}</div>}
+      </div>
     </div>
   )
 }

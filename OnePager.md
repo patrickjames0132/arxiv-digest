@@ -464,15 +464,19 @@ optional, behind a key.
 
 ### UI & rendering polish
 
-- [ ] **Collapse the graph controls panel to a single bar** — the controls
-      panel (`GraphControls.tsx`, pinned top-left) is a fixed 272px-wide box
-      that sits over the canvas whether or not the user is touching it; on a
-      busy graph it costs real working space. Add a minimize control that
-      collapses the whole panel down to a single slim bar (mirroring the find
-      control's collapse-until-wanted pattern), restoring on click, so the
-      GraphExplorer canvas gets the room back. Remember to update the tour
-      step and any hints that assume the panel is always open. *(From the
-      `todos.md` inbox, 2026-07-18.)*
+- [ ] **Mirror the collapsed bar's readout in the expanded panel — and fold
+      "clear" into the action row** — the v5.19.0 collapsed bar says
+      `N / total papers shown` (or `N / shown papers selected` during a
+      hand-pick), but the expanded panel's footer still reads the bare
+      `78 / 356 papers`: give it the same wording and the same
+      selected-case flip. And the selection status row under the gesture
+      hint (`2 picked · clear`) may not deserve its own line once the
+      readout carries the count — consider dropping the "picked" display
+      and moving **clear** up into the action row beside
+      Release / Fit / Refresh. One ticket: the footer readout, the picked
+      row's retirement, and the button move travel together. Remember the
+      tour's "selector" stop and the controls README describe the current
+      row. *(From Patrick's screenshot review, 2026-07-18.)*
 - [ ] **Reorder the tour steps to match expectation** — some guided-tour
       steps display in an order that doesn't match how the eye actually moves
       through the UI (not a bug — the steps run in array order in

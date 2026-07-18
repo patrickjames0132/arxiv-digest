@@ -1367,6 +1367,28 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Collapse the graph controls panel to a single bar** *(v5.19.0)* —
+      the declutter panel (`GraphControls.tsx`, pinned top-left) was a fixed
+      272px box over the canvas whether or not the user was touching it. The
+      panel now wears a **"Graph controls" header strip that is itself a
+      button**: one click collapses the whole panel to that slim bar (the
+      width shrinks with it — the FindBar's collapse-until-wanted idea,
+      panel-sized), another reopens it. The collapsed bar keeps reporting
+      state — `N / total PAPERS SHOWN` under bare filters, flipping to
+      `N / shown PAPERS SELECTED` while a hand-pick exists (denominator = the
+      *shown* papers, honest to the `selected ∩ visible` teacher scope) —
+      wording and both fractions tuned across the browser rounds. Collapse
+      hides the body via `hidden` rather than unmounting, so the tour's
+      `presentIf` existence checks still see the year/citation stops; a new
+      tour stop on the header teaches the gesture, and every stop inside the
+      panel now stages **`'controls'`** (`Atlas` → `GraphExplorer`'s
+      `tourStage` → the new `stagedOpen` prop), re-expanding a collapsed
+      panel mid-walk and never re-collapsing after (the detail panel's
+      no-tidy-up precedent). The collapsed flag is the panel's one piece of
+      local state, like FindBar's own open/closed. Vitest +3 cases
+      (round-trip with hidden-not-unmounted body, the readout flip, the
+      staged re-expand); controls + tour READMEs updated. *(From the
+      `todos.md` inbox, 2026-07-18; shipped 2026-07-18.)*
 - [x] **A query-analyst toggle in the search bar — and rename "Filters"**
       *(v5.18.0)* — the search surface gave no way to skip the query-analyst
       agent; sometimes you want the raw keyword search without the LLM

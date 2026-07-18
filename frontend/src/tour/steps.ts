@@ -106,7 +106,14 @@ export const HOME_TOUR: TourStep[] = [
   },
 ]
 
-/** The graph-tools tour, in reading order (controls top-to-bottom, then the teacher). */
+/**
+ * The graph-tools tour, in reading order (controls top-to-bottom, then the
+ * teacher). The steps inside the controls panel stage `'controls'` so a
+ * collapsed panel expands under the walk; the year/citation stops carry their
+ * own target as `presentIf` — an existence check, which the collapsed panel's
+ * `hidden` (still-in-DOM) body passes whenever the graph's data earns those
+ * sliders at all.
+ */
 export const GRAPH_TOUR: TourStep[] = [
   {
     target: '[data-tour="find"]',
@@ -117,7 +124,17 @@ export const GRAPH_TOUR: TourStep[] = [
       'clears it and tucks it away. To pull new papers in, use the search box up top.',
   },
   {
+    target: '[data-tour="controls-head"]',
+    title: 'The controls panel',
+    body:
+      'Everything that declutters the map lives under this header. The header is also ' +
+      'a button. Click it to collapse the whole panel to a slim bar when you want the ' +
+      'canvas space back, and click it again to reopen. The next stops walk through ' +
+      'what’s inside.',
+  },
+  {
     target: '[data-tour="layout"]',
+    stage: 'controls',
     title: 'Two layouts',
     body:
       'Force lets connections cluster the papers; Timeline pins every paper to its ' +
@@ -125,6 +142,7 @@ export const GRAPH_TOUR: TourStep[] = [
   },
   {
     target: '[data-tour="relations"]',
+    stage: 'controls',
     title: 'Relation filters',
     body:
       'Each chip shows or hides one kind of neighbor, and the chip colors match the ' +
@@ -135,6 +153,8 @@ export const GRAPH_TOUR: TourStep[] = [
   },
   {
     target: '[data-tour="years"]',
+    stage: 'controls',
+    presentIf: '[data-tour="years"]',
     title: 'Year window',
     body:
       'Drag the two knobs to keep only papers published inside a span — in Timeline the ' +
@@ -142,6 +162,8 @@ export const GRAPH_TOUR: TourStep[] = [
   },
   {
     target: '[data-tour="citations"]',
+    stage: 'controls',
+    presentIf: '[data-tour="citations"]',
     title: 'Citation window',
     body:
       'Bound how cited the visible papers are (a log scale, so the knobs stay useful next ' +
@@ -149,6 +171,7 @@ export const GRAPH_TOUR: TourStep[] = [
   },
   {
     target: '[data-tour="actions"]',
+    stage: 'controls',
     title: 'Release · Fit · Refresh',
     body:
       'Release unpins every node you dragged and re-settles a drifted layout — without ' +
@@ -157,6 +180,7 @@ export const GRAPH_TOUR: TourStep[] = [
   },
   {
     target: '[data-tour="selector"]',
+    stage: 'controls',
     title: 'Hand-pick the teacher’s scope',
     body:
       'Hold ⌥ Alt and drag a box around papers to add them to the AI teacher’s scope — ' +
@@ -166,6 +190,7 @@ export const GRAPH_TOUR: TourStep[] = [
   },
   {
     target: '[data-tour="hint"]',
+    stage: 'controls',
     title: 'Open a paper',
     body:
       'Click any paper to open its detail panel — abstract, figures, code links, tags. ' +

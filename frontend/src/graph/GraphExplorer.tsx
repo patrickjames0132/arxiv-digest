@@ -59,8 +59,10 @@ import {
  * Render the graph area: canvas + controls + legend + detail panel, plus the
  * shell's overlays as `children`. `tourStage` is the guided tour's staging
  * signal: when it asks for `'details'` and nothing is selected, the seed is
- * selected so the detail-panel stops have a panel to walk (the selection
- * stays after — a tour that tidies up behind itself would be jarring).
+ * selected so the detail-panel stops have a panel to walk, and `'controls'`
+ * passes down to GraphControls to expand a collapsed panel (the selection
+ * and the expansion both stay after — a tour that tidies up behind itself
+ * would be jarring).
  *
  * @returns The graph exploration area.
  */
@@ -482,6 +484,7 @@ export default function GraphExplorer({
             onRefresh={onRefresh}
             refreshing={loading}
             providerNote={landmarkNote(provider, graph?.citation_source)}
+            stagedOpen={tourStage === 'controls'}
           />
         )}
 
