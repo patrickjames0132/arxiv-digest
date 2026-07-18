@@ -32,7 +32,6 @@ function makeProps(overrides: Partial<DetailPanelProps> = {}): DetailPanelProps 
   return {
     node: makeNode(),
     fieldsLabel: 'OpenAlex tags',
-    figuresLoading: false,
     onEnlarge: () => {},
     isPinned: false,
     onTogglePin: () => {},

@@ -36,6 +36,24 @@ figures.
   isn't re-hit; code links (HF Papers) and category tags (arXiv's own
   metadata) each use a requested-set for the same guarantee. A new graph
   invalidates all four caches and selects its seed.
+- **The loadable sections reveal together, behind one joint gate.** While
+  ANY of the node's fetches is in flight — summary hydration (reported by
+  `useSelection`'s `detailLoading` id), arXiv tags, code links, figures —
+  every loadable section holds its place with an anonymous shimmer block
+  (`Skeleton`, in-file; `.skel-*` variants shaped like the content to
+  come), *including one whose answer already landed*, and the whole set
+  reveals in a single paint when the last answer arrives (Patrick's call:
+  figures beating the abstract in read as jank; the first per-section
+  version let each resolve independently). Empty sections simply don't
+  appear at the reveal. The arXiv-keyed trio infers "in flight" from
+  `arxiv_id && response === undefined` — those fetches always fire on
+  first open and cache their failures, so undefined can only mean
+  pending; non-arXiv papers never fetch them, so only hydration can gate
+  those. The node-local parts (badges, title, meta, actions) render
+  instantly — they never load, so they never pop. Skeletons are
+  **headless on purpose**: a section may resolve to "nothing", and a named
+  header that then vanishes would be its own jank. Purely decorative —
+  `aria-hidden`, with the shimmer disabled under `prefers-reduced-motion`.
 - **Hydration works for non-arXiv papers** (fixed in this port): the fetch
   uses `arxiv_id ?? id` — the old code's arXiv gate left journal papers
   abstract-less forever, the client half of the hydration bug fixed

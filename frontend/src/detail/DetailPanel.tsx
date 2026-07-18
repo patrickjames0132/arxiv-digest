@@ -4,6 +4,17 @@
  * (Hugging Face Papers), lazily-loaded figures (ar5iv, click-to-enlarge via
  * the shared lightbox), and the paper actions (abstract/PDF links, pin,
  * explore-from-here).
+ *
+ * The late-arriving sections (summary hydration, arXiv tags, code links,
+ * figures) load behind ONE joint gate: while any of the node's fetches is
+ * still in flight, every one of those sections holds its place with a
+ * shimmering skeleton, and they all reveal together in a single paint once
+ * the last answer lands (Patrick's call — figures beating the abstract in
+ * read as jank; empty sections simply don't appear at the reveal). The
+ * node-local parts (badges, title, meta, actions) render instantly — they
+ * never load, so they never pop. Skeletons are anonymous gray shapes — no
+ * section heads — because a section may turn out empty and a named header
+ * that then vanishes would be its own jank.
  */
 
 import { useEffect, useState } from 'react'
@@ -19,13 +30,16 @@ import './detail.css'
 export interface DetailPanelProps {
   /** The selected node, already merged with any hydrated detail fields. */
   node: VNode
+  /** The node's summary hydration (abstract/TL;DR) is still in flight —
+   *  the summary section holds its place with a skeleton. */
+  detailLoading?: boolean
   /** Heading for the provider field-of-study tag section ("Semantic Scholar
    *  tags" / "OpenAlex tags"), naming who classified the paper. */
   fieldsLabel: string
-  /** The node's figures, once fetched (undefined while not yet requested). */
+  /** The node's figures, once fetched (undefined while still in flight —
+   *  the fetch always fires for arXiv papers, and failures cache as
+   *  unavailable, so undefined can only mean pending). */
   figures?: FiguresResponse
-  /** The figure fetch for THIS node is still in flight. */
-  figuresLoading: boolean
   /** The node's code & artifact links, once fetched (undefined until then). */
   codeLinks?: CodeLinksResponse
   /** The node's own arXiv category tags, once fetched (undefined until then). */
@@ -123,6 +137,17 @@ function SummarySection({
 }
 
 /**
+ * A shimmering placeholder block holding a loading section's place. Purely
+ * decorative (hidden from the accessibility tree); shape comes from the
+ * variant class.
+ *
+ * @returns The skeleton element.
+ */
+function Skeleton({ variant }: { variant: 'line' | 'line-short' | 'chip' | 'row' | 'fig' }) {
+  return <span className={`skel skel-${variant}`} aria-hidden="true" />
+}
+
+/**
  * Compact count for repo metadata: 1400 → "1.4k", 2100000 → "2.1M".
  *
  * @param count The raw count.
@@ -166,33 +191,44 @@ function CodeRow({
  * provider's own field classification (S2's coarse fields of study, e.g.
  * "Computer Science", or OpenAlex's finer topic labels). Each section renders
  * only when it has tags — a non-arXiv paper shows the provider section alone.
+ * While the arXiv-tag fetch is in flight (`arxivPending`), that section's
+ * slot holds a chip skeleton instead of popping in later.
  *
  * @returns The rendered tag sections, or null when there are no tags at all.
  */
 function CategoryTags({
   categories,
+  arxivPending,
   fieldsOfStudy,
   fieldsLabel,
 }: {
   categories?: CategoriesResponse
+  arxivPending: boolean
   fieldsOfStudy: string[]
   fieldsLabel: string
 }) {
   const arxivCats = categories?.available ? categories.categories : []
-  if (arxivCats.length === 0 && fieldsOfStudy.length === 0) return null
+  if (arxivCats.length === 0 && fieldsOfStudy.length === 0 && !arxivPending) return null
   return (
     <div className="detail-cat-groups" data-tour="detail-tags">
-      {arxivCats.length > 0 && (
-        <div className="detail-cat-group">
-          <div className="detail-cat-head">arXiv tags</div>
-          <div className="detail-cats">
-            {arxivCats.map((category) => (
-              <span key={category.code} className="detail-cat" title={category.code}>
-                {category.name}
-              </span>
-            ))}
-          </div>
+      {arxivPending ? (
+        <div className="detail-cats">
+          <Skeleton variant="chip" />
+          <Skeleton variant="chip" />
         </div>
+      ) : (
+        arxivCats.length > 0 && (
+          <div className="detail-cat-group">
+            <div className="detail-cat-head">arXiv tags</div>
+            <div className="detail-cats">
+              {arxivCats.map((category) => (
+                <span key={category.code} className="detail-cat" title={category.code}>
+                  {category.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )
       )}
       {fieldsOfStudy.length > 0 && (
         <div className="detail-cat-group">
@@ -272,9 +308,9 @@ function CodeSection({ code }: { code: CodeLinksResponse }) {
  */
 export default function DetailPanel({
   node,
+  detailLoading,
   fieldsLabel,
   figures,
-  figuresLoading,
   codeLinks,
   categories,
   onEnlarge,
@@ -294,6 +330,16 @@ export default function DetailPanel({
     const label = BADGE_LABEL[rel] ?? rel
     if (!badges.has(label)) badges.set(label, rel)
   }
+  // ONE joint gate for every loadable section. The arXiv-keyed fetches fire
+  // on first open for every arXiv paper and cache their failures, so an
+  // undefined response with an arxiv_id can only mean "in flight"; summary
+  // hydration reports through `detailLoading`. While ANY of them is pending,
+  // every loadable section shows its skeleton — even one whose answer came
+  // back early — and the whole set reveals in a single paint at the end.
+  const pending =
+    !!detailLoading ||
+    (!!node.arxiv_id &&
+      (categories === undefined || codeLinks === undefined || figures === undefined))
   return (
     <aside className="detail" data-tour="details" style={{ width }}>
       <div
@@ -324,11 +370,20 @@ export default function DetailPanel({
         </div>
       </div>
       <CategoryTags
-        categories={categories}
+        categories={pending ? undefined : categories}
+        arxivPending={pending && !!node.arxiv_id}
         fieldsOfStudy={node.fields_of_study ?? []}
         fieldsLabel={fieldsLabel}
       />
-      <SummarySection node={node} onGenerateTldr={onGenerateTldr} />
+      {pending ? (
+        <div className="detail-summary-skel">
+          <Skeleton variant="line" />
+          <Skeleton variant="line" />
+          <Skeleton variant="line-short" />
+        </div>
+      ) : (
+        <SummarySection node={node} onGenerateTldr={onGenerateTldr} />
+      )}
       <div className="detail-actions" data-tour="detail-actions">
         {node.url && (
           <a href={node.url} target="_blank" rel="noreferrer">
@@ -349,11 +404,19 @@ export default function DetailPanel({
           </button>
         )}
       </div>
-      {codeLinks && codeLinks.available && <CodeSection code={codeLinks} />}
-      {node.arxiv_id && !figures && figuresLoading && (
-        <div className="detail-figs-hint">Loading figures…</div>
+      {pending && node.arxiv_id && (
+        <div className="detail-code-skel">
+          <Skeleton variant="row" />
+          <Skeleton variant="row" />
+        </div>
       )}
-      {figures && figures.available && figures.figures.length > 0 && (
+      {!pending && codeLinks && codeLinks.available && <CodeSection code={codeLinks} />}
+      {pending && node.arxiv_id && (
+        <div className="detail-figs-skel">
+          <Skeleton variant="fig" />
+        </div>
+      )}
+      {!pending && figures && figures.available && figures.figures.length > 0 && (
         <div className="detail-figs" data-tour="detail-figures">
           <div className="detail-figs-head">Figures</div>
           {figures.figures.map((figure, index) => (

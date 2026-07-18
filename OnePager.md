@@ -474,18 +474,6 @@ optional, behind a key.
       array reordering; the find control's move to the bottom-right corner
       (v5.18.1) may also change where its step best sits. *(From the
       `todos.md` inbox, 2026-07-18.)*
-- [ ] **A loading state over the whole Detail panel while its pieces arrive**
-      — the panel fans out to several services after opening (S2/OpenAlex
-      abstract hydration, the ar5iv figure strip, code links…), and each
-      piece pops in as its call lands, so the panel assembles jankily in
-      front of the user. Put the panel behind a single loading treatment — a
-      spinner (or skeleton) over the whole panel until the pieces are in, or
-      at least until the primary metadata is — so it appears composed rather
-      than piecemeal. Worth deciding the cutoff deliberately: the figure
-      strip can be much slower than the metadata, and blocking the whole
-      panel on the slowest call would trade jank for a long blank — a
-      skeleton with per-section placeholders may be the honest middle.
-      *(From the `todos.md` inbox, 2026-07-18.)*
 - [ ] **A settings modal — and let the user choose corpus vs live citations** —
       there's nowhere in the UI to configure anything; the corpus is a `config.json`
       edit plus a server restart. Add a **settings button (top-right)** opening a
