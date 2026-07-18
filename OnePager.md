@@ -217,6 +217,15 @@ optional, behind a key.
       2026-07-13.)*
 
 
+- [ ] **A precise "overlapping references/citations" skill for the researcher** —
+      asking which references or citations the seed paper SHARES with an
+      expanded paper kind-of works today, but the answer comes from the model
+      eyeballing the graph and reads imprecise. Give it a real tool: a
+      deterministic overlap computation (intersect the two papers' reference/
+      citer sets server-side — the graph and the expansion data already hold
+      both) exposed as a researcher skill, so the answer is exact set output
+      rather than model recall. Probably wants the result grounded as
+      highlightable node lists too. *(From the `todos.md` inbox, 2026-07-18.)*
 - [ ] **OCR for scanned PDFs in the library** — image-only PDFs are rejected at
       ingest today; OCR them so they ingest and retrieve like any other source.
       *(Deferred — needs a system Tesseract dep, fiddly on Windows. Moved out of
@@ -507,6 +516,39 @@ optional, behind a key.
       v5.2.0 edge-less-node filter fix.)*
 
 
+
+- [ ] **Select-all for find-bar matches** — the lexical find (🔍, bottom-right)
+      highlights matching papers, but turning that spotlight into a teacher
+      scope means alt-dragging or shift-clicking them one by one. Add a
+      one-press "select all matches" control to the find pill that commits
+      the current match set to the hand-picked selection (the same
+      `nodeSelectionSet` machinery the marquee uses), so find → select →
+      ask becomes three gestures. Update the find tour stop + tooltips in
+      the same change. *(From the `todos.md` inbox, 2026-07-18.)*
+- [ ] **Responsive layout + a collapsible icon side rail (mobile-friendly)** —
+      the frontend assumes a wide desktop window; resizing squeezes the
+      header until controls collide, and mobile is unusable. Patrick's
+      sketch: much of the header (Library / Assistant / Sessions / data
+      source…) collapses into a **hidden side panel behind a hamburger
+      (☰)**, in the style of **Azure DevOps' left rail — icons visible in
+      the collapsed strip**, one per function, expanding to labels.
+      **Before building: ask Patrick for examples/images of the look he
+      wants.** Substantial: touches the header, panel overlays, and the
+      canvas-resize plumbing; probably lands in stages (desktop-narrow
+      first, true mobile after). *(From the `todos.md` inbox, 2026-07-18.)*
+- [ ] **Show the publisher/venue in the Detail panel** — the panel names no
+      venue: arXiv, Nature, IEEE, wherever — it would be nice to see at a
+      glance. Both providers can serve it: S2 has `venue`/
+      `publicationVenue` (needs adding to the hydration/graph field lists),
+      OpenAlex has `primary_location.source.display_name`. Likely a line in
+      the meta block under the authors; decide how it composes with the
+      arXiv-id line for preprints that are ALSO published (show both?).
+      *(From the `todos.md` inbox, 2026-07-18.)*
+- [ ] **DATA SOURCE dropdown arrow overflows its box** — small visual bug in
+      the header: the dropdown's caret renders just barely outside the
+      select's rounded border. Pure CSS fix in the header styles; check both
+      provider names' widths while there. *(From the `todos.md` inbox,
+      2026-07-18.)*
 
 ### Enhancements & tech debt
 
