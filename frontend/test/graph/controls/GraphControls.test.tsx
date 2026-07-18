@@ -3,7 +3,10 @@
  * The controls panel's clear-all status and the Release button: the "clear"
  * link appears for a hand-picked selection OR a teacher highlight (and fires
  * the one shared reset), and Release stays enabled with nothing pinned — it
- * doubles as "re-settle the layout".
+ * doubles as "re-settle the layout". Plus the header's collapse-to-a-bar:
+ * the body hides (but stays in the DOM for the tour's existence checks), the
+ * count readout moves into the bar, and the tour's 'controls' staging
+ * re-expands a collapsed panel.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -67,6 +70,51 @@ describe('GraphControls clear-all status', () => {
     render(<GraphControls {...makeProps({ selectedCount: 2, litCount: 3 })} />)
     expect(screen.getByText('picked', { exact: false })).toBeTruthy()
     expect(screen.queryByText('lit', { exact: false })).toBeNull()
+  })
+})
+
+describe('GraphControls collapse', () => {
+  it('collapses to the slim header bar (body hidden, not unmounted) and back', () => {
+    const { container } = render(<GraphControls {...makeProps()} />)
+    const head = screen.getByRole('button', { name: /Graph controls/ })
+    const body = container.querySelector('.ctrl-body')!
+    expect(head.getAttribute('aria-expanded')).toBe('true')
+    expect(body.hasAttribute('hidden')).toBe(false)
+
+    fireEvent.click(head)
+    expect(head.getAttribute('aria-expanded')).toBe('false')
+    // Hidden, NOT unmounted — the tour's presentIf existence checks rely on
+    // the year/citation targets staying in the DOM while collapsed.
+    expect(body.hasAttribute('hidden')).toBe(true)
+    expect(container.querySelector('[data-tour="years"]')).not.toBeNull()
+    // The visible-count readout rides the collapsed bar, unit and all.
+    expect(head.textContent).toContain('10 / 12 papers shown')
+
+    fireEvent.click(head)
+    expect(body.hasAttribute('hidden')).toBe(false)
+    expect(head.textContent).not.toContain('10 / 12 papers shown')
+  })
+
+  it('reports the hand-picked selection in the collapsed bar, and reverts on clear', () => {
+    const { rerender } = render(<GraphControls {...makeProps({ selectedCount: 3 })} />)
+    const head = screen.getByRole('button', { name: /Graph controls/ })
+    fireEvent.click(head)
+    expect(head.textContent).toContain('3 / 10 papers selected')
+
+    // Deselecting all hands the bar back to the visible-count readout.
+    rerender(<GraphControls {...makeProps({ selectedCount: 0 })} />)
+    expect(head.textContent).toContain('10 / 12 papers shown')
+    expect(head.textContent).not.toContain('selected')
+  })
+
+  it('re-expands when the tour stages the panel open', () => {
+    const { container, rerender } = render(<GraphControls {...makeProps()} />)
+    fireEvent.click(screen.getByRole('button', { name: /Graph controls/ }))
+    const body = container.querySelector('.ctrl-body')!
+    expect(body.hasAttribute('hidden')).toBe(true)
+
+    rerender(<GraphControls {...makeProps({ stagedOpen: true })} />)
+    expect(body.hasAttribute('hidden')).toBe(false)
   })
 })
 

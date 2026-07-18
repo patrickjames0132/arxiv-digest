@@ -94,8 +94,9 @@ export default function Atlas() {
   /** Stage what a tour step asks for: open the named drawer/panel; a step
    *  wanting nothing (undefined) puts the drawers away as the walk moves on.
    *  The assistant only ever opens — collapsing it mid-walk would hide the
-   *  graph tour's own lecture and ask stops. 'details' passes through to
-   *  GraphExplorer (via tourStage), which selects the seed when nothing is. */
+   *  graph tour's own lecture and ask stops. 'details' and 'controls' pass
+   *  through to GraphExplorer (via tourStage), which selects the seed when
+   *  nothing is / expands a collapsed controls panel. */
   const onTourStage = useCallback((stage?: string) => {
     setTourStage(stage)
     setShowSources(stage === 'library')

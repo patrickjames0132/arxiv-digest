@@ -6,11 +6,12 @@ parent is `graph/GraphExplorer.tsx`.
 
 ```
 controls/
-  GraphControls.tsx — layout toggle, per-relation filter chips, the
-                      dual-knob year slider, the citation-count threshold
-                      slider, count readout, release/fit/refresh actions,
-                      the node-selector row (gesture hint + picked-count /
-                      clear), the gesture hint line
+  GraphControls.tsx — a collapsible header bar over: layout toggle,
+                      per-relation filter chips, the dual-knob year slider,
+                      the citation-count threshold slider, count readout,
+                      release/fit/refresh actions, the node-selector row
+                      (gesture hint + picked-count / clear), the gesture
+                      hint line
   Legend.tsx        — the color legend (agent entries appear on first use)
 ```
 
@@ -23,6 +24,23 @@ canvas about what "a reference" looks like, and both style via
 
 ## `GraphControls` — points worth knowing
 
+- **The whole panel collapses to its header bar.** The "Graph controls"
+  header is a button: clicking it hides the body and shrinks the panel to a
+  slim strip (the find control's collapse-until-wanted idea, panel-sized),
+  giving the canvas the 272px box back; the visible-count readout rides the
+  collapsed bar (`N / total papers shown`) so the panel still reports what
+  the filters let through — and while a hand-picked selection exists it
+  reports that instead (`N / shown papers selected` — out of the shown, not
+  the total, since the pick scopes as `selected ∩ visible`), reverting when
+  the pick clears. The collapsed flag
+  is the panel's one piece of local state (like FindBar's own open/closed).
+  The body hides via `hidden`, **not** unmounting — the guided tour judges
+  its year/citation stops by element *existence* (`presentIf`), and those
+  targets must survive a collapse. The panel steps stage `'controls'`
+  (`tour/steps.ts` → `Atlas` → `GraphExplorer`'s `tourStage` → the
+  `stagedOpen` prop), which re-expands a collapsed panel so the walk has
+  something to spotlight; it never re-collapses after (no tidy-up, same as
+  the detail panel's staged seed selection).
 - **The relation chips are the only node-type filter.** Each toggles one
   relation on/off; a hidden relation's edges drop, and neighbors reachable
   only through them fall out of the view. The chips are driven by `REL_TYPES`

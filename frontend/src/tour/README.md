@@ -38,7 +38,9 @@ A step may carry `stage: '<name>'`: on entering it, `Tour` calls the caller's
 `onStage(name)` and then **polls briefly for the target** (a just-opened
 drawer needs a beat to mount) before spotlighting it — so the Library /
 Assistant / Sessions steps open their own panel and the walk continues
-inside it. Entering a step with no stage fires `onStage(undefined)`, which is
+inside it, and the graph-controls steps stage `'controls'` to re-expand a
+collapsed controls panel (via `GraphExplorer` → `GraphControls`'s
+`stagedOpen`). Entering a step with no stage fires `onStage(undefined)`, which is
 the caller's cue to put drawers away again (in `Atlas`, the two drawers close;
 the assistant only ever opens — collapsing it mid-walk would hide the graph
 tour's own lecture/ask stops, which stage it too). A staged step's target may
