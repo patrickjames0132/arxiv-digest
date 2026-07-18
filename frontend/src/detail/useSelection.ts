@@ -38,10 +38,12 @@ export interface SelectionApi {
   setSelectedId: (id: string | null) => void
   /** The selected node, merged with any hydrated detail fields. */
   selected: VNode | null
-  /** Figures per arXiv id, as they finish loading. */
+  /** The node id whose summary hydration (fetchPaperDetail) is in flight
+   *  (else null) — the detail panel shows its summary skeleton for it. */
+  detailLoading: string | null
+  /** Figures per arXiv id, as they finish loading (failures cache as
+   *  unavailable, so a missing entry always means "in flight"). */
   figures: Record<string, FiguresResponse>
-  /** The arXiv id whose figures are currently being fetched (else null). */
-  figLoading: string | null
   /** Code & artifact links (HF Papers) per arXiv id, as they finish loading. */
   codeLinks: Record<string, CodeLinksResponse>
   /** The paper's own arXiv category tags per arXiv id, as they finish loading. */
@@ -66,6 +68,9 @@ export interface SelectionApi {
 export function useSelection({ base, graph, provider, loadGraph }: UseSelectionArgs): SelectionApi {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, Partial<GraphNode>>>({})
+  // The node id whose summary hydration is in flight — drives the panel's
+  // summary skeleton so the abstract doesn't just pop in.
+  const [detailLoading, setDetailLoading] = useState<string | null>(null)
   // Figures (ar5iv) per arXiv id, lazily fetched when a node is opened.
   const [figures, setFigures] = useState<Record<string, FiguresResponse>>({})
   const [figLoading, setFigLoading] = useState<string | null>(null)
@@ -154,9 +159,11 @@ export function useSelection({ base, graph, provider, loadGraph }: UseSelectionA
       // to the arXiv-minted DOI), but the node's own id always resolves.
       const detailRef = provider === 'openalex' ? node.id : (node.arxiv_id ?? node.id)
       if (!node.tldr && !node.abstract && !details[node.id]) {
+        setDetailLoading(node.id)
         fetchPaperDetail(detailRef, provider)
           .then((full) => setDetails((prev) => ({ ...prev, [node.id]: full })))
           .catch(() => {})
+          .finally(() => setDetailLoading((cur) => (cur === node.id ? null : cur)))
       }
     },
     [details, provider, loadGraph],
@@ -171,8 +178,8 @@ export function useSelection({ base, graph, provider, loadGraph }: UseSelectionA
     selectedId,
     setSelectedId,
     selected,
+    detailLoading,
     figures,
-    figLoading,
     codeLinks,
     categories,
     onNodeClick,

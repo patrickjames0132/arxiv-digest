@@ -1367,6 +1367,32 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **A loading state over the whole Detail panel while its pieces arrive**
+      *(v5.21.0)* — the panel fans out to several services after opening
+      (S2/OpenAlex abstract hydration, arXiv category tags, HF code links,
+      the ar5iv figure strip), and each piece popped in as its call landed,
+      so the panel assembled jankily. Shipped in two design rounds. Round
+      one built the ticket's sketched "honest middle": per-section
+      **skeleton placeholders** — anonymous shimmer shapes (`Skeleton`
+      in-file, `.skel-*` variants; `aria-hidden`, shimmer off under
+      `prefers-reduced-motion`), headless on purpose since a section may
+      resolve to "nothing" and a named header that then vanishes is its own
+      jank — each resolving independently. The browser round exposed the
+      flaw: figures sometimes beat the abstract, so the assembly still read
+      staggered. Round two (Patrick's call) put everything behind **one
+      joint gate**: while ANY fetch is in flight, every loadable section
+      holds its skeleton — even one whose answer already landed — and the
+      whole set reveals in a single paint when the last answer arrives;
+      empty sections simply don't appear. Node-local parts (badges, title,
+      meta, actions) render instantly. Plumbing: `useSelection` grew a
+      `detailLoading` id for the summary hydration; the arXiv-keyed trio
+      infers "in flight" from `arxiv_id && response === undefined` (those
+      fetches always fire on first open and cache failures), which let the
+      old `figuresLoading` prop and the hook's exposed `figLoading` retire.
+      The "Loading figures…" text hint retired too. Vitest: new
+      `DetailPanel.test.tsx` (5 cases: the gate holding a known abstract,
+      the one-paint reveal, instant node-local parts, the non-arXiv paths).
+      *(From the `todos.md` inbox, 2026-07-18; shipped 2026-07-18.)*
 - [x] **Mirror the collapsed bar's readout in the expanded panel — and fold
       "clear" into the action row** *(v5.20.0)* — the v5.19.0 collapsed bar
       got the honest readout but the expanded footer still read the bare

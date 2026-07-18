@@ -217,19 +217,12 @@
 .detail-figs {
   margin-top: 16px;
 }
-.detail-figs-head,
-.detail-figs-hint {
+.detail-figs-head {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
   margin-bottom: 8px;
-}
-.detail-figs-hint {
-  margin-top: 16px;
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 13px;
 }
 .detail-fig {
   margin: 0 0 14px;
@@ -254,4 +247,68 @@
   font-size: 12px;
   line-height: 1.5;
   color: var(--muted);
+}
+
+/* --- loading skeletons --- */
+/* Anonymous shimmer shapes holding a late-arriving section's place (summary
+   hydration, arXiv tags, code links, figures) so the panel loads composed
+   instead of assembling piecemeal. Headless on purpose: a section may
+   resolve to "nothing" and collapse, and a named header that then vanishes
+   would be its own jank. */
+.skel {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(
+    100deg,
+    var(--border) 40%,
+    rgba(255, 255, 255, 0.09) 50%,
+    var(--border) 60%
+  );
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes skel-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel {
+    animation: none;
+  }
+}
+.skel-line {
+  height: 12px;
+  margin-bottom: 8px;
+}
+.skel-line-short {
+  height: 12px;
+  width: 60%;
+}
+.skel-chip {
+  display: inline-block;
+  width: 84px;
+  height: 22px;
+  border-radius: 999px;
+}
+.skel-row {
+  height: 30px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+}
+.skel-fig {
+  height: 120px;
+  border-radius: 8px;
+}
+.detail-summary-skel {
+  margin: 14px 0 6px;
+}
+.detail-code-skel {
+  margin-top: 16px;
+}
+.detail-figs-skel {
+  margin-top: 16px;
 }

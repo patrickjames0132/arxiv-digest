@@ -234,8 +234,8 @@ export default function GraphExplorer({
     selectedId,
     setSelectedId,
     selected,
+    detailLoading,
     figures,
-    figLoading,
     codeLinks,
     categories,
     onNodeClick,
@@ -538,9 +538,9 @@ export default function GraphExplorer({
       {selected && (
         <DetailPanel
           node={selected}
+          detailLoading={detailLoading === selected.id}
           fieldsLabel={provider === 'openalex' ? 'OpenAlex tags' : 'Semantic Scholar tags'}
           figures={selected.arxiv_id ? figures[selected.arxiv_id] : undefined}
-          figuresLoading={figLoading === selected.arxiv_id}
           codeLinks={selected.arxiv_id ? codeLinks[selected.arxiv_id] : undefined}
           categories={selected.arxiv_id ? categories[selected.arxiv_id] : undefined}
           onEnlarge={setLightbox}
