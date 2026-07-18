@@ -1367,6 +1367,13 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **DATA SOURCE dropdown arrow overflows its box** *(v5.24.1)* — the
+      header select relied on the native caret, which macOS rendered just
+      past the rounded border. Fixed by owning the caret:
+      `appearance: none` plus a muted data-URI SVG chevron drawn inside the
+      box (`--muted` hardcoded — CSS vars can't reach into a `url()`), with
+      right padding reserving its lane. *(From the `todos.md` inbox,
+      2026-07-18; shipped 2026-07-18.)*
 - [x] **Cleaner layout for expanded nodes — in BOTH layouts** *(v5.24.0)* —
       the researcher's `expand_node` discoveries used to land on top of the
       seed's neighborhood; after v5.23.0's relation clustering the failure

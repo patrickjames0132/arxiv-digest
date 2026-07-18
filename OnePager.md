@@ -544,11 +544,6 @@ optional, behind a key.
       the meta block under the authors; decide how it composes with the
       arXiv-id line for preprints that are ALSO published (show both?).
       *(From the `todos.md` inbox, 2026-07-18.)*
-- [ ] **DATA SOURCE dropdown arrow overflows its box** — small visual bug in
-      the header: the dropdown's caret renders just barely outside the
-      select's rounded border. Pure CSS fix in the header styles; check both
-      provider names' widths while there. *(From the `todos.md` inbox,
-      2026-07-18.)*
 
 ### Enhancements & tech debt
 

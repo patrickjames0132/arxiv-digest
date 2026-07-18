@@ -68,14 +68,22 @@
   letter-spacing: 0.04em;
   font-size: 11px;
 }
+/* Own the caret: the native select arrow rendered just past the rounded
+   border on macOS, so appearance:none drops it and a data-URI chevron
+   (--muted #7c8392 — CSS vars can't reach into a url()) draws inside the
+   box, with right padding reserving its lane. */
 .provider-select select {
-  padding: 7px 10px;
+  padding: 7px 26px 7px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--bg)
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M1 1l3 3 3-3' fill='none' stroke='%237c8392' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat right 9px center;
   color: var(--text);
   font-size: 13px;
   cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .provider-select select:hover:not(:disabled) {
   border-color: var(--accent);
