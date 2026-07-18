@@ -506,7 +506,10 @@ optional, behind a key.
       user** rather than in a file nobody edits — the second half of the
       constants-audit ticket (Enhancements & tech debt) feeds it a candidate
       list. Placement: the settings button sits top-right **beside the
-      help/tutorials button**.
+      help/tutorials button**. **Sequencing (Patrick, 2026-07-18): do this
+      only AFTER the config reorganization has landed** — the modal builds on
+      the reorganized shape (which knobs live with the user vs. in the file),
+      so doing it first would mean reworking it.
 
 - [ ] **Cleaner layout for expanded nodes** — nodes/edges the researcher pulls in
       via `expand_node` land right on top of the seed's own edges and nodes, so a
