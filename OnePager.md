@@ -179,6 +179,20 @@ optional, behind a key.
       even when asked, so "show more often, unprompted" needs the tool-call
       compliance to be solid first (stronger `AGENT_MODEL` / sub-agent
       decomposition). *(From the `todos.md` inbox, 2026-07-07.)*
+- [ ] **"Render page region" fallback for uncaptioned inline diagrams** — the
+      v5.28.0 figure miner is caption-anchored, so a diagram with no caption
+      (Sutton & Barto's inline backup diagrams; pseudo-code "figures" in very
+      old PDFs) has nothing to anchor on and correctly reports "not
+      extractable" — the one honest gap left after the Sarsa(λ) fixes. A
+      fallback could let the agent show such a diagram anyway by rendering a
+      *page region* rather than a manifest entry: e.g. a
+      `show_source_page(source_id, page)` tool (whole page, or the page's
+      largest drawing neighborhood via the existing cluster machinery), traded
+      against the risk of shipping half a page of body text as an "image".
+      Needs a crop heuristic that doesn't reintroduce the mislabeling problem
+      the caption echo just fixed — the tool result must say exactly what's
+      being shown ("page 87 of X", not a figure designation). *(Filed
+      2026-07-19, out of the v5.28.0 browser tests.)*
 - [ ] **Keep "frontier" out of the "landmark papers since" lecture** — the
       evolution lecture ("The landmark papers since", narrating the landmark
       citers) sometimes ends on a beat whose **title contains the word
