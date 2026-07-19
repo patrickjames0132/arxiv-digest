@@ -1,7 +1,9 @@
 # Configuration reference
 
 `config.json` (repo root, gitignored) holds every tunable; copy
-`config.example.json` to start. Each field's meaning lives as a Pydantic
+`config.example.json` to start. (Code-side constants — the tunables that
+deliberately *aren't* config — are catalogued in
+[`constants.md`](constants.md).) Each field's meaning lives as a Pydantic
 `Field(description=...)` right next to it in
 [`config.py`](../src/atlas/config.py) — read that file for what each
 setting does. This page is for the **why** behind specific example values,
