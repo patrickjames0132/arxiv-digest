@@ -372,18 +372,6 @@ optional, behind a key.
       a refresh/override button to the search surface, mirroring the graph's
       per-seed **Refresh** button (v2.5.0) that busts the snapshot cache.
       *(From the `todos.md` inbox, 2026-07-08.)*
-- [ ] **Distinguish survey/review papers from primary-contribution papers** — a
-      graph today treats a review or survey the same as a paper that introduces a
-      new idea, but they play very different roles in a field's story (a survey
-      *summarizes* the field; an innovation *advances* it). Classify the two per
-      node so the app can act on the difference: a **badge / distinct styling** in
-      the detail panel or on the node, and — more usefully — letting the
-      lecturer/researcher **weight primary contributions over surveys** when
-      narrating "how we got here." Decide the signal during the work: title
-      keywords ("survey" / "review" / "a comprehensive …"), the citations-vs-
-      references shape (surveys cite widely, get cited broadly, rarely introduce
-      method), or S2/OpenAlex type metadata — heuristic first, a small classifier
-      only if it needs one. *(From the `todos.md` inbox, 2026-07-13.)*
 - [ ] **SPIKE: SPECTER2 semantic retrieval as a landmark source (not just
       Similar)** — a spike to investigate, **not yet a build decision**. Patrick's
       idea: use S2's SPECTER2 recommendations to surface heavily-cited **landmark**
