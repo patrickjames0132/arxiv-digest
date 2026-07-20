@@ -12,6 +12,7 @@ api/
   search.ts    — live + local seed search, field vocabulary (routes/search.py)
   graph.ts     — graph, paper detail, figures, code links, category tags (routes/graph.py)
   sessions.ts  — saved workspaces                          (routes/sessions.py)
+  settings.ts  — the settings modal's config read/write     (routes/settings.py)
   sources.ts   — the local semantic library                (routes/sources.py)
   index.ts     — the barrel
 ```

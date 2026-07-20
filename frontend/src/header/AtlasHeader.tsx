@@ -43,6 +43,8 @@ export interface AtlasHeaderProps {
   assistantOpen: boolean
   onToggleAssistant: () => void
   onOpenSessions: () => void
+  /** Open the settings modal (config-file editor). */
+  onOpenSettings: () => void
   /** Start (or restart) the guided tour for the current phase — the search
    *  surface before a graph is up, the graph tools once one is. */
   onStartTour: () => void
@@ -70,6 +72,7 @@ export default function AtlasHeader({
   assistantOpen,
   onToggleAssistant,
   onOpenSessions,
+  onOpenSettings,
   onStartTour,
 }: AtlasHeaderProps) {
   return (
@@ -140,6 +143,15 @@ export default function AtlasHeader({
         title="Save the current graph + chat, or reopen a saved one"
       >
         🗂 Sessions
+      </button>
+      <button
+        className="sources-toggle"
+        data-tour="settings-btn"
+        onClick={onOpenSettings}
+        title="Settings — the app's configuration, editable in place"
+        aria-label="Open settings"
+      >
+        <span className="settings-gear">⚙</span>
       </button>
       <button
         className="sources-toggle tour-launch"

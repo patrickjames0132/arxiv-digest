@@ -122,7 +122,10 @@ and it's deliberate that the entry's `"provider:model"` string is only ever
 would pull the API key from environment variables, and this app's config
 rule is no env vars — the key comes from `config.llm.providers`, passed
 explicitly to the provider. `agent_entry(id)` (the lookup half) is also how
-an agent reads its own `extras` knobs. The factory also sets
+an agent reads its own `extras` knobs — which arrive **already validated**
+against that agent's model in `config.AGENT_EXTRAS`, complete with defaults
+filled in, so a package indexes them (`extras["min_beats"]`) instead of
+range-checking or `.get`-defaulting them. The factory also sets
 `anthropic_eager_input_streaming` on every model — see `streams.py` below
 for why nothing streams without it.
 
@@ -301,10 +304,11 @@ See its own README.
   Structured output replaces the old NDJSON protocol and its fence-stripping
   parser.
 - **Skills:** `numbered-papers`, `teaching-voice`, `citation-discipline`.
-- **Config:** the five mode-intent paragraphs; `extras` knobs for the
-  frontier narration window (`frontier_window_months`, default 60 — now frames
-  the FRONTIER wording only, no longer a node filter) and the beat-count bounds
-  (`min_beats`/`max_beats`, default 7–12 — widened as a full-span lever).
+- **Config:** the five mode-intent paragraphs; `extras` knobs (typed as
+  `config.LecturerExtras`) for the frontier narration window
+  (`frontier_window_months`, default 60 — now frames the FRONTIER wording only,
+  no longer a node filter) and the beat-count bounds (`min_beats`/`max_beats`,
+  default 7–12 — widened as a full-span lever; the model enforces min ≤ max).
 
 ### `researcher` — agentic Q&A over the graph *(built)*
 

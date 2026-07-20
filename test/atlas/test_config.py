@@ -71,13 +71,15 @@ def test_legacy_budget_fields_must_go_through_extras():
         Config.model_validate(cfg)
 
 
-def test_agent_extras_accepts_arbitrary_data():
-    """extras is a free-form escape hatch — any JSON-serializable value is fine."""
+def test_agent_extras_are_typed_not_free_form():
+    """extras stopped being a free-form escape hatch (v6.0.0): each agent's
+    knobs are validated against its registered model, so junk is rejected at
+    load instead of reaching the agent. See TestAgentExtras below."""
     cfg = set_nested(
         example_config(), ("llm", "agents", 0, "extras"), {"max_steps": 12, "nested": [1, 2]}
     )
-    loaded = Config.model_validate(cfg)
-    assert loaded.llm.agents[0].extras == {"max_steps": 12, "nested": [1, 2]}
+    with pytest.raises(ValidationError):
+        Config.model_validate(cfg)
 
 
 def test_agents_list_cannot_be_empty():
@@ -140,9 +142,60 @@ def test_overlap_must_be_smaller_than_chunk():
         Config.model_validate(cfg)
 
 
-def test_missing_config_file_has_helpful_error(tmp_path):
-    """A fresh clone without config.json gets told exactly what to do."""
+def test_missing_user_chosen_config_file_errors(tmp_path):
+    """A sidecar-named file that doesn't exist is an error (only the DEFAULT
+    config.json is auto-created from the example — see load_settings)."""
     from atlas.config import load_settings
 
-    with pytest.raises(FileNotFoundError, match="config.example.json"):
+    with pytest.raises(FileNotFoundError, match="nope.json"):
         load_settings(tmp_path / "nope.json")
+
+
+class TestAgentExtras:
+    """Agent knobs are typed (config.AGENT_EXTRAS), not a free-form dict —
+    so a nonsensical value fails at load rather than reaching the agent."""
+
+    def _with_extras(self, agent_id: str, extras: dict):
+        """The example config with one agent's extras replaced."""
+        cfg = example_config()
+        for entry in cfg["llm"]["agents"]:
+            if entry["id"] == agent_id:
+                entry["extras"] = extras
+        return cfg
+
+    def test_omitted_knobs_take_their_defaults(self):
+        loaded = Config.model_validate(self._with_extras("lecturer", {}))
+        lecturer = next(entry for entry in loaded.llm.agents if entry.id == "lecturer")
+        assert lecturer.extras == {
+            "frontier_window_months": 60,
+            "min_beats": 7,
+            "max_beats": 12,
+        }
+
+    def test_negative_knob_is_rejected(self):
+        with pytest.raises(ValidationError, match="min_beats"):
+            Config.model_validate(self._with_extras("lecturer", {"min_beats": -1}))
+
+    def test_zero_is_rejected_where_it_makes_no_sense(self):
+        with pytest.raises(ValidationError, match="max_steps"):
+            Config.model_validate(self._with_extras("researcher", {"max_steps": 0}))
+
+    def test_disabling_a_budget_with_zero_is_allowed(self):
+        """0 figures means "no inline figures" — legitimate, unlike 0 steps."""
+        loaded = Config.model_validate(self._with_extras("librarian", {"figures": 0}))
+        librarian = next(entry for entry in loaded.llm.agents if entry.id == "librarian")
+        assert librarian.extras["figures"] == 0
+
+    def test_beat_bounds_must_be_ordered(self):
+        with pytest.raises(ValidationError, match="min_beats"):
+            Config.model_validate(
+                self._with_extras("lecturer", {"min_beats": 9, "max_beats": 4})
+            )
+
+    def test_unknown_knob_is_rejected(self):
+        with pytest.raises(ValidationError, match="beat_count"):
+            Config.model_validate(self._with_extras("lecturer", {"beat_count": 5}))
+
+    def test_knobs_on_an_agent_that_has_none_are_rejected(self):
+        with pytest.raises(ValidationError, match="no tunable knobs"):
+            Config.model_validate(self._with_extras("summarizer", {"max_steps": 3}))

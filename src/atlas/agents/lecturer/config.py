@@ -1,9 +1,10 @@
 """The lecturer's words and knobs: its agent id, skills, prompt, the
 mode-intent paragraphs, the frontier recency window, and the beat-count
 bounds. Model choice lives in its ``config.llm.agents`` entry; the knobs
-live in that entry's ``extras`` (the staging area — promoted to typed
-config fields once their shape settles). Unknown extras keys fail at
-import so the staging area can't silently accumulate junk.
+live in that entry's ``extras``, validated at load against
+``config.LecturerExtras`` — so the values read here are already complete,
+in range, and ordered (min_beats <= max_beats). This module reads them; it
+no longer range-checks them.
 """
 
 from __future__ import annotations
@@ -15,46 +16,11 @@ AGENT_ID = "lecturer"
 
 SKILLS: tuple[str, ...] = ("numbered-papers", "teaching-voice", "citation-discipline")
 
-EXTRA_DEFAULTS: dict[str, int] = {
-    # THE CURRENT FRONTIER's recency window, in months. Wide (~5 years) on
-    # purpose: since the OpenAlex hybrid (v4.0.0) the graph's light-green
-    # "Latest Publications" nodes span the newest years plus the
-    # `LATEST_NUMBER_OF_BANDS` per-year bands below them, so the old
-    # 12-month lecture window narrated almost none of what the user sees.
-    "frontier_window_months": 60,
-    # How many beats a lecture asks for. The bound lives in the prompt (there
-    # is no hard output cap): it's also what keeps lecture length in check —
-    # raising max_beats materially lengthens (and slows) every lecture. Widened
-    # (from 5–9) so a long publication history has room for a beat at each end
-    # plus the middle — too few beats for a multi-decade story forces skipping.
-    "min_beats": 7,
-    "max_beats": 12,
-}
-
 _extras = factory.agent_entry(AGENT_ID).extras
-_unknown = set(_extras) - set(EXTRA_DEFAULTS)
-if _unknown:
-    raise ValueError(
-        f"unknown lecturer extras {sorted(_unknown)!r} in config.llm.agents — "
-        f"known knobs: {sorted(EXTRA_DEFAULTS)}"
-    )
 
-FRONTIER_WINDOW_MONTHS: int = int(
-    _extras.get("frontier_window_months", EXTRA_DEFAULTS["frontier_window_months"])
-)
-if FRONTIER_WINDOW_MONTHS <= 0:
-    raise ValueError(
-        f"lecturer extras frontier_window_months must be positive, "
-        f"got {FRONTIER_WINDOW_MONTHS}"
-    )
-
-MIN_BEATS: int = int(_extras.get("min_beats", EXTRA_DEFAULTS["min_beats"]))
-MAX_BEATS: int = int(_extras.get("max_beats", EXTRA_DEFAULTS["max_beats"]))
-if not 1 <= MIN_BEATS <= MAX_BEATS:
-    raise ValueError(
-        f"lecturer extras need 1 <= min_beats <= max_beats, "
-        f"got min_beats={MIN_BEATS}, max_beats={MAX_BEATS}"
-    )
+FRONTIER_WINDOW_MONTHS: int = _extras["frontier_window_months"]
+MIN_BEATS: int = _extras["min_beats"]
+MAX_BEATS: int = _extras["max_beats"]
 
 
 def _window_phrase(months: int) -> str:

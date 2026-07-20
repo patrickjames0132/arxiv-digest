@@ -105,6 +105,13 @@ export const HOME_TOUR: TourStep[] = [
       'save itself — zero API calls, discovered papers included — and the transcript ' +
       'comes back with it.',
   },
+  {
+    target: '[data-tour="settings-btn"]',
+    title: 'Settings',
+    body:
+      "The app's configuration — data providers, API keys, the citations corpus — " +
+      'editable in place. Changes are validated and applied live, no restart.',
+  },
 ]
 
 /**

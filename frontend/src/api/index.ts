@@ -7,6 +7,7 @@
 //   agents   — streaming lecture, Q&A, and offline library chat (SSE)
 //   sources  — the user's local semantic library (bring-your-own sources)
 //   sessions — saved workspaces (graph + transcript)
+//   settings — the settings modal's config-file read/write
 //   sse      — the shared text/event-stream reader (internal)
 
 export * from './search'
@@ -14,3 +15,4 @@ export * from './graph'
 export * from './agents'
 export * from './sources'
 export * from './sessions'
+export * from './settings'

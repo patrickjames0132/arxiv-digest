@@ -112,3 +112,10 @@ button.brand {
   text-align: center;
   font-weight: 700;
 }
+
+/* The header's settings gear: same button chrome and size — the glyph is
+ * enlarged with a transform, which doesn't affect layout. */
+.settings-gear {
+  display: inline-block;
+  transform: scale(1.45);
+}

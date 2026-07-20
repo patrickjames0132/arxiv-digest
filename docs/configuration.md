@@ -159,16 +159,22 @@ vendors. Each entry:
   skills) and its tool functions are *code*, defined in its own package's
   `config.py` and `tools.py` (see `src/atlas/agents/README.md`).
   Config carries only what an operator tunes — the model and the knobs.
-- **`extras`** is a deliberate escape hatch: a free-form JSON object for
-  settings that don't have a permanent typed home yet. An earlier version
-  of this config had a dozen first-class fields here — per-tool-call
-  budgets (`max_steps`, `reads.max_full`, `s2_search.limit`, a "How we got
-  here" lecture's backward-walk knobs, etc.). All of that was cut rather
-  than carried forward as dead weight; if a given knob turns out to still
-  matter once the agent is rebuilt, it goes into `extras` first and only
-  gets promoted to a proper typed field (with real validation) once its
-  final shape has settled. Don't treat `extras` as a long-term home —
-  it's a staging area, not a junk drawer.
+- **`extras`** holds that agent's tuning knobs, and is **typed**: each
+  agent id maps to a model in `config.py`'s `AGENT_EXTRAS` registry
+  (`LecturerExtras`, `ResearcherExtras`, `LibrarianExtras`), so every knob
+  has a bounded type, a default, and a description right beside it. Omit a
+  knob and its default applies; write a nonsensical one (`min_beats: -1`,
+  `max_steps: 0`) and the config fails to load. An agent with no registered
+  knobs must leave `extras` empty.
+
+  It began as a free-form `dict[str, Any]` staging area — a junk-drawer
+  escape hatch for knobs with no permanent home — and each agent package
+  range-checked its own values by hand at import. That left a real hole:
+  anything the hand-checks didn't cover (a negative beat count) passed
+  validation, which the settings modal made easy to hit. Typing them moved
+  the rules to one place every writer of the config goes through — hand
+  edit, modal save, or test. Adding a knob now means adding a field to the
+  agent's extras model, not a bare key in this file.
 
 ## `server` — Flask + conversation policy
 
