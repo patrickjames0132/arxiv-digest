@@ -193,6 +193,39 @@ optional, behind a key.
       the caption echo just fixed — the tool result must say exactly what's
       being shown ("page 87 of X", not a figure designation). *(Filed
       2026-07-19, out of the v5.28.0 browser tests.)*
+- [ ] **Investigate: no figures extractable from the Feynman Lectures Vol. 3** —
+      the library figure miner comes up empty on *Quantum Mechanics* (Vol. 3),
+      so the librarian can't show anything from it. Unknown yet whether this is
+      the known caption-anchoring gap (the ticket above — a book whose figures
+      are captioned in a form `CAPTION_RE` doesn't match, e.g. "Fig. 3–2" with
+      an en-dash, or captions set as running text rather than their own block),
+      a text-layer problem (the volume may be a scan, or have figures drawn as
+      vector art the cluster machinery discards), or an ingest-side failure.
+      **Start by looking, not fixing:** dump the mined manifest for the source
+      and compare against the actual pages — if captions are present but
+      unmatched it's a regex/anchor fix; if the page has no text layer it's the
+      OCR question (deliberately dropped, 2026-07-16); if the drawings are
+      filtered out it's the float-geometry constants. See
+      [docs/pdf-mining.md](docs/pdf-mining.md) before touching
+      `services/pdf` — the storage decisions there are settled.
+      *(From the `todos.md` inbox, 2026-07-19.)*
+- [ ] **A failed figure chip drops the source and mislabels the figure** — when
+      the agent can't show a figure the trace chip reads "Tried **Figure 1**"
+      rather than naming the figure *and* the source it was reaching into. Two
+      causes, both in the emitters, not the renderer
+      (`teacher/transcript/ChatMessage.tsx` already renders "of <title>" when
+      it's given one): (1) the two earliest failure paths in
+      `agents/library_figures.py` emit `title=None` because they fail *before*
+      the source resolves, so the "of …" clause is dropped entirely; (2)
+      `label` is only ever set on success (it's split off the resolved entry's
+      caption), so the chip falls back to `Figure {figure}` — and that number
+      is the **page-local ordinal**, so "Figure 1" is actively misleading for a
+      figure the book calls something else. Fix: look the source title up from
+      `source_id` on the failure paths, and give the fallback label the
+      coordinates actually requested (e.g. "figure 1 on p.42 of X") so a failed
+      chip says what was attempted. Same treatment for the researcher's
+      `show_figure` failures in `researcher/tools.py`.
+      *(From the `todos.md` inbox, 2026-07-19.)*
 - [ ] **Should display filters scope the agents? Researcher yes, lecturer maybe
       not** — today filtering the graph (relation chips, year / citation sliders)
       narrows what **both** the researcher and the lecturer are grounded in:
@@ -480,6 +513,20 @@ optional, behind a key.
         bust or key around it or the old snapshot just comes back.
       *(From the `todos.md` inbox, 2026-07-16; scoped 2026-07-19.)*
 
+- [ ] **A light/dark mode toggle** — the app is dark-only: the palette lives as
+      CSS custom properties on `:root` in `frontend/src/index.css` (`--bg`,
+      `--panel`, `--border`, `--text`, `--text-strong`, `--muted`, `--accent`,
+      `--accent-strong`), which is most of the work already done — a light
+      theme is a second set of values plus a toggle that swaps them (a
+      `data-theme` attribute on the root, persisted in localStorage, defaulting
+      to `prefers-color-scheme`). **The catch is what *doesn't* read the
+      tokens:** the graph canvas paints node/edge colors from its own
+      constants, the relation palette is fixed (green landmarks, light-green
+      latest, blue references, pink search), and several components carry
+      hardcoded rgba washes — those all need auditing before a light
+      background stops looking broken. Placement: the settings modal's General
+      section is the natural home (it's a user preference, not config).
+      *(From the `todos.md` inbox, 2026-07-19.)*
 - [ ] **A filter chip for teacher-discovered nodes and search nodes** — discovered papers
       (dashed ring, from `expand_node`/`search_papers`) and search papers have no filter control;
       add a chip (like the relation chips) to show/hide the whole discovered set
