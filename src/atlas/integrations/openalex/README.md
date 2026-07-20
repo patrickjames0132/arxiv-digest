@@ -56,10 +56,10 @@ So the two citer relations are:
   overflows pays one ceiling-sized refetch. This also guarantees no landmark
   year exceeds `PER_YEAR_CAP`, which a predicted count never could.
 - **Latest Publications** (`latest`) — **recent** citers as **uniform per-year
-  bands**: one `publication_year:<Y>` query per year (each top `nodes_per_band`
-  (config; default 50) by citations), from the band start **up to the current
-  year** — no separate newest-date window, every recent year gets its own fair
-  slice. The band's lower edge is `number_of_bands` (config; default 5) below
+  bands**: one `publication_year:<Y>` query per year (each top
+  `LATEST_NODES_PER_BAND` = 50 by citations), from the band start **up to the
+  current year** — no separate newest-date window, every recent year gets its
+  own fair slice. The band's lower edge is `LATEST_NUMBER_OF_BANDS` = 5 below
   the landmark cutoff by default, but **adapts per seed** when a `band_start`
   chooser is supplied (see below): for an old seed whose landmarks tail off
   early, the bands *widen* backward to meet the cluster. The newest

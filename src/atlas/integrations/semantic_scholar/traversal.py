@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from typing import Callable
 
 from ...config import config
-from ..caps import UNBOUNDED_LANDMARK_CAP
+from ..caps import LATEST_NODES_PER_BAND, LATEST_NUMBER_OF_BANDS, UNBOUNDED_LANDMARK_CAP
 from . import client, nodes
 
 log = logging.getLogger(__name__)
@@ -481,7 +481,7 @@ def _complete_pool_relations(
     # A declining rule (None) falls back to the flat payload guard.
     landmark = ranked[:budget] if budget is not None else ranked[:UNBOUNDED_LANDMARK_CAP]
 
-    earliest = max_landmark_year - config.graph.latest_nodes.number_of_bands + 1
+    earliest = max_landmark_year - LATEST_NUMBER_OF_BANDS + 1
     if band_start is not None:
         adaptive = band_start(
             [year for year in (entry["node"].get("year") for entry in landmark) if year],
@@ -497,7 +497,7 @@ def _complete_pool_relations(
     shipped = {entry["node"]["id"] for entry in landmark}
     recent: list[dict] = []
     for year_entries in by_year.values():
-        recent += _select_by_influence(year_entries, config.graph.latest_nodes.nodes_per_band)
+        recent += _select_by_influence(year_entries, LATEST_NODES_PER_BAND)
     latest = [entry for entry in recent if entry["node"]["id"] not in shipped]
     latest.sort(key=_latest_order, reverse=True)
     latest.reverse()

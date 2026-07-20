@@ -21,7 +21,7 @@ app that consumes it:
 ```
 config.storage    — the three SQLite database paths
 config.providers.s2         — Semantic Scholar connection settings
-config.graph      — how big a neighborhood one seed pulls onto the canvas
+config.graph      — the graph's provider default and snapshot-cache TTL
 config.sources    — bring-your-own sources: embedding, chunking, retrieval
 config.server     — Flask host/port/debug
 config.llm        — providers (backend credentials) + agents (behavior)

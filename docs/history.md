@@ -2297,14 +2297,19 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       `integrations/caps.py`, **named as the payload guard it is** (never
       fitted, deliberately not config — the "worth deciding while in there"
       item), where both providers use it without depending on each other. The
-      surviving band knobs were renamed and grouped:
-      `graph.latest_nodes.{number_of_bands, nodes_per_band}` (were
-      `latest_band_years`/`latest_per_year`). **Migration:** `extra="forbid"`
-      fails startup until each machine's gitignored `config.json` drops to the
-      four-key `graph` shape, and `CLAUDE.md`'s session-start drift check now
-      flags keys the template has *dropped*, not just added. `GraphConfig` ends
-      at `default_provider · latest_nodes · cache_ttl`. *(Patrick, 2026-07-17;
-      browser-tested.)*
+      band-shape knobs left config too (Patrick's symmetry argument: if
+      landmark sizing isn't configurable, band sizing isn't either), renamed
+      on the way out: `caps.LATEST_NUMBER_OF_BANDS` and
+      `caps.LATEST_NODES_PER_BAND` (were `latest_band_years`/`latest_per_year`,
+      briefly `graph.latest_nodes.*`) — `caps.py` grew from the payload guard
+      into the shared cross-provider sizing-constants module. **Migration:**
+      `extra="forbid"` fails startup until each machine's gitignored
+      `config.json` drops to the two-key `graph` shape, and `CLAUDE.md`'s
+      session-start drift check now flags keys the template has *dropped*, not
+      just added. `GraphConfig` ends at `default_provider · cache_ttl` —
+      config.json is operator concerns only, and `docs/constants.md` (new)
+      catalogues every code-side constant the purge decisions rest on.
+      *(Patrick, 2026-07-17; browser-tested.)*
 - [x] **~~Iterative (multi-round) landmark mining to beat recency bias~~ —
       RETIRED** *(v4.0.0)* — this was an idea to loop S2 reference-list mining to
       fill the sparse early-landmark band. The **OpenAlex hybrid** (shipped)

@@ -9,7 +9,6 @@ from __future__ import annotations
 import datetime
 import urllib.parse
 
-from atlas.config import config
 from atlas.integrations.openalex import client, traversal
 
 
@@ -86,8 +85,8 @@ def test_landmark_is_all_time_latest_is_uniform_year_bands(monkeypatch):
     (no separate newest-date window), shipped oldest-first so the reveal slider
     walks toward the present — and a recent paper that's also an all-time giant
     stays a landmark, excluded from latest (not double-shown)."""
-    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 3)
-    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
+    monkeypatch.setattr(traversal, "LATEST_NUMBER_OF_BANDS", 3)
+    monkeypatch.setattr(traversal, "LATEST_NODES_PER_BAND", 40)
     current, _, landmark_max = _split_years()  # bands: (landmark_max-2) .. current
     band_years = []
 
@@ -131,8 +130,8 @@ def test_latest_is_year_bands_with_no_date_window(monkeypatch):
     ``from_publication_date``/``publication_date:desc`` window at all — robust to
     OpenAlex's coarse year-only (``<year>-01-01``) dates, and the bands run right
     up to the current year (the ex-window years are just more bands now)."""
-    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
-    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
+    monkeypatch.setattr(traversal, "LATEST_NUMBER_OF_BANDS", 1)
+    monkeypatch.setattr(traversal, "LATEST_NODES_PER_BAND", 40)
     current, _, landmark_max = _split_years()
     filters = []
 
@@ -154,8 +153,8 @@ def test_latest_is_year_bands_with_no_date_window(monkeypatch):
 def test_latest_ships_oldest_first(monkeypatch):
     """The banded citers ship oldest-first — the enumeration rank drives the
     reveal slider, which walks toward the present."""
-    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
-    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
+    monkeypatch.setattr(traversal, "LATEST_NUMBER_OF_BANDS", 1)
+    monkeypatch.setattr(traversal, "LATEST_NODES_PER_BAND", 40)
     current_year, latest_from, _ = _split_years()
 
     def fake_request(url):
@@ -182,8 +181,8 @@ def test_band_start_callable_places_the_band_span(monkeypatch):
     landmark distribution — it's fed the shipped landmarks' years and the
     landmark-max year, and its return is used directly (no only-widen clamp), so
     it can place the start earlier OR later than the fixed number_of_bands."""
-    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 2)
-    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
+    monkeypatch.setattr(traversal, "LATEST_NUMBER_OF_BANDS", 2)
+    monkeypatch.setattr(traversal, "LATEST_NODES_PER_BAND", 40)
     current, _, landmark_max = _split_years()
     band_years = []
     seen_args = {}
@@ -215,8 +214,8 @@ def test_band_start_callable_places_the_band_span(monkeypatch):
 def test_band_start_none_keeps_the_fixed_span(monkeypatch):
     """When the chooser returns None (or isn't supplied), the band span is the
     fixed number_of_bands — the non-adaptive fallback behavior is unchanged."""
-    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 3)
-    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
+    monkeypatch.setattr(traversal, "LATEST_NUMBER_OF_BANDS", 3)
+    monkeypatch.setattr(traversal, "LATEST_NODES_PER_BAND", 40)
     current, _, landmark_max = _split_years()
     band_years = []
 
@@ -236,8 +235,8 @@ def test_band_start_callable_can_place_a_later_start(monkeypatch):
     """With no only-widen clamp, a chooser may start the bands LATER than the
     fixed span too — a young seed whose landmark cluster edge is recent gets a
     tight recent frontier, not the full fixed span."""
-    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 5)
-    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
+    monkeypatch.setattr(traversal, "LATEST_NUMBER_OF_BANDS", 5)
+    monkeypatch.setattr(traversal, "LATEST_NODES_PER_BAND", 40)
     current, _, landmark_max = _split_years()
     band_years = []
 
@@ -255,8 +254,8 @@ def test_band_start_callable_can_place_a_later_start(monkeypatch):
 
 def test_payload_guard_caps_all_time_query(monkeypatch):
     """The payload guard caps the (only) all-time landmark query."""
-    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
-    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
+    monkeypatch.setattr(traversal, "LATEST_NUMBER_OF_BANDS", 1)
+    monkeypatch.setattr(traversal, "LATEST_NODES_PER_BAND", 40)
     monkeypatch.setattr(traversal, "UNBOUNDED_LANDMARK_CAP", 2)
 
     def fake_request(url):
@@ -278,8 +277,8 @@ def test_landmark_budget_computes_from_a_one_page_probe(monkeypatch):
     from ONE ranked page: the rule sees the probe's years most-cited first, and
     its count trims the band — no model, no second request when the rule stops
     inside the probe."""
-    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
-    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
+    monkeypatch.setattr(traversal, "LATEST_NUMBER_OF_BANDS", 1)
+    monkeypatch.setattr(traversal, "LATEST_NODES_PER_BAND", 40)
     landmark_queries = []
     seen: dict[str, object] = {}
 
@@ -310,8 +309,8 @@ def test_landmark_budget_probe_extends_when_nothing_overflows(monkeypatch):
     """A seed whose top-200 never overflows a year is the one case the probe
     can't settle — the fetch extends to the ceiling and the rule re-measures
     over the longer ranking."""
-    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
-    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
+    monkeypatch.setattr(traversal, "LATEST_NUMBER_OF_BANDS", 1)
+    monkeypatch.setattr(traversal, "LATEST_NODES_PER_BAND", 40)
     landmark_calls = []
 
     def fake_request(url):
@@ -340,8 +339,8 @@ def test_landmark_budget_probe_extends_when_nothing_overflows(monkeypatch):
 def test_landmark_budget_declining_keeps_the_flat_cap(monkeypatch):
     """A budget rule answering None (the adaptive toggle off) leaves the flat
     payload guard in charge — same fallback contract as the corpus source."""
-    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
-    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
+    monkeypatch.setattr(traversal, "LATEST_NUMBER_OF_BANDS", 1)
+    monkeypatch.setattr(traversal, "LATEST_NODES_PER_BAND", 40)
 
     def fake_request(url):
         params = _query(url)

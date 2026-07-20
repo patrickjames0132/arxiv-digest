@@ -3,7 +3,7 @@
 **What it produces.** `model.joblib` (beside this trainer) — the model the app
 loads (`atlas.services.graph.bands`) to decide, per seed, where the *Latest
 Publications* per-year bands should **start** (replacing the fixed
-`config.graph.latest_nodes.number_of_bands` span).
+`caps.LATEST_NUMBER_OF_BANDS` span).
 
 **Why.** Field Landmarks are a seed's all-time most-cited citers (any year);
 Latest Publications fills recent years evenly, one `cited_by_count` query per

@@ -394,7 +394,6 @@ def test_complete_pool_bands_cap_each_year_and_exclude_landmarks(monkeypatch):
     """The complete-pool Latest bands mirror the corpus: each band year ships
     its top ``nodes_per_band`` by citations, and a citer already shipped as a
     landmark stays a landmark rather than double-showing."""
-    from atlas.config import config
 
     this_year = datetime.date.today().year
     band_year = this_year - 1
@@ -410,7 +409,7 @@ def test_complete_pool_bands_cap_each_year_and_exclude_landmarks(monkeypatch):
         {"paperId": "band_dreg", "citationCount": 1, "year": band_year,
          "publicationDate": f"{band_year}-05-01"},
     ])
-    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 2)
+    monkeypatch.setattr(traversal, "LATEST_NODES_PER_BAND", 2)
     landmark, latest = _relations(
         max_landmark_year=this_year - 2, current_year=this_year,
         landmark_budget=lambda citer_years: 1,

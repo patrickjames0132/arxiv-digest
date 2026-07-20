@@ -31,9 +31,8 @@ import re
 from collections.abc import Sequence
 from typing import Callable
 
-from ...config import config
 from .. import arxiv
-from ..caps import UNBOUNDED_LANDMARK_CAP
+from ..caps import LATEST_NODES_PER_BAND, LATEST_NUMBER_OF_BANDS, UNBOUNDED_LANDMARK_CAP
 from . import client, nodes
 
 log = logging.getLogger(__name__)
@@ -408,7 +407,7 @@ def citation_relations(
     * **latest** (light-green, *Latest Publications*) — **recent** citers as
       **per-year bands**: one ``publication_year:<Y>`` query per year (each top
       ``nodes_per_band`` by citations), from the band start up to the current
-      year. The band span defaults to ``config.graph.latest_nodes.number_of_bands`` (below
+      year. The band span defaults to ``LATEST_NUMBER_OF_BANDS`` (below
       the landmark cutoff) plus the ``_LATEST_YEARS`` latest-only years above it,
       but when a ``band_start`` chooser is supplied it may **widen** per seed to
       close the landmark→latest gap (see :func:`bands.earliest_band_year`).
@@ -442,7 +441,7 @@ def citation_relations(
     """
     current_year = datetime.date.today().year
     max_landmark_year = landmark_max_year(datetime.date.today())
-    per_year = config.graph.latest_nodes.nodes_per_band
+    per_year = LATEST_NODES_PER_BAND
 
     # FIELD LANDMARKS: the all-time giants, up to the last landmark year.
     landmark = _budgeted_landmarks(
@@ -456,7 +455,7 @@ def citation_relations(
     # start up to the current year (by citations, one query each so no single year
     # dominates), excluding giants. Uniform per-year bands the whole way — no
     # separate newest-date window — so every recent year gets its own fair slice.
-    earliest_band_year = max_landmark_year - config.graph.latest_nodes.number_of_bands + 1
+    earliest_band_year = max_landmark_year - LATEST_NUMBER_OF_BANDS + 1
     if band_start is not None:
         landmark_years = [entry["node"].get("year") for entry in landmark]
         adaptive_start = band_start(

@@ -225,42 +225,15 @@ class ProvidersConfig(ConfigModel):
     openalex: OpenAlexConfig
 
 
-class LatestNodesConfig(ConfigModel):
-    """The shape of the 'Latest Publications' relation's per-year bands.
-
-    Its own settings group because the two knobs only mean anything together
-    — a band count without a per-band size (or vice versa) describes no
-    relation — and because the planned settings modal's non-adaptive mode
-    hands exactly this pair to the user.
-    """
-
-    number_of_bands: PositiveInt = Field(
-        description="How many one-year bands below the landmark cutoff the 'Latest "
-        "Publications' relation covers — one cited_by_count:desc query per year, each "
-        "feeding the LATEST relation (not landmarks), running up to the current year. "
-        "Fills recent years evenly. The fixed FALLBACK band span for when the fitted "
-        "tau rule (services/graph/bands.py earliest_band_year) can't place a per-seed "
-        "start — model unloadable, or too few dated landmarks. See "
-        "openalex/traversal.py citation_relations."
-    )
-    nodes_per_band: PositiveInt = Field(
-        description="Top-N most-cited citers kept from each one-year Latest band "
-        "(≤200, OpenAlex's page cap). Per-year banding gives even coverage; a single "
-        "recent-window query sorted by citations would let its oldest year dominate."
-    )
-
-
 class GraphConfig(ConfigModel):
-    """The graph build's few remaining knobs — provider, band shape, cache.
+    """The graph build's two remaining knobs — provider and cache.
 
-    Deliberately small: the app **sizes every relation itself** (the adaptive
-    rules in ``services/graph/budget.py`` and ``bands.py``, ceilinged by the
-    ``integrations.caps.UNBOUNDED_LANDMARK_CAP`` payload guard), so there are
-    no per-relation count caps and no adaptive on/off toggles here — those
-    were deleted as knobs nobody turned. What remains either genuinely varies
-    per deployment (``default_provider``, ``cache_ttl``) or shapes the Latest
-    bands in ways the fitted rules fall back on (``latest_nodes``). See
-    docs/configuration.md.
+    Deliberately minimal: the app **sizes every relation itself** (the
+    adaptive rules in ``services/graph/budget.py`` and ``bands.py``, with the
+    shared guards and band-shape defaults in ``integrations/caps.py``), so
+    there are no per-relation count caps, no adaptive on/off toggles, and no
+    band-shape fields here — all deleted as knobs nobody turned. What
+    remains genuinely varies per deployment. See docs/configuration.md.
     """
 
     default_provider: Literal["s2", "openalex"] = Field(
@@ -274,9 +247,6 @@ class GraphConfig(ConfigModel):
         "but reads the seed from OpenAlex's own record (a famous published paper resolves "
         "to its lower-cited arXiv-preprint stub). The user overrides this per graph from "
         "the header dropdown."
-    )
-    latest_nodes: LatestNodesConfig = Field(
-        description="The 'Latest Publications' bands' shape (see LatestNodesConfig)."
     )
     cache_ttl: NonNegativeInt = Field(
         description="Seconds a graph snapshot stays cached before rebuilding. "

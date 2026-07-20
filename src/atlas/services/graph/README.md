@@ -188,7 +188,7 @@ cache hit, a deliberate trade.
    places the band start at the **density tail edge** of the landmark cluster (a
    second offline model, `src/ml_pipelines/latest_gap/model.joblib`), closing the
    gap for an old seed and keeping a tight frontier for a young one, falling
-   back to the fixed `config.graph.latest_nodes.number_of_bands` span when the model can't
+   back to the fixed `caps.LATEST_NUMBER_OF_BANDS` span when the model can't
    load or the seed has too few dated landmarks. `build.py` injects
    `bands.earliest_band_year` as the OpenAlex `band_start` callable so
    `integrations` stays below `services` in the import order (config-free, so

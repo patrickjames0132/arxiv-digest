@@ -85,18 +85,16 @@ The recommendations candidate pool is a call parameter now too
 (`s2.recommendations(..., pool=)`, defaulting to `"all-cs"` in code — S2's
 `"recent"` pool returns zero hits for seeds older than a year or two).
 
-What remains configurable — the Latest bands' shape, grouped under
-`graph.latest_nodes` (its own sub-object because the two knobs only mean
-anything together, and the planned settings modal's non-adaptive mode hands
-exactly this pair to the user):
+The Latest bands' shape lives in code too — `caps.LATEST_NUMBER_OF_BANDS`
+(the fallback span, 5) and `caps.LATEST_NODES_PER_BAND` (top-N per band, 50)
+— by the same argument as the landmarks: if landmark sizing isn't
+configurable, band sizing isn't either. (The settings modal's non-adaptive
+mode will hand this pair to the user *per request*, not through this file.)
 
-- **`latest_nodes.number_of_bands: 5`** — the **fallback** band span, used
-  only when the tau rule can't place a per-seed start (model unloadable, or
-  too few dated landmarks): the bands then cover this many one-year slices
-  below the landmark cutoff, running up to the current year.
-- **`latest_nodes.nodes_per_band: 50`** — top-N most-cited citers kept from
-  each one-year band (≤200, OpenAlex's page cap). Per-year banding gives even
-  coverage; one big recency query would let its oldest year dominate.
+What remains configurable:
+
+- **`default_provider: "s2"`** — see `config.py`; the header dropdown
+  overrides it per graph.
 - **`cache_ttl: 86400`** (1 day) — citation graphs change slowly; a day-long
   cache keeps repeat exploration and backtracking instant without
   re-hitting S2.

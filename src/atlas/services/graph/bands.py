@@ -7,7 +7,7 @@ once, with worked examples, in ``docs/landmark-vocabulary.md``; the sibling
 Field Landmarks are a seed's all-time most-cited citers (any year); Latest
 Publications fills recent years evenly with one ``cited_by_count`` query *per
 year*, up to the current year. Those bands used to start at a **fixed** lower
-edge (``config.graph.latest_nodes.number_of_bands``). For an *old* seed whose landmark
+edge (``LATEST_NUMBER_OF_BANDS``). For an *old* seed whose landmark
 cluster tails off years before that fixed start, the timeline shows a dead
 stretch between the last landmark and the first band — the gap this module
 closes.

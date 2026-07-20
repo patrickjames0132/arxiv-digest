@@ -44,8 +44,7 @@ from typing import Callable, Protocol
 
 import duckdb
 
-from ....config import config
-from ...caps import UNBOUNDED_LANDMARK_CAP
+from ...caps import LATEST_NODES_PER_BAND, LATEST_NUMBER_OF_BANDS, UNBOUNDED_LANDMARK_CAP
 from . import paths as corpus_paths
 from .ingest import NBUCKETS
 from .paths import ReleasePaths, read_current_release
@@ -574,7 +573,7 @@ def citation_relations(
     # LATEST PUBLICATIONS: per-year bands. The start defaults to the fixed span and
     # may widen per seed, read off the landmarks we just chose — which is why this
     # runs second.
-    earliest = max_landmark_year - config.graph.latest_nodes.number_of_bands + 1
+    earliest = max_landmark_year - LATEST_NUMBER_OF_BANDS + 1
     if band_start is not None:
         adaptive = band_start(
             [year for year in (entry["node"].get("year") for entry in landmark) if year],
@@ -584,7 +583,7 @@ def citation_relations(
             earliest = adaptive
     recent = source.latest_bands(corpus_id, band_start=earliest,
                                  current_year=current_year,
-                                 per_year=config.graph.latest_nodes.nodes_per_band)
+                                 per_year=LATEST_NODES_PER_BAND)
 
     # The bands reach below max_landmark_year, so a giant can appear in both —
     # keep it a landmark rather than double-showing it (as the OpenAlex path does).

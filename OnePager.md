@@ -496,7 +496,8 @@ optional, behind a key.
         guard as the only ceiling), the per-chip **count sliders come back**
         (a feature we once had and removed) so the user trims what's
         *displayed*, and the Latest bands' shape becomes user input: cluster
-        start, `latest_nodes.number_of_bands`, `latest_nodes.nodes_per_band`.
+        start, `LATEST_NUMBER_OF_BANDS`, `LATEST_NODES_PER_BAND` (code
+        defaults in `integrations/caps.py`, overridden per request).
         The flag lives **with the user**, reaching the build per request — it
         deliberately does not return to `config.json` (the v6.0.0 purge
         deleted the old file toggles). **Open question:** with adaptive ON,
