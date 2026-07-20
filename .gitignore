@@ -3,6 +3,7 @@
 # rewrite; config.json: the new settings file for already-rewritten parts.
 .env
 config.json
+.config-location
 
 # Data
 data/

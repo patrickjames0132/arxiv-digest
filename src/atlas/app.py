@@ -14,6 +14,7 @@ import logging.handlers
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, send_from_directory
+from flask.json.provider import DefaultJSONProvider
 from flask_cors import CORS
 
 from .config import config
@@ -54,6 +55,12 @@ def create_app() -> Flask:
         force=True,
     )
     app = Flask(__name__, static_folder=None)
+    # Keep JSON keys in the order we put them — the settings modal round-trips
+    # the config file through the API, and Flask's default alphabetical sort
+    # was silently reordering the file on every save. (isinstance narrowing:
+    # ``app.json`` is typed as the abstract provider, which has no sort_keys.)
+    if isinstance(app.json, DefaultJSONProvider):
+        app.json.sort_keys = False
     # Books can be large — allow generous uploads for source ingestion.
     app.config["MAX_CONTENT_LENGTH"] = 256 * 1024 * 1024  # 256 MB
     # Allow the Vite dev server (localhost:5173) to call the API during

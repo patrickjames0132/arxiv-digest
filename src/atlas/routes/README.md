@@ -157,6 +157,27 @@ on S2 and we fall back to the lexical search we'd have run anyway — the
 failure mode is "no better than today," never worse. Post-cutoff papers
 degrade to plain expansion the same way.
 
+## `settings.py` — the settings modal's backend
+
+| Endpoint | Job |
+| --- | --- |
+| `GET /api/settings` | the active config file's path + parsed contents |
+| `PUT /api/settings` | replace the file's contents (validated first) and apply live |
+| `PUT /api/settings/location` | repoint the app at another config file (`""` = default) |
+| `POST /api/settings/pick` | open the OS file chooser server-side, return the picked path |
+
+The modal is a **config-file editor**, so the file stays the single source of
+truth: PUT validates the whole body as a `Config` *before* writing anything
+(a rejection returns the Pydantic field error as the 400 body and changes
+nothing), then rewrites the file **in the example template's canonical key order**
+(stable saves, readable diffs — Flask's default alphabetical JSON sort is
+also off for the same reason) and folds the fresh values into the running
+app's shared `config` object in place (`config.reload_config` — every
+consumer reads fields late, so no restart). The raw file JSON is what GET
+returns and PUT accepts, so values round-trip byte-for-byte. The location
+endpoint validates the target file before switching the `.config-location`
+sidecar (see `config.py`).
+
 ## `sessions.py` — saved workspaces
 
 | Endpoint | Job |

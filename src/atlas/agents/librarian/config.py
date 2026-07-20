@@ -34,22 +34,9 @@ SYSTEM_PROMPT = (
     "yourself — no ASCII art, no text diagrams."
 )
 
-BUDGET_DEFAULTS: dict[str, int] = {
-    "figures": 2,  # show_source_figure calls per answer
-}
-
-_extras = factory.agent_entry(AGENT_ID).extras
-_unknown = set(_extras) - set(BUDGET_DEFAULTS)
-if _unknown:
-    raise ValueError(
-        f"unknown librarian extras {sorted(_unknown)!r} in config.llm.agents — "
-        f"known budget knobs: {sorted(BUDGET_DEFAULTS)}"
-    )
-
-BUDGETS: dict[str, int] = {
-    **BUDGET_DEFAULTS,
-    **{name: int(value) for name, value in _extras.items()},
-}
+#: The per-answer budgets, straight from this agent's validated ``extras``
+#: (see ``config.LibrarianExtras``) — always complete, so callers index.
+BUDGETS: dict[str, int] = factory.agent_entry(AGENT_ID).extras
 
 NO_HITS_ANSWER = (
     "I couldn't find anything in your library about that. Try rephrasing, "

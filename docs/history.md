@@ -1447,6 +1447,56 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **A settings modal — the app's config, editable in place** *(v6.1.0)* —
+      there was nowhere in the UI to configure anything: every setting was a
+      `config.json` hand-edit plus a server restart. The modal (⚙, top-right
+      beside the help button) is a **config-file editor**, laid out like
+      Claude Desktop's settings — a left sidebar with a search field and
+      grouped nav, a right pane of label-left / control-right rows on
+      hairline dividers, skinned with the app's own dark tokens.
+      **The file stays the single source of truth:** the modal loads the
+      active `config.json`, edits a local draft, and writes the whole object
+      back on Save; the server validates *before* writing anything and folds
+      accepted values into the running app in place (`config.reload_config`),
+      so changes apply **without a restart** — the load-once-at-import
+      question the ticket flagged, answered by mutating the shared object
+      rather than by a per-request override. A rejected save writes nothing
+      and comes back as a **per-field** error list (`{path, message}`),
+      rendered one readable line per bad setting instead of raw Pydantic
+      text. Sections: General (default data source, graph cache lifetime,
+      and the **config-file location** — an editable path plus a 📁 button
+      that opens the *native* OS chooser via the backend, because a browser
+      never reveals absolute paths; the choice persists in a gitignored
+      `.config-location` sidecar), Data Providers (keys, throttles), Agents
+      (all five, each with a **model dropdown** populated live from the
+      Anthropic Models API, plus the lecturer/researcher/librarian knobs),
+      and Citations Corpus. Search is **PyCharm-style** — rows are a
+      registry, so typing filters the nav to sections with a matching row
+      *and* the pane to the matching rows themselves.
+      **Three things this forced open along the way.** (1) `llm.agents[].extras`
+      stopped being a free-form `dict[str, Any]` that each agent package
+      range-checked by hand at import — it's typed now, per-agent models in
+      `config.AGENT_EXTRAS` (`LecturerExtras`/`ResearcherExtras`/
+      `LibrarianExtras`) with bounded types, defaults, descriptions, and a
+      min≤max beats rule; a nonsensical knob (`min_beats: -1`) is refused at
+      save where it used to sail through, and the three agent packages lost
+      their defaults dicts and hand-rolled checks entirely. (2) Flask's
+      `jsonify` alphabetizes keys, so every modal round-trip was silently
+      re-sorting `config.json` — `sort_keys` is off and each save is written
+      in the example template's canonical key order, making saves stable and
+      diffs readable. (3) `providers.default_provider` turned out to be
+      **inert**: the store hardcoded `'s2'` and the frontend names a provider
+      on every request, so neither the dropdown's initial state nor the
+      backend fallback ever consulted it — the app now seeds the header
+      selector from it on mount (only when nothing is loaded, so a restored
+      session isn't yanked). Number fields also carry their config field's
+      floor client-side (spinner stop + clamp), as a second line behind the
+      server's validation. *(From the `todos.md` inbox, 2026-07-16; layout,
+      scope, and polish rounds by Patrick, 2026-07-19; browser-tested.
+      Stage 2+ — the adaptive checkbox, the revived per-chip sliders, the
+      band-shape inputs, and the corpus on/off toggle — stays in the
+      Backlog.)*
+
 - [x] **Show the publisher/venue in the Detail panel** *(v5.26.0)* — the
       panel named no venue. Now the meta block reads **`Authors: …`** /
       **`Publisher: *venue*`** (prefix plain, value italicized — both

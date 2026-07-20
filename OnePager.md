@@ -452,43 +452,10 @@ optional, behind a key.
 
 ### UI & rendering polish
 
-- [ ] **A settings modal — and let the user choose corpus vs live citations** —
-      there's nowhere in the UI to configure anything; the corpus is a `config.json`
-      edit plus a server restart. Add a **settings button (top-right)** opening a
-      modal that can at least (a) point at the citations corpus
-      (`storage.s2_corpus`) and (b) **toggle
-      the corpus off**, falling back to the live S2 citation endpoint. The fallback
-      already exists and is automatic when the corpus can't serve a seed; this makes
-      it a *choice* — useful when the corpus is stale, mid-ingest, or suspect.
-      Design questions worth settling first: config today is **load-once at import**
-      (`config.py`'s `config = load_settings()`), so a UI that writes `config.json`
-      either needs a reload path or an honest "restart required" — and a
-      *per-request* provider/source override (like `?provider=`) may be the cleaner
-      model than mutating global config. The graph cache is keyed by
-      `(provider, seed)` and **not** by citation source, so a toggle must bust or
-      key around it or the old snapshot just comes back. *(From the `todos.md`
-      inbox, 2026-07-16.)* **Scope grew 2026-07-17:** the modal is also the
-      landing place for whichever `config.json` knobs deserve to live **with the
-      user** rather than in a file nobody edits — the second half of the
-      constants-audit ticket (Enhancements & tech debt) feeds it a candidate
-      list. Placement: the settings button sits top-right **beside the
-      help/tutorials button**. **Sequencing (Patrick, 2026-07-18): do this
-      only AFTER the config reorganization has landed** — the modal builds on
-      the reorganized shape (which knobs live with the user vs. in the file),
-      so doing it first would mean reworking it. *(The reorg shipped as the
-      v6.0.0 config purge — see history — so this is unblocked.)*
-      **Scope & design notes (Patrick, 2026-07-19):**
-      - **Layout mirrors Claude Desktop's settings modal**: a left sidebar with
-        a search field and grouped nav sections (icon + label per entry,
-        selected item highlighted), a right content pane with bold section
-        headings and label-left / control-right rows separated by hairline
-        dividers.
-      - **`config.json` is the modal's store**: the modal reads its displayed
-        values from `config.json` and writes changes back to it — and the user
-        can point the app at **their own config.json location** from the modal.
-        (This sharpens the load-once design question above: the modal is a
-        config *editor*, so it needs a reload path or per-request overrides
-        for the graph-affecting settings.)
+- [ ] **Settings modal, stage 2+ — the adaptive checkbox, the revived sliders,
+      and the corpus toggle** — the modal itself shipped in v6.1.0 (see
+      history); what's left is the *graph-shaping* half, which needs
+      per-request plumbing rather than config edits.
       - **The headline setting is a single `adaptive` checkbox.** ON = today's
         behavior: STOP/SKIP size the landmark band, the tau rule places the
         Latest cluster start, and the filter chips have **no sliders**. OFF =
@@ -503,6 +470,15 @@ optional, behind a key.
         deleted the old file toggles). **Open question:** with adaptive ON,
         should nodes-per-band come from the SKIP rule instead of the fixed
         `nodes_per_band` (50)?
+      - **Corpus vs live citations, as a choice.** The corpus path is a
+        `storage.s2_corpus` edit today (settable in the modal since v6.1.0),
+        but there's no way to say "ignore the corpus for this build" — useful
+        when it's stale, mid-ingest, or suspect. The fallback already exists
+        and is automatic when the corpus can't serve a seed; this makes it
+        deliberate. **The catch:** the graph cache is keyed by
+        `(provider, seed)` and **not** by citation source, so a toggle must
+        bust or key around it or the old snapshot just comes back.
+      *(From the `todos.md` inbox, 2026-07-16; scoped 2026-07-19.)*
 
 - [ ] **A filter chip for teacher-discovered nodes and search nodes** — discovered papers
       (dashed ring, from `expand_node`/`search_papers`) and search papers have no filter control;

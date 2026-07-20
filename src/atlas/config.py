@@ -24,7 +24,7 @@ module-level ``from ... import y``) so those overrides are seen.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import (
     BaseModel,
@@ -33,6 +33,8 @@ from pydantic import (
     NonNegativeFloat,
     NonNegativeInt,
     PositiveInt,
+    ValidationError,
+    ValidationInfo,
     field_validator,
     model_validator,
 )
@@ -243,6 +245,98 @@ class LLMProvidersConfig(ConfigModel):
     anthropic: AnthropicConfig
 
 
+class LecturerExtras(ConfigModel):
+    """The lecturer's knobs: the frontier window and the beat-count bounds."""
+
+    frontier_window_months: PositiveInt = Field(
+        default=60,
+        description="THE CURRENT FRONTIER's recency window, in months. Wide (~5 years) "
+        "on purpose: since the OpenAlex hybrid (v4.0.0) the graph's light-green 'Latest "
+        "Publications' nodes span the newest years plus the per-year bands below them "
+        "(caps.LATEST_NUMBER_OF_BANDS), so the old 12-month lecture window narrated "
+        "almost none of what the user sees.",
+    )
+    min_beats: PositiveInt = Field(
+        default=7,
+        description="Fewest beats a lecture asks for. Too few for a multi-decade story "
+        "forces skipping, which is why this was widened from 5.",
+    )
+    max_beats: PositiveInt = Field(
+        default=12,
+        description="Most beats a lecture asks for. The bound lives in the prompt (there "
+        "is no hard output cap) and is what keeps lecture length in check — raising it "
+        "materially lengthens (and slows) every lecture.",
+    )
+
+    @model_validator(mode="after")
+    def _beats_bound_is_ordered(self) -> LecturerExtras:
+        """A lecture can't want more beats at minimum than at maximum."""
+        if self.min_beats > self.max_beats:
+            raise ValueError(
+                f"min_beats ({self.min_beats}) must not exceed max_beats ({self.max_beats})"
+            )
+        return self
+
+
+class ResearcherExtras(ConfigModel):
+    """The researcher's per-question budgets — the ceilings on one agentic run.
+
+    Every one is a hard stop on cost and latency, so they're bounded types
+    rather than free ints: a zero read budget is legitimate (turn the tool
+    off), a negative one is nonsense.
+    """
+
+    max_steps: PositiveInt = Field(
+        default=12, description="Total tool calls per question, across all tools."
+    )
+    full_reads: NonNegativeInt = Field(
+        default=4, description="Full-text paper reads per question — the priciest tokens."
+    )
+    summary_reads: NonNegativeInt = Field(
+        default=12, description="Abstract/TL;DR reads per question."
+    )
+    hops: NonNegativeInt = Field(
+        default=5, description="expand_node calls per question — bounds graph growth."
+    )
+    expand_limit: PositiveInt = Field(
+        default=8, description="Neighbors fetched per expand_node hop."
+    )
+    searches: NonNegativeInt = Field(
+        default=3, description="search_papers calls per question — bounds off-graph reach."
+    )
+    search_limit: PositiveInt = Field(default=8, description="Hits fetched per search.")
+    source_searches: NonNegativeInt = Field(
+        default=5, description="Library-retrieval calls per question."
+    )
+    figures: NonNegativeInt = Field(
+        default=3, description="show_source_figure calls per answer (0 disables figures)."
+    )
+    fulltext_max_chars: PositiveInt = Field(
+        default=8000,
+        description="Characters kept per full-text read, so one read can't flood the context.",
+    )
+
+
+class LibrarianExtras(ConfigModel):
+    """The librarian's one knob."""
+
+    figures: NonNegativeInt = Field(
+        default=2, description="show_source_figure calls per answer (0 disables figures)."
+    )
+
+
+#: Which typed knob model validates each agent's ``extras`` — the registry
+#: ``AgentConfig`` looks itself up in. An agent absent from here has no
+#: tunable knobs and must leave ``extras`` empty. Adding a knob means adding
+#: a field to the model here (with its default and description), not a bare
+#: key in config.json.
+AGENT_EXTRAS: dict[str, type[ConfigModel]] = {
+    "lecturer": LecturerExtras,
+    "researcher": ResearcherExtras,
+    "librarian": LibrarianExtras,
+}
+
+
 class AgentConfig(ConfigModel):
     """One configured agent: which model it runs, plus its tunables.
 
@@ -265,9 +359,12 @@ class AgentConfig(ConfigModel):
         "'<provider>:<model_name>' string (e.g. 'anthropic:claude-sonnet-4-6'). The "
         "prefix must name a vendor configured under `providers`."
     )
-    extras: dict[str, Any] = Field(
-        description="Free-form bag for agent-specific settings not yet promoted to "
-        "a first-class field."
+    extras: dict[str, int] = Field(
+        description="This agent's tuning knobs — validated against the typed model "
+        "registered for its `id` (see AGENT_EXTRAS), so a nonsensical value is "
+        "rejected at load instead of reaching the agent. Omitted knobs take the "
+        "model's default, and the stored value is always the fully-populated set. "
+        "An agent with no registered knobs must leave this empty."
     )
 
     @field_validator("model")
@@ -280,6 +377,55 @@ class AgentConfig(ConfigModel):
                 "'anthropic:claude-sonnet-4-6'"
             )
         return model
+
+    @field_validator("extras")
+    @classmethod
+    def _extras_match_this_agents_schema(
+        cls, extras: dict[str, int], info: ValidationInfo
+    ) -> dict[str, int]:
+        """Validate the knobs against this agent's typed model, filling defaults.
+
+        The knobs used to be a free-form ``dict[str, Any]`` that each agent
+        package range-checked by hand at import — so a value the hand-check
+        didn't cover (a negative ``min_beats``, say) sailed through the
+        settings modal's save and only misbehaved later. Validation lives here
+        now, so every writer of the config — hand-edit, modal, or test — hits
+        the same typed schema. Runs as a *field* validator so a failure is
+        reported at ``…agents.<n>.extras``, which is where the reader has to
+        go to fix it.
+
+        Args:
+            extras: The knob values as written in the config file.
+            info: Pydantic's validation context — ``id`` is already validated
+                (it's declared first), so it can be read from ``info.data``.
+
+        Returns:
+            The validated, fully populated knob set.
+
+        Raises:
+            ValueError: When a knob is unknown, out of range, or supplied for
+                an agent that has none.
+        """
+        agent_id = info.data.get("id")
+        schema = AGENT_EXTRAS.get(agent_id) if isinstance(agent_id, str) else None
+        if schema is None:
+            if extras:
+                raise ValueError(
+                    f"agent {agent_id!r} has no tunable knobs — extras must be empty, "
+                    f"got {sorted(extras)}"
+                )
+            return extras
+        try:
+            return dict(schema.model_validate(extras).model_dump())
+        except ValidationError as error:
+            # Flatten the inner model's failures into one readable line each —
+            # the reader wants the knob name and the rule, not a nested dump.
+            raise ValueError(
+                "; ".join(
+                    f"{'.'.join(str(part) for part in item['loc']) or 'extras'}: {item['msg']}"
+                    for item in error.errors()
+                )
+            ) from None
 
     @property
     def provider(self) -> str:
@@ -513,17 +659,84 @@ class Config(ConfigModel):
 
 CONFIG_PATH = PROJECT_ROOT / "config.json"
 
+#: The tracked template. A missing default ``config.json`` is **created from
+#: it automatically** at load (fresh checkout boots keyless with no setup
+#: step), and the settings route uses its key order as the canonical
+#: structure every save is written in.
+EXAMPLE_CONFIG_PATH = PROJECT_ROOT / "config.example.json"
 
-def load_settings(path: Path = CONFIG_PATH) -> Config:
-    """Parse and validate a config file into a Settings object."""
+#: Optional sidecar naming the active config file — one absolute path on one
+#: line. Written by the settings modal's "config file location" setting. A
+#: sidecar rather than a config field because the pointer to the config can't
+#: live inside the file it points at. Gitignored, like the config itself.
+CONFIG_LOCATION_FILE = PROJECT_ROOT / ".config-location"
+
+
+def active_config_path() -> Path:
+    """The config file the app runs on — the sidecar's pick, or the default.
+
+    Returns:
+        The path named by ``CONFIG_LOCATION_FILE`` when the sidecar exists and
+        is non-blank, else the default ``CONFIG_PATH`` (created from the
+        example on first load — see :func:`load_settings`).
+    """
+    try:
+        named = CONFIG_LOCATION_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        named = ""
+    return Path(named).expanduser() if named else CONFIG_PATH
+
+
+def load_settings(path: Path | None = None) -> Config:
+    """Parse and validate a config file into a Settings object.
+
+    A missing **default** ``config.json`` is created from the tracked example
+    first (a fresh checkout boots keyless, no setup step); only a missing
+    *sidecar-named* file is an error — the user pointed at something that
+    isn't there.
+
+    Args:
+        path: The file to load; None (the default) loads the active config
+            (see :func:`active_config_path`).
+
+    Returns:
+        The validated settings.
+
+    Raises:
+        FileNotFoundError: When a user-chosen config file doesn't exist.
+    """
+    path = path if path is not None else active_config_path()
+    if path == CONFIG_PATH and not path.exists():
+        path.write_text(EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8"), encoding="utf-8")
     try:
         raw = path.read_text()
     except FileNotFoundError:
-        raise FileNotFoundError(
-            f"{path} not found — copy config.example.json to config.json "
-            "and fill in your values."
-        ) from None
+        raise FileNotFoundError(f"config file {path} not found") from None
     return Config.model_validate_json(raw)
 
 
 config = load_settings()
+
+
+def reload_config(path: Path | None = None) -> None:
+    """Re-read the active config file into the shared ``config``, in place.
+
+    The settings modal's write path: after the settings route rewrites the
+    config file (or repoints the sidecar), this folds the fresh values into
+    the **existing** ``config`` object field by field — every consumer holds
+    the module-level ``config`` and reads its fields late (the codebase
+    convention), so an in-place update is seen everywhere without a restart.
+    Validation happens in :func:`load_settings`; on failure the shared object
+    is left untouched.
+
+    Args:
+        path: The file to load; None (the default) re-reads the active config.
+
+    Raises:
+        FileNotFoundError: When the file doesn't exist.
+        pydantic.ValidationError: When the file's contents are invalid —
+            propagated so the caller can report it; ``config`` is unchanged.
+    """
+    fresh = load_settings(path)
+    for field_name in Config.model_fields:
+        setattr(config, field_name, getattr(fresh, field_name))

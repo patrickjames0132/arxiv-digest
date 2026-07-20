@@ -12,14 +12,15 @@
  * and Save reads the store, not a hoisted copy.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { listSources, PROVIDER_LABEL } from './api'
+import { getSettings, listSources, PROVIDER_LABEL } from './api'
 import { ID_RE } from './graph/model'
 import { useAppDispatch, useAppSelector } from './store'
 import {
   errorSet,
   loadGraph,
+  providerSet,
   restoreSession,
   saveWorkspace,
   switchProvider,
@@ -32,6 +33,7 @@ import HitList from './search/HitList'
 import Teacher from './teacher/Teacher'
 import Sources from './library/Sources'
 import Sessions from './sessions/Sessions'
+import SettingsModal from './settings/SettingsModal'
 import Tour from './tour/Tour'
 import { GRAPH_TOUR, HOME_TOUR, TOUR_KEYS } from './tour/steps'
 import './atlas.css'
@@ -50,6 +52,7 @@ export default function Atlas() {
   // Drawer visibility + the assistant toggle — shell-local UI.
   const [showSources, setShowSources] = useState(false)
   const [showSessions, setShowSessions] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
   // Gates the graph-free library-chat entry point; refreshed when the
   // Sources drawer closes (they may have added/removed sources).
@@ -60,7 +63,33 @@ export default function Atlas() {
       .then((res) => setLibraryCount(res.sources.length))
       .catch(() => {})
   }, [])
+  // Latest graph, readable from the mount-only effect below without making it
+  // a dependency (that would re-fire the settings fetch on every graph load).
+  const graphRef = useRef(graph)
+  graphRef.current = graph
+
   useEffect(refreshLibraryCount, [refreshLibraryCount])
+
+  // Seed the header's data-source selector from the configured default. The
+  // store's initial value is a placeholder — the honest default lives in
+  // config (`providers.default_provider`, editable in the settings modal),
+  // and without this the setting would be inert: the dropdown always started
+  // on 's2' and the frontend names a provider on every request, so the
+  // backend's own fallback never fired either. Only applied before anything
+  // is loaded, so it can't yank a restored session onto another provider.
+  useEffect(() => {
+    let cancelled = false
+    void getSettings()
+      .then((settings) => {
+        const configured = settings.config.providers.default_provider
+        if (!cancelled && !graphRef.current && configured) dispatch(providerSet(configured))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+  }, [])
 
   // Surface the teacher whenever a graph loads or a session restores. (Home
   // also bumps the epoch, but with no graph there's nothing to surface.)
@@ -174,12 +203,15 @@ export default function Atlas() {
         assistantOpen={assistantOpen}
         onToggleAssistant={() => setAssistantOpen((prev) => !prev)}
         onOpenSessions={() => setShowSessions(true)}
+        onOpenSettings={() => setShowSettings(true)}
         onStartTour={() => setTourOpen(true)}
       />
 
       {tourOpen && (
         <Tour steps={hasGraph ? GRAPH_TOUR : HOME_TOUR} onClose={closeTour} onStage={onTourStage} />
       )}
+
+      <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
 
       <Sources
         open={showSources}

@@ -36,28 +36,7 @@ SYSTEM_PROMPT = (
     "the answer draws on (an empty list if none)."
 )
 
-BUDGET_DEFAULTS: dict[str, int] = {
-    "max_steps": 12,  # total tool calls per question, across all tools
-    "full_reads": 4,
-    "summary_reads": 12,
-    "hops": 5,  # expand_node calls
-    "expand_limit": 8,  # neighbors fetched per hop
-    "searches": 3,  # search_papers calls
-    "search_limit": 8,  # hits fetched per search
-    "source_searches": 5,
-    "figures": 3,
-    "fulltext_max_chars": 8000,
-}
-
-_extras = factory.agent_entry(AGENT_ID).extras
-_unknown = set(_extras) - set(BUDGET_DEFAULTS)
-if _unknown:
-    raise ValueError(
-        f"unknown researcher extras {sorted(_unknown)!r} in config.llm.agents — "
-        f"known budget knobs: {sorted(BUDGET_DEFAULTS)}"
-    )
-
-BUDGETS: dict[str, int] = {
-    **BUDGET_DEFAULTS,
-    **{name: int(value) for name, value in _extras.items()},
-}
+#: The per-question budgets, straight from this agent's validated ``extras``
+#: (see ``config.ResearcherExtras`` for each knob's meaning and default) —
+#: always the complete set, so callers index rather than ``.get``.
+BUDGETS: dict[str, int] = factory.agent_entry(AGENT_ID).extras
