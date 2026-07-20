@@ -562,15 +562,6 @@ optional, behind a key.
 
 ### Enhancements & tech debt
 
-- [ ] **Revisit the root `README.md` — wording, clutter, formatting** — the
-      repo's front page has grown by accretion (a dozen shipped features each
-      added their paragraph) and reads cluttered. Do an editorial pass:
-      tighten the wording, cut duplication with `OnePager.md` /
-      `docs/`-pages it can link instead, and clean up the formatting so a
-      newcomer gets the what-and-why in one screen. Content changes should
-      stay honest to the current app — check claims against the shipped
-      feature set while in there. *(From the `todos.md` inbox, 2026-07-18.)*
-
 - [ ] **Audit every constant in `src/` for config-knob-worthiness — then decide
       which knobs belong in the UI instead** — a systematic pass over the
       module-level constants (`NBUCKETS`, `_RANK_POOL`, `_MAX_OFFSET`,
