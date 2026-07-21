@@ -304,7 +304,7 @@ pipeline and its model.
 
 ## The provider-calibration problem
 
-**Unresolved. Decide before Phase 1.**
+**Settled 2026-07-20: option 1, two curves.**
 
 Citation counts are provider-specific: OpenAlex's `cited_by_count` and S2's
 `citationcount` disagree for the same paper (different indexing coverage;
@@ -313,17 +313,29 @@ to the OpenAlex serving path is **miscalibrated**, and it would surface as the
 OpenAlex graph carrying systematically more landmarks than the S2 one — exactly
 the scenario-dependence the whole design is meant to buy out.
 
-Three options:
+The options considered:
 
 1. **Two curves** — `T_s2[]` from the corpus (huge sample, free) and
-   `T_openalex[]` from a smaller OpenAlex collection run. Most correct; roughly
-   doubles Phases 0–1.
-2. **One curve + a measured correction factor** *(recommended)* — fit on S2,
-   then measure the OpenAlex/S2 count ratio on papers present in both and scale.
-   The bridge table already exists: `live_pool_validation/corpus.csv` carries
-   `work_id` (OpenAlex) *and* `corpus_id`/`doi` (S2) for 58 seeds.
-3. **One curve, accept the drift** — fastest, but reintroduces
+   `T_openalex[]` from an OpenAlex collection run. **Chosen: most correct.**
+   Roughly doubles Phases 0–1.
+2. *(Rejected)* One curve + a measured correction factor — fit on S2, then
+   measure the OpenAlex/S2 count ratio on papers present in both and scale.
+   Cheaper, but a single scalar cannot capture a ratio that varies by field,
+   era, and venue type.
+3. *(Rejected)* One curve, accept the drift — fastest, but reintroduces
    provider-dependent graph density.
+
+**This choice and the narrow target range reinforce each other.** A 20–40
+landmark band (below) leaves little slack: a miscalibrated provider would push
+seeds out of range far more readily than it would out of a wider band. Two
+properly fitted curves make the tight band attainable; a correction factor
+probably would not.
+
+Practical consequence for Phase 0: **two collection runs**, not one. The S2 half
+comes from the corpus via DuckDB (fast, unlimited); the OpenAlex half needs a
+throttled API run, which is what `cite_budget/collect.py` already does — it just
+has to stop discarding `cited_by_count`. `S(median seed) = 1` is pinned
+*per curve*, so each provider's `T[]` reads on its own scale.
 
 ---
 
@@ -377,8 +389,8 @@ phases per the working agreement (browser test before any commit).
 
 | Phase | Where | Work |
 | --- | --- | --- |
-| **0 — Data** | **Windows** | New `ml_pipelines/landmark_threshold/`. Sample seeds + their citers with `(year, citationcount)` from the corpus via DuckDB. Resolve the provider-calibration question first. |
-| **1 — Fit** | **Windows** | Research notebook under `research/`. Fit `T[age]`, `S()`, `FLOOR` jointly against the legibility objective. Commit the artifact + `corpus.csv`. |
+| **0 — Data** | **Windows** | New `ml_pipelines/landmark_threshold/`. **Two collection runs** (calibration option 1): the S2 half samples seeds + their citers with `(year, citationcount)` from the corpus via DuckDB; the OpenAlex half extends `cite_budget/collect.py` to stop discarding `cited_by_count`. |
+| **1 — Fit** | **Windows** | Research notebook under `research/`. Fit `T_s2[age]` and `T_openalex[age]`, plus `S()` and `FLOOR`, jointly against the 20–40 objective, `S(median) = 1` pinned per curve. **Report the achieved count spread**, not just the parameters. Also score the predicate against full-history STOP via `live_pool_validation` (see below). Commit both artifacts + `corpus.csv`. |
 | **2 — Rule** | Either | `budget.py` → a small `threshold.py` predicate. Delete `bands.py`, `shape.py`'s adaptive machinery, `_decline_budget`, `cache_suffix()`. |
 | **3 — Traversals** | Either | Rewire all three: OpenAlex gets a server-side `cited_by_count:>N` filter; corpus gets a SQL `WHERE`; live S2 pages and filters in memory. Latest becomes the complement. |
 | **4 — Frontend** | Either | Sliders always visible, display-only trimming; drop the adaptive toggle from settings; `Field Landmarks` → `Landmarks` in the 6 strings above; update tour steps, legend, tooltips (the "in-app help tracks the UI" rule). |
@@ -389,15 +401,41 @@ phases per the working agreement (browser test before any commit).
 - **The objective.** Fit so the **landmark count lands in a legible range for
   every seed** in the corpus — niche and blockbuster alike. This is a far
   better-posed objective than the per-year-cap sweep that produced
-  `PER_YEAR_CAP = 12`. Proposed range: **40–120 landmarks**. Rationale: the
-  retired cite-budget model's computed budgets averaged ~76 across the 58-seed
-  validation corpus, so 40–120 brackets today's behavior rather than silently
-  changing graph density under cover of a refactor. **Patrick has not confirmed
-  this number.**
+  `PER_YEAR_CAP = 12`. **Target range: 20–40 landmarks** (Patrick, 2026-07-20).
+
+  An earlier proposal of 40–120 was rejected, and the reasoning matters because
+  it is easy to re-derive the wrong number. 40–120 was chosen to bracket
+  *today's* behavior — the retired cite-budget model's computed budgets averaged
+  ~76 across the 58-seed validation corpus. But **that comparison is invalid
+  under the new design**: today the landmark budget *is* the volume control,
+  whereas under the predicate the **sliders** govern volume (display-only) and
+  the threshold governs only the **split**. Tightening 76 → 30 does not shrink
+  the graph; it reclassifies citers from Landmark into Latest.
+
+  So the number is a **composition** target and must be chosen against the
+  **default slider position**. If the default draws ~60 citer nodes and the
+  threshold admits 76 landmarks, the user sees 60 landmarks and *zero* Latest —
+  the second category is invisible at default settings. 20–40 leaves room for
+  both halves to show. It also matches the semantic claim better: *Attention*
+  has 180,215 citers, and the field-defining ones (BERT, GPT-3, ViT, T5,
+  RoBERTa, Llama) number a few dozen. 76 is "notable papers"; 20–40 is
+  "landmarks".
+
+  **Fitting risk — report the achieved spread.** 20–40 is a 2× band where
+  40–120 was 3×, and `S(seed)` must hold *every* seed inside it across ~3 orders
+  of magnitude of seed size. With a single-parameter `S()` that only works if
+  the citer citation distribution has a roughly constant power-law exponent
+  across seeds — plausible, not guaranteed. Phase 1 must therefore report the
+  **distribution of achieved landmark counts**, not just the fitted parameters.
+  If a 2× band proves infeasible, that finding belongs at fit time, not in the
+  browser; the fallbacks are a slightly wider band, a more flexible `S()`, or
+  accepting a named set of outliers.
 - **`T[]` and `S()` are degenerate unless one is pinned.** Only their *product*
-  enters the rule, so the fit has a free scale parameter. Pin
-  **`S(median seed) = 1`**, which makes `T[age]` read as "the bar for a typical
-  seed" and `S()` a pure multiplier. **Patrick has not confirmed this either.**
+  enters the rule, so the fit has a free scale parameter. **Pinned:
+  `S(median seed) = 1`** (Patrick, 2026-07-20), which makes `T[age]` read as
+  "the bar for a typical seed" and `S()` a pure multiplier. Pin it
+  **per provider curve**, so `T_s2[]` and `T_openalex[]` each read on their own
+  scale.
 - **Fit on citers, not on all papers.** The corpus's `papers` table would give
   a `T[age]` curve over the whole literature in one `GROUP BY`, but that is the
   wrong population — citers of a notable seed skew higher-quality than the
@@ -411,9 +449,18 @@ phases per the working agreement (browser test before any commit).
 
 ## Open items
 
-1. **Provider calibration** — options 1/2/3 above. Recommended: 2.
-2. **The legible range** — proposed 40–120 landmarks. Unconfirmed.
-3. **Pinning `S(median seed) = 1`** — proposed. Unconfirmed.
+**None blocking.** All three former open items were settled by Patrick on
+2026-07-20: provider calibration takes **option 1, two curves**; the target
+range is **20–40 landmarks**; and **`S(median seed) = 1`** is pinned per curve.
+Phase 0 can start.
+
+Two things to decide *during* the build rather than before it:
+
+1. **The default slider position.** The 20–40 target was chosen as a composition
+   ratio against it, so the two numbers are coupled — pick the slider default in
+   Phase 4 with the fitted landmark counts in hand, not independently.
+2. **What to do if the 2× band proves infeasible** — see the fitting risk above.
+   Phase 1 reports the achieved spread; decide then.
 
 ---
 

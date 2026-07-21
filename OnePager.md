@@ -262,9 +262,14 @@ optional, behind a key.
       are in [docs/citation-threshold.md](docs/citation-threshold.md) — read it
       first.** Phases 0–1 (collect + fit) must run on the **Windows** machine,
       which has the offline citations corpus; the fitted artifact is git-tracked
-      so it travels back. Three items still open: provider calibration
-      (S2 vs OpenAlex counts disagree), the target landmark range, and pinning
-      `S(median seed) = 1`. *(Filed 2026-07-20.)*
+      so it travels back. **Fully specified — no open questions.** Provider
+      calibration takes two separately fitted curves (S2 and OpenAlex citation
+      counts disagree, and the narrow band leaves no slack for a correction
+      factor); the fit targets **20–40 landmarks** per seed, chosen as a
+      *composition* ratio against the default slider rather than to match
+      today's ~76, because the threshold no longer controls volume — the
+      sliders do; and `S(median seed) = 1` is pinned per curve.
+      *(Filed 2026-07-20.)*
 - [ ] ~~**Spike: is the SKIP rule what we actually want?**~~ — **superseded
       2026-07-20** by the threshold-predicate ticket above, which generalizes
       this spike's own option (3), "SKIP with a citation floor", into an
