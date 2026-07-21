@@ -246,7 +246,32 @@ optional, behind a key.
 
 ### Citations & graph data
 
-- [ ] **Spike: is the SKIP rule what we actually want?** — Patrick's ask
+- [ ] **Replace every citation rule with one threshold predicate** — Patrick's
+      epiphany (2026-07-20). Rip out the STOP rule, the SKIP rule, truncated vs
+      full history, and adaptive vs non-adaptive, and replace all of them with a
+      single per-citer predicate:
+      `citer.cited_by >= max(FLOOR, T[now - citer.year] * S(seed.cited_by))`.
+      A predicate reads one citer and never the pool, so it is order-free by
+      construction — which is *why* one rule can serve every scenario. Latest
+      Publications becomes the complement (deleting `bands.py`, `tau`,
+      `max_span`, and `ml_pipelines/latest_gap`); the adaptive switch is deleted
+      and the sliders come back permanently as display-only trimming;
+      `PER_YEAR_CAP` is demoted from semantics to a default slider position; and
+      "Field Landmarks" becomes just "Landmarks". **The full design, both wrong
+      turns, all four decisions, the data findings, and the phased build plan
+      are in [docs/citation-threshold.md](docs/citation-threshold.md) — read it
+      first.** Phases 0–1 (collect + fit) must run on the **Windows** machine,
+      which has the offline citations corpus; the fitted artifact is git-tracked
+      so it travels back. Three items still open: provider calibration
+      (S2 vs OpenAlex counts disagree), the target landmark range, and pinning
+      `S(median seed) = 1`. *(Filed 2026-07-20.)*
+- [ ] ~~**Spike: is the SKIP rule what we actually want?**~~ — **superseded
+      2026-07-20** by the threshold-predicate ticket above, which generalizes
+      this spike's own option (3), "SKIP with a citation floor", into an
+      age-adjusted, seed-scaled floor applied to every path. Kept for its
+      success criterion, which the new design should still be measured against
+      (see [docs/citation-threshold.md](docs/citation-threshold.md) →
+      "Relationship to the spike"). Original text follows. — Patrick's ask
       (2026-07-17), from the conversation that retired the budget model. Since
       v5.13.0 SKIP serves exactly one situation: a **truncated** live pool — a
       hyper-cited seed, on a machine with no corpus. Everything else prefixes by
