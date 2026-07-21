@@ -716,6 +716,18 @@ optional, behind a key.
       "LLM vendor" row is a fixed label. Watch for per-provider streaming and
       tool-call differences in the agentic paths (see `teacher/agentic.py`'s
       SDK-boundary handling). *(From the `todos.md` inbox, 2026-07-20.)*
+- [ ] **Publish to PyPI — pick an available distribution name** — `atlas` is
+      almost certainly taken on PyPI, so the package `name` in `pyproject.toml`
+      must change (candidates: `arxiv-atlas`, `atlas-papers`, …) even though the
+      GitHub repo and the `atlas` CLI stay as-is. Also needs the packaging work:
+      a `[build-system]`, **bundling the built React frontend (`frontend/dist`)
+      as package data** so `atlas serve` works from an installed wheel,
+      config-file discovery for an installed package (today it reads
+      `config.json` from the cwd), and the PyPI metadata (license, authors,
+      classifiers, project URLs, long-description from the README). Ties into the
+      licensing work (2026-07-20) — a public, timestamped PyPI release is also
+      the prior-art defense discussed there. *(Raised 2026-07-20, deferred from
+      the licensing pass.)*
 
 ### Larger phases
 
