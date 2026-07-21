@@ -684,6 +684,21 @@ optional, behind a key.
       bundling) is the separate "Publish to PyPI" item above; this is the
       surrounding automation. Likely staged: CI first, then release automation,
       then deploy. *(From the `todos.md` inbox, 2026-07-20.)*
+- [ ] **Rename the `data/oa_pdfs/` PDF cache — "oa" reads as OpenAlex, means
+      open-access** — `services/pdf/fetch.py` caches downloaded PDFs under
+      `data_dir/oa_pdfs` (hash-named, LRU-pruned beyond `config.pdf.cache_files`).
+      The `oa_` prefix is meant as *open-access* but reads as *OpenAlex*, which
+      misleads — the cache is provider-agnostic (any paper's open-access PDF,
+      mined for figures/full text). Rename to something unambiguous (`pdfs/`,
+      `pdf_cache/`), updating `fetch.py` and the `services/pdf/README.md`
+      references; old `oa_pdfs/` dirs can age out (it's a regenerable cache).
+      *(From the `todos.md` inbox, 2026-07-20.)*
+- [ ] **Move `check_identifiers.py` out of `bin/` to the project root** — the
+      no-single-letter-identifiers AST hook lives in `bin/check_identifiers.py`,
+      but it's repo-level tooling like `noxfile.py`, which sits at the root; move
+      it alongside. Updates the `.pre-commit-config.yaml` `entry`
+      (`uv run --no-sync python bin/check_identifiers.py`) and the two CLAUDE.md
+      references. *(From the `todos.md` inbox, 2026-07-20.)*
 
 ### Larger phases
 
