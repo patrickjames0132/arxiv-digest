@@ -253,8 +253,8 @@ optional, behind a key.
       `citer.cited_by >= max(FLOOR, T[now - citer.year] * S(seed.cited_by))`.
       A predicate reads one citer and never the pool, so it is order-free by
       construction — which is *why* one rule can serve every scenario. Latest
-      Publications becomes the complement (deleting `bands.py`, `tau`,
-      `max_span`, and `ml_pipelines/latest_gap`); the adaptive switch is deleted
+      Publications becomes the complement (deleting `bands.py`, `tau`, and
+      `max_span`); the adaptive switch is deleted
       and the sliders come back permanently as display-only trimming;
       `PER_YEAR_CAP` is demoted from semantics to a default slider position; and
       "Field Landmarks" becomes just "Landmarks". **The full design, both wrong
@@ -458,7 +458,7 @@ optional, behind a key.
   reuses the recommendations API, which that ticket keeps wired for the
   researcher anyway.)
 
-  **The experiment (extends `research/citation_coverage/`).** Same seeds
+  **The experiment.** Same seeds
   (Attention, GPT-3, QMIX, DQN + a physics control like Hawking): pull SPECTER
   neighbors re-ranked by citations, then measure against (a) our shipped OA
   landmark set, (b) S2's true top-cited citers where pullable (the <9k-citer RL
@@ -585,24 +585,24 @@ optional, behind a key.
       holds operator concerns (paths, keys, ports), the modal holds user
       preferences, and code holds fitted or structural constants. *(From the
       `todos.md` inbox, 2026-07-17.)*
-- [ ] **Gate the research notebooks — nothing executes them, so they rot
-      silently** — two of the three (`research/cite_budget`, `research/latest_gap`)
-      had been un-executable since the src-layout migration and nobody noticed,
-      because no nox session runs a notebook (see `docs/bugs.md` → "Two of the
-      three research notebooks had been un-executable for weeks"). `precommit`
-      lints notebook *identifiers*, which makes them feel covered while their
-      actual correctness is checked by no one; a committed output is a claim, and
-      claims were going stale invisibly. **Proposal:** a `notebooks` nox session
-      running `jupyter nbconvert --execute` over `research/*/analyze.ipynb`.
-      **The design question that stops this being a one-liner:** all three
-      currently read *committed* corpora and are offline and cheap (~seconds), so
-      today it's free — but the gate must never become a thing that hits a live
-      API or needs the corpus machine, and a future notebook might want either.
-      So the session needs a rule for what's includable (offline, committed inputs
-      only) and a way for a notebook to opt out, rather than globbing everything.
-      Worth pairing with the fact that the pipelines' **collectors** have no test
-      coverage at all for the same reason — they call live APIs. *(Found while
-      renaming the budget vocabulary, 2026-07-16.)*
+- [ ] **Gate research notebooks — nothing executes them, so they rot silently**
+      — a committed notebook output is a *claim*, and nothing checks it. Under the
+      old (now-deleted) `research/` layout, two of three notebooks had been
+      un-executable since the src-layout migration and nobody noticed, because no
+      nox session runs a notebook; `precommit` lints notebook *identifiers*, which
+      makes them feel covered while their correctness is checked by no one (see
+      `docs/bugs.md` → "Two of the three research notebooks had been un-executable
+      for weeks"). **Carry this forward into the rebuilt research** (the
+      `research-reset` restart): whatever notebook lives beside a fitted artifact
+      needs a `notebooks` nox session running `jupyter nbconvert --execute` over
+      it. **The design question that stops it being a one-liner:** the gate must
+      never hit a live API or need the corpus machine, so it needs a rule for
+      what's includable (offline, committed inputs only) and a per-notebook opt-out
+      rather than globbing everything — and the pipelines' **collectors** (which
+      call live APIs) stay uncovered for the same reason. Fold this into the
+      research-rule decision before rebuilding the pipeline plumbing. *(Found while
+      renaming the budget vocabulary, 2026-07-16; re-scoped for the restart
+      2026-07-22.)*
 - [ ] **Rename `digest.db` → `cache.db`** — the ephemeral graph-snapshot store
       is still named `digest.db`, a leftover from the retired daily-digest era;
       it's really the 1-day graph/artifact **cache** now. Rename the file (and
@@ -611,24 +611,6 @@ optional, behind a key.
       name matches what it holds. A cosmetic rename — old `digest.db` files can be
       left to age out or deleted, since it's a regenerable cache. *(From the
       `todos.md` inbox, 2026-07-11.)*
-- [ ] **Fold the retired predictor into `ml_pipelines` (or retire it fully)** —
-      since v5.13.0 `budget.predicted_budget` / `load_model` / `MODEL_PATH` are
-      app-side code (`services/graph/budget.py`) whose only callers are
-      pipelines: `latest_gap/collect.py` (trims citer-year distributions the way
-      v5.12-era builds did, so its committed corpus stays reproducible) and
-      `live_pool_validation/collect.py` (both age-origin columns). That respects
-      the dependency rule (pipelines import the app, never the reverse — the
-      `compute_features` precedent), but "app code with no app callers" is worth
-      resolving deliberately: either move the predictor + artifact loading into
-      `ml_pipelines/cite_budget` (churns the `latest_gap` collector's provenance
-      story; `compute_features`/the STOP label stay app-side — the label is the
-      serving rule now), or decide the `latest_gap` corpus should be re-collected
-      against the *computed* budget and delete the predictor outright. Blocked
-      on neither; just don't do it silently — the model coming back (a future
-      provider that genuinely can't compute) is the one reason to wait. Same
-      family as the v6.0.0 count-caps purge — "what does the model's absence let
-      us delete?" *(Patrick, 2026-07-17, spotting the near-dead code in
-      review.)*
 - [ ] **Swap the hand-rolled `urllib` clients for `httpx`** — S2, arXiv
       (`client`/`fulltext`/`figures`), and OpenAlex all hand-roll stdlib
       `urllib` (manual `Request`/`urlencode`/`HTTPError` plumbing); only HF uses
