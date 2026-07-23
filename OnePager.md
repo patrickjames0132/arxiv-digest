@@ -246,41 +246,42 @@ optional, behind a key.
 
 ### Citations & graph data
 
-- [ ] **Replace every citation rule with one threshold predicate** — Patrick's
-      epiphany (2026-07-20). Rip out the STOP rule, the SKIP rule, truncated vs
-      full history, and adaptive vs non-adaptive, and replace all of them with a
-      single per-citer predicate:
-      `citer.cited_by >= max(FLOOR, T[now - citer.year] * S(seed.cited_by))`.
-      A predicate reads one citer and never the pool, so it is order-free by
-      construction — which is *why* one rule can serve every scenario. Latest
-      Publications becomes the complement (deleting `bands.py`, `tau`, and
-      `max_span`); the adaptive switch is deleted
-      and the sliders come back permanently as display-only trimming;
-      `PER_YEAR_CAP` is demoted from semantics to a default slider position; and
-      "Field Landmarks" becomes just "Landmarks". **The design was fully
-      specified and reached Phase 1 (collect + fit) on the `citation-threshold`
-      branch, where the fit found the 20–40 landmark band is *unreachable* by
-      this predicate family — so the effort is superseded by the 2026-07-22
-      research restart (`research-reset`), and its design doc
-      (`docs/citation-threshold.md`) was retired in that scrub.** The branch and
-      its fitted S2 corpus sample survive for reference. Original ticket text
-      follows. Phases 0–1 (collect + fit) had to run on the **Windows** machine,
-      which has the offline citations corpus; the fitted artifact is git-tracked
-      so it travels back. Provider
-      calibration takes two separately fitted curves (S2 and OpenAlex citation
-      counts disagree, and the narrow band leaves no slack for a correction
-      factor); the fit targets **20–40 landmarks** per seed, chosen as a
-      *composition* ratio against the default slider rather than to match
-      today's ~76, because the threshold no longer controls volume — the
-      sliders do; and `S(median seed) = 1` is pinned per curve.
-      *(Filed 2026-07-20.)*
+- [ ] **Replace the STOP/SKIP citation rules with a citation-threshold predicate**
+      — the standing goal (Patrick, 2026-07-20). Rip out the STOP rule, the SKIP
+      rule, truncated-vs-full-history, and adaptive-vs-non-adaptive, and replace
+      all of them with a single **per-citer predicate** — something shaped like
+      `is_landmark(citer) = citer.cited_by >= threshold(citer, seed)` — that reads
+      one citer and never the pool, so it is order-free and provider-independent
+      by construction. That collapses five behaviors to one, pushes the filter
+      into the query (OpenAlex `cited_by_count:>N`, a corpus `WHERE`), and turns
+      truncation into a caveat instead of a code path. Latest Publications becomes
+      the complement; the sliders return as display-only trimming; `PER_YEAR_CAP`
+      demotes from semantics to a default slider position; "Field Landmarks"
+      becomes "Landmarks".
+
+      **Restarting from scratch under the `research` process** (`.claude/skills/research`).
+      A first fully-specified formulation
+      (`citer.cited_by >= max(FLOOR, T[age] · S(seed))`, fit for a 20–40 landmark
+      band) reached Phase 1 on the `citation-threshold` branch and was retired —
+      but its **key finding must carry forward so we don't rediscover it the hard
+      way:** a pool-independent predicate can *center* the landmark count but
+      cannot *pin* it per seed. The required per-seed multiplier scatters ~1.9–2.5×
+      around anything seed size predicts, while a 20–40 band is only ~1.65× wide →
+      ~35% max in-band, an exhaustively-proven ceiling for that model family
+      (independently reproduced). The lesson: a **count guarantee belongs in the
+      display layer** (the sliders), not the predicate — the predicate owns the
+      Landmark/Latest *split*, the sliders own *volume*. The `citation-threshold`
+      branch survives with its fitted S2 corpus sample (1,502 seeds) for
+      reference; fitting still runs on the **Windows** box (offline corpus),
+      artifact travels back via git.
+      *(Goal filed 2026-07-20; restarted 2026-07-23.)*
 - [ ] ~~**Spike: is the SKIP rule what we actually want?**~~ — **superseded
       2026-07-20** by the threshold-predicate ticket above, which generalizes
       this spike's own option (3), "SKIP with a citation floor", into an
       age-adjusted, seed-scaled floor applied to every path. Kept for its
       success criterion, which any future design should still be measured
-      against (the citation-threshold design that generalized this spike was
-      retired in the 2026-07-22 research reset). Original text follows. — Patrick's ask
+      against (see the citation-threshold ticket above, now restarting from
+      scratch under the research process). Original text follows. — Patrick's ask
       (2026-07-17), from the conversation that retired the budget model. Since
       v5.13.0 SKIP serves exactly one situation: a **truncated** live pool — a
       hyper-cited seed, on a machine with no corpus. Everything else prefixes by
@@ -570,6 +571,19 @@ optional, behind a key.
 
 ### Enhancements & tech debt
 
+- [ ] **Scrub the STOP/SKIP docs & memories once citation-thresholding supersedes
+      them** — a deliberately-deferred cleanup, **gated on** the "Replace the
+      STOP/SKIP citation rules with a citation-threshold predicate" ticket
+      (Citations & graph data) actually landing. While STOP/SKIP still ship, their
+      docs stay accurate and must remain. The moment the predicate replaces them,
+      a large body of material goes dead at once and should be revised in one
+      pass: `docs/landmark-vocabulary.md` (STOP/SKIP/tau/anchor — most of it),
+      `docs/predict-vs-compute.md` (its whole regime table is about the rules
+      being replaced), the STOP/SKIP/tau rows in `docs/constants.md`, the relevant
+      `docs/configuration.md` prose, and the STOP/SKIP-era memories. `history.md`
+      and `bugs.md` stay **verbatim** as always. (The 2026-07-22/23 research-reset
+      scrub already retired the *model/pipeline* material; this ticket is the
+      *rules* half, which couldn't go until the rules do.) *(Filed 2026-07-23.)*
 - [ ] **Audit every constant in `src/` for config-knob-worthiness — then decide
       which knobs belong in the UI instead** — a systematic pass over the
       module-level constants (`NBUCKETS`, `_RANK_POOL`, `_MAX_OFFSET`,
