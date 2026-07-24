@@ -151,12 +151,40 @@ than trying to buy that certainty up front with a more complex first hypothesis.
 
 Nothing run yet. Awaiting the 10 labelled seeds.
 
+## Where this work runs — the Windows machine
+
+**All data collection and experiments for this problem run on Patrick's Windows
+box**, decided 2026-07-23. That machine holds the **complete offline S2 corpus**,
+so the 10 seeds' citers can be pulled in full, locally, at no API cost. The Mac
+has no corpus (`config.json` → `"s2_corpus": null`), which would force every
+citer pull through the live Semantic Scholar API and get throttled — see
+`CLAUDE.md`'s rate-limit notes.
+
+**Sessions do not transfer between machines — the repository is the sync
+channel.** This work lives on branch **`citation-threshold-redo`**, pushed to
+`origin`. Pick it up there rather than starting fresh, and push results back the
+same way so either machine can read them.
+
+**Before the first notebook runs on Windows:**
+
+1. `git pull` and check out `citation-threshold-redo`.
+2. Run `bin\setup.bat` (the session-start bootstrap) and the `config.json` drift
+   check.
+3. Add the **`research` dependency group** back to `pyproject.toml` — pandas,
+   numpy, seaborn, jupyter, scikit-learn. It went out with the 2026-07-22 research
+   reset, so there is currently no notebook toolchain at all. (`CLAUDE.md` still
+   refers to `uv sync --all-groups` preserving "the notebook `research` group" —
+   that reference is stale until this is done.)
+
 ## Status
 
-- ✅ **Step 1 framing** — settled 2026-07-23.
+- ✅ **Step 1 framing** — settled 2026-07-23, with the formal problem statement
+  above.
+- ✅ **Hypothesis 1 agreed** — age-only expectation, with the accepted cost
+  recorded.
 - ⏳ **Blocked on data** — Patrick is picking 10 seeds (a deliberate spread: an old
-  classic, a mid-career paper, something recent enough that it *should* return
-  zero landmarks).
-- ⏳ **Tooling** — the `research` dependency group (pandas, seaborn, jupyter) went
-  out with the 2026-07-22 research reset and must be added back before any
-  notebook runs.
+  classic, a mid-career paper, and something recent enough that it *should* return
+  zero landmarks — the only case that tests solution property 4).
+- ⏭️ **Resume at** step 3: pull those seeds' citers from the offline corpus, hand
+  Patrick a per-seed list to mark landmark / not / unsure, then fit and grade
+  hypothesis 1 against those labels.
