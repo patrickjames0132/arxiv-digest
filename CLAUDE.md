@@ -107,11 +107,12 @@ before launching it; they'll usually allow it when it's really needed.
 For any research, analysis, model-fitting, constant-tuning, corpus study, or
 "derive a rule from the data" task, **invoke the `research` skill**
 (`.claude/skills/research/SKILL.md`) *before* writing analysis code or explaining a
-finding. It defines the fixed cycle — frame + build intuition → hypothesis →
-experiment → results → decision → productionize — and an explicit list of things
-not to do (born from a session that did them). The order is the point: build
-shared understanding first, test only a stated hypothesis, and productionize only
-what's decided-solved.
+finding. It defines the shape of the work — frame + build intuition *once*, then
+open-ended **workstreams** that each loop hypothesis → experiment → results (no
+*decision*, no *productionize*: research is for understanding, nothing is
+"solved") — and an explicit list of things not to do (born from a session that
+did them). The order still matters: build shared understanding first, and test
+only a stated hypothesis.
 
 ## The `todos.md` inbox
 

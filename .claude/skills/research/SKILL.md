@@ -1,11 +1,13 @@
 ---
 name: research
 description: >
-  The research process for Atlas — how to frame a problem, build intuition, form
-  and test hypotheses, and derive rules/constants worth productionizing. Invoke for
-  any analysis, model-fitting, constant-tuning, corpus study, experiment design, or
-  "derive a rule from the data" work. Read it BEFORE writing analysis code, choosing
-  a method, or explaining a finding.
+  The research process for Atlas — how to frame a problem, build intuition, and
+  grow understanding through open-ended workstreams of hypothesis → experiment →
+  results. Research here is for knowledge, not a deliverable: nothing is
+  "solved", and productionizing what you learn is a separate process. Invoke for
+  any analysis, model-fitting, constant-tuning, corpus study, experiment design,
+  or "derive a rule from the data" work. Read it BEFORE writing analysis code,
+  choosing a method, or explaining a finding.
 ---
 
 # The research process
@@ -20,42 +22,52 @@ description: >
 
 This skill governs how research and analysis are done in Atlas. It exists because
 research done badly is worse than none: a finding the researcher can't follow is
-one they can't check, and a conclusion pulled from thin air is one nobody can trust. The
-process below is built to prevent that.
+one they can't check, and a conclusion pulled from thin air is one nobody can
+trust. And it treats research as **open-ended understanding, not a deliverable** —
+there is no problem to declare *solved*, only more to learn. The process below is
+built around both.
 
-> **The cycle runs in a fixed order:** frame + build intuition → hypothesis →
-> experiment → results → decision → (productionize, or loop back). Build shared
-> understanding *first*, in plain language; only once the idea is mutual do we
-> test it; only once a result is in do we decide; only once we've decided it's
-> solved do we build anything durable. Don't skip stages, and don't run ahead of
-> the shared understanding — most of the ways research goes wrong are really that
-> one thing.
+> **Research is open-ended, not a march to a solution.** Frame the problem once
+> and build the intuition (step 1); then explore it through **workstreams** —
+> parallel lines of inquiry that emerge as you go. Each workstream runs its own
+> never-ending loop of **hypothesis → experiment → results** (steps 2–4), and you
+> push whichever frontier you like next, breadth-first across the problem.
+> Nothing is ever *solved*; every result is just something newly learned, logged
+> where it accrues. Build shared understanding *first*, in plain language; test
+> only a stated hypothesis; and keep each workstream's log growing. Most of the
+> ways research goes wrong are really one thing — running ahead of the shared
+> understanding.
 
-## The research cycle
+## The shape of the work
 
 > **Every step is back-and-forth.** Present what you have, ask what you're unsure
 > of, and wait for the researcher's response before moving to the next — the shared
 > understanding is built *in* the exchange, not delivered at the end of it.
 
-Six steps. Steps 1–5 are a loop; step 6 is the exit taken only once the problem
-is genuinely solved. Most work goes around 1–5 more than once before it earns
-step 6.
+Framing happens once — step 1, the umbrella. Everything after is the **hypothesis
+→ experiment → results** loop (steps 2–4), run open-ended inside each workstream.
+There is no step 5 and no step 6: no *decision* that closes the problem, no
+*productionize*. Workstreams emerge freely as you explore, and at any time you can
+pick a different one and push its frontier out another hypothesis.
 
 ```
-  ┌─────────────────────────────────────────────────────────────────┐
-  │                                                                   │
-  ▼                                                                   │
-1. frame + intuition ─→ 2. hypothesis ─→ 3. experiment ─→ 4. results ─→ 5. decision
-  ▲                        ▲                                              │
-  │                        │                                             solved
-  └── reframe ─────────────┴──── more evidence                            │
-                                                                          ▼
-                                                              6. productionize
+1. Frame + build intuition        ← once; the umbrella every workstream hangs off
+       │
+       ├── workstream A ──▶ 2. hypothesis ─▶ 3. experiment ─▶ 4. results ──┐
+       │                         ▲                                         │
+       │                         └─────────────── loop, open-ended ────────┘
+       ├── workstream B ──▶ 2. hypothesis ─▶ 3. experiment ─▶ 4. results ──┐
+       │                         ▲                                         │
+       │                         └─────────────── loop, open-ended ────────┘
+       └── workstream … (emerges as you go)
+
+Breadth-first: pick any workstream, add its next hypothesis, expand the frontier.
+Nothing is ever "solved" — each result is understanding gained, and logged.
 ```
 
 ### 1. Frame the problem and build the intuition
 
-What we're actually solving, in plain language, plus a shared mental model of
+What we're actually exploring, in plain language, plus a shared mental model of
 *why* — before any analysis code. Framing and intuition are one step: you can't
 build intuition for a problem you haven't framed, and you haven't really framed it
 until the intuition is mutual. This is where the ground-up explanation discipline
@@ -64,23 +76,24 @@ restate the problem and the rough shape of the answer in their own words — not
 before.
 
 **The step's output is a written formal problem statement**, recorded in the
-research log before any hypothesis is proposed. Plain language still, but precise
-about scope: what we are trying to solve, what counts as a solution, what is
-deliberately *out* of scope, and what a valid answer may look like — **including
-the degenerate ones**. (On landmark selection, "zero landmarks is a valid answer"
+problem's README before any hypothesis is proposed. Plain language still, but
+precise about scope: what we are exploring, what is deliberately *out* of scope,
+and what a valid answer to a question about it may look like — **including the
+degenerate ones**. (On landmark selection, "zero landmarks is a valid answer"
 looked like a minor clarification and turned out to eliminate an entire family of
-rules, before any data was touched.) Write it down because it is what **step 5
-measures against**: *solved* means this statement is satisfied. When it isn't, the
-statement is also what tells you which way to loop — a hypothesis that failed on
-its own terms sends you back to step 2, while a statement that no longer describes
-the real problem sends you back here.
+rules, before any data was touched.) The statement is the umbrella every
+workstream hangs off. It isn't frozen: as a workstream deepens your understanding,
+you may sharpen or re-frame it — keep the old framing and *why it changed*, because
+the history of how the problem itself came into focus is part of what you're
+learning.
 
 ### 2. Hypothesis
 
-A single, testable claim about what's true, specific enough that an experiment
-could refute it. *"A per-citer citation threshold can hold most seeds inside a
-20–40 landmark band"* is a hypothesis; *"let's look at the data"* is not. Write it
-down, so the results in step 4 have something concrete to confirm or reject.
+Within a workstream, a single, testable claim about what's true, specific enough
+that an experiment could refute it. *"A per-citer citation threshold can hold most
+seeds inside a 20–40 landmark band"* is a hypothesis; *"let's look at the data"* is
+not. Write it down, so the results in step 4 have something concrete to confirm or
+reject.
 
 **Start with the simplest hypothesis that could be true — Occam's razor.** Begin
 with the fewest moving parts (one variable, not four; a straight line before a
@@ -105,91 +118,94 @@ What the experiment actually showed, and whether it confirms or rejects the
 hypothesis. **Interpret — don't just state numbers:** say what each figure *means*
 and how it connects back to the intuition from step 1. A number without an
 interpretation is noise. A rejected hypothesis is a real result — often the more
-useful one — so record what it taught us either way.
+useful one. Whatever it shows, it's a **new learning**, not a verdict on the
+problem: record it in this loop's README and add a row to the workstream's table,
+so the understanding accrues where the next hypothesis will build on it.
 
-### 5. Decision
+### The loop never closes
 
-Given the results, is the problem solved?
+There's no fifth step. A result doesn't get a *solved* / *not-solved* verdict —
+that isn't a question this process asks. What a result gives you is the next
+question: a sharper hypothesis to add to this workstream, a new workstream the
+finding suggests, or a reason to re-frame the umbrella (back to step 1). Pick
+whichever frontier you want to push next — the work is breadth-first across the
+problem, and the problem is never finished, only better understood.
 
-- **Solved** → go to step 6.
-- **Needs reframing** — the results say we were asking the wrong question → loop
-  back to **step 1**.
-- **Needs more evidence** — the framing holds but this hypothesis was wrong or
-  incomplete → loop back to **step 2**.
-
-This is a genuine fork and usually the researcher's call. Surface it explicitly; don't
-slide past it into more code.
-
-### 6. Productionize
-
-Reached only when step 5 says *solved*. Turn the finding into durable code: a
-fitted model published through `ml_pipelines/` (with its research write-up under
-`research/`), or a direct change to `src/` when the result is a rule or constant
-rather than a model. This is the only stage that writes lasting artifacts —
-everything before it is exploration. (See **Standards** for the
-data-driven-over-magic-numbers pattern and the notebook-gating rule.)
+**Productionization is deliberately out of scope.** Turning something you've
+learned into shipped code — a fitted model, a rule in `src/` — is a separate
+process that *uses* research output; it isn't part of research. This skill ends at
+understanding.
 
 ## Standards and house patterns
 
 Research code is still Atlas code — it holds to the repo's conventions, plus a few
 specific to notebooks and plots. This section is self-contained: it doesn't assume
-you've read `CLAUDE.md`, though the code rules deliberately match it. (The
-standards for **productionizing** a solved finding into `ml_pipelines/` are a
-later addition — for now this covers the research log and its notebooks.)
+you've read `CLAUDE.md`, though the code rules deliberately match it.
 
 **Reach for whatever library fits the work.** numpy, pandas, scikit-learn, torch,
 and the rest are all fair game — there is no dependency-minimalism rule in research
 code, unlike the shipped app. The seaborn preference in §4 is specifically about
 *visualization*, not a limit on the analysis itself.
 
-### 1. Where research lives — a package per problem
+### 1. Where research lives — nest by problem → workstream → loop
 
-Every problem we frame gets its **own sub-directory under `research/`**, following
-the same package pattern as the rest of the repo: one directory, one concern, its
-own `README.md`. Experiments and their results live as **Jupyter notebooks** in
-that directory — that's where analysis code actually runs; nothing exploratory
-belongs in `src/`.
-
-**Split notebooks logically** — don't force everything into one `analyze.ipynb`.
-Often the clean cut is **one notebook per hypothesis/experiment**, so each reads
-as a self-contained argument and a rerun of one doesn't drag the others. Name them
-so the reading order is obvious.
+The research tree mirrors the shape of the work: one directory per **problem**, a
+sub-directory per **workstream** inside it, and a sub-directory per **loop** (one
+hypothesis→experiment→result) inside that. Every level carries its own `README.md`
+(see §2), and the executable detail — Jupyter notebooks — lives at the loop level;
+nothing exploratory belongs in `src/`.
 
 ```
 research/
-  <problem-name>/
-    README.md              # the research log — see below
-    01_<hypothesis>.ipynb  # one experiment + its results
-    02_<hypothesis>.ipynb  # the next, split where it reads more cleanly apart
+  <problem-name>/                    # one problem statement — the umbrella
+    README.md                        # the formal problem statement + intuition
+    <workstream-name>/               # a line of inquiry (emerges freely as you go)
+      README.md                      # what it explores + a concise table of its loops
+      01_<loop-name>/                # ONE hypothesis → experiment → result loop
+        README.md                    # the hypothesis, the experiment, the results
+        01_<loop-name>.ipynb         # the executable detail
+      02_<loop-name>/
+        README.md
+        02_<loop-name>.ipynb
+    <another-workstream>/
+      ...
 ```
 
-When a finding is decided-solved and earns durable code, *that* lands in
-`ml_pipelines/` or `src/` (cycle step 6), kept separate from the research log.
+**One loop, one package.** Each loop directory holds a single
+hypothesis→experiment→result and the notebook(s) that ran it — name it for the
+claim it tests, and number the loops so the reading order within a workstream is
+obvious. A loop is self-contained: a rerun of one doesn't drag the others.
 
-### 2. The README is the research log
+### 2. The READMEs are the research log — three altitudes
 
-The sub-directory's `README.md` documents the **entire research cycle except
-productionization**, at a high level (the notebook holds the executable detail).
-It's the one document someone can read to understand what we did and why. It
-tracks, and is written **as we go**, not at the end (it *is* the working document,
-the way `OnePager.md` is for features):
+Documentation is the point of the whole exercise — it's where the understanding
+accumulates — and it's written **as you go**, not at the end (each README *is* a
+working document, the way `OnePager.md` is for features). There's a README at each
+level, and the right amount of detail lives at each:
 
-- **Problem framing & intuition** (step 1) — the **formal problem statement**
-  (see step 1: scope, what counts as a solution, what a valid answer may look
-  like), plus the mental model that led to it in plain
-  language. **Including re-framings:** when a decision sends
-  us back to step 1, the README keeps the old framing and *why it changed*, not
-  just the latest one. The history is the point.
-- **Hypotheses, experiments, results** (steps 2–4) — ideally a running table, so
-  the thread from claim → test → outcome is legible at a glance. For example:
+- **Problem README** (`<problem>/README.md`) — the **framing**: the formal problem
+  statement (scope, what's out, what a valid answer may look like, degenerate
+  cases) and the plain-language intuition behind it (step 1). Keep re-framings
+  here with *why* they changed. Plus a short index of the workstreams as they
+  emerge.
+- **Workstream README** (`<workstream>/README.md`) — **what this line of inquiry
+  explores**, and a **concise** running table collecting its loops. Clear and to
+  the point here; the detail lives one level down. For example:
 
-  | # | Hypothesis | Experiment | Result | Decision |
-  |---|---|---|---|---|
-  | 1 | A per-citer threshold holds most seeds in 20–40 | Fit `(a, p, β, FLOOR)`, report the spread | 31.6% in band vs a ~35% family ceiling | Reframe — band unreachable |
-  | 2 | … | … | … | … |
+  | # | Hypothesis | Experiment | What we learned |
+  |---|---|---|---|
+  | 1 | A per-citer threshold holds most seeds in 20–40 | Fit `(a, p, β, FLOOR)`, report the spread | 31.6% land in-band against a ~35% family ceiling — the band is unreachable within this family |
+  | 2 | … | … | … |
 
-- **Decisions** (step 5) — what each result concluded and where it sent us
-  (solved / reframe / more evidence).
+- **Loop README** (`<loop>/README.md`) — **one loop in full detail**: the
+  hypothesis stated plainly, the experiment written out (what it runs, what each
+  outcome would mean), and the results — interpreted, not just numbers (step 4).
+  This is where verbosity belongs; the notebook beside it holds the executable
+  proof.
+
+The thread reads top-down when you want the shape (problem → workstreams → the
+table of what each taught) and bottom-up when you want the proof (a loop's README
++ its notebook).
 
 ### 3. Notebook code quality — the same bar as the rest of the repo
 
@@ -237,8 +253,8 @@ A plot in a research notebook is an argument; it has to stand on its own.
 
 These are not hypotheticals. Every one happened in the session that created this
 skill (2026-07-22, the citation-threshold analysis), and each lost the researcher
-or wasted their time. Read them as hard rules, not suggestions. Notice that most are
-the same underlying mistake — running ahead of the shared understanding.
+or wasted their time. Read them as hard rules, not suggestions. Notice that most
+are the same underlying mistake — running ahead of the shared understanding.
 
 ### 1. Do not invent jargon or private metaphors
 
@@ -307,10 +323,10 @@ the researcher and I agreed on what question they answered.
 **Why it's bad:** an experiment is only meaningful against a hypothesis. Run it
 first and the output is just numbers with no frame; the reader can't tell a
 confirmation from a coincidence, and I've spent effort (and often live API budget
-or compute) buying a result nobody's ready to interpret. This is steps 1–2 of the
-cycle existing for a reason.
+or compute) buying a result nobody's ready to interpret. This is steps 1–2
+existing for a reason.
 
-**Do instead:** follow the cycle. Reach agreement on the intuition (step 1) and a
+**Do instead:** follow the loop. Reach agreement on the intuition (step 1) and a
 stated hypothesis (step 2) *before* writing analysis code. When you do run
 something, say up front what it's testing and what each outcome would mean.
 
